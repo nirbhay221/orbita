@@ -1,0 +1,516 @@
+# Orbita
+
+**"Alexa, can I run the planter today?"**
+**"Alexa, there's a storm coming. What should I do?"**
+
+An Alexa+ add-on that turns NOAA's space weather forecast into decisions. It does two jobs from
+the same live data.
+
+For anyone whose work stands on satellite positioning, it says whether guidance will hold the
+accuracy the job needs, by joining the forecast to where they are standing and what they are
+about to do. A planter, a survey crew, a drone pilot and a dozer on grade all get a different
+answer from the same storm, and all four are correct.
+
+For everyone else a storm reaches, it says what to do and when: a satellite team, a grid control
+room, an airline dispatcher, an HF radio operator, a network that takes its time from GPS, a
+pipeline crew, a directional driller, railway signalling, someone hoping to see the aurora, and a
+household wondering whether any of this is their problem. Every step is timed to how far off the
+storm is and names where it comes from.
+
+It works anywhere. Kp is a planetary index, and exposure is computed from geomagnetic latitude
+rather than the number on the map, so a site in Punjab, Manitoba or Patagonia is judged on the
+field it is actually sitting in.
+
+The Latin `orbita` meant a track or rut cut into the ground by a wheel. The astronomical sense,
+the path of a heavenly body, came later from the same root, and `exorbitant` comes from
+`exorbitare`, to go off track. One word for the line a tractor cuts across a field, the orbit of
+the thing that ruins it, and what happens when the two meet.
+
+Built for the [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com),
+Alexa+ track, plus the Open Source and AWS Builder mini challenges. Self-hosted MCP server,
+spec 2025-11-25, Streamable HTTP, with an MCP Apps panel for the Echo Show.
+
+## The problem
+
+In May 2024 a solar storm knocked GPS accuracy out across the Midwest at the peak of planting.
+
+* Farmers stopped planting across the Midwest, Nebraska and Kansas among the worst hit
+* Position errors reached about 33 feet, ten metres, against an RTK spec of two centimetres
+* Growers described tractors as "acting possessed", and John Deere dealerships sent warnings
+  that accuracy was "extremely compromised"
+* Losses to American farmers are put above 500 million dollars
+* 70 percent of US planted acres run GPS guidance, and modern equipment is too wide to run without it
+
+It was not a one-off. In November 2025 another superstorm pushed GPS error past ten metres
+again, coast to coast, and this time the auroral oval reached Florida. Yizengaw et al. measured
+it in *Geophysical Research Letters* ([10.1029/2026GL124645](https://doi.org/10.1029/2026GL124645),
+2026) and drew the conclusion this project is built on:
+
+> If the November superstorm onset had occurred during farming season in the American sector,
+> it could have led to significant losses for the American farming and transportation industries.
+
+The same May 2024 storm reached far past farms. About half of all active satellites in low orbit
+manoeuvred at once and collision avoidance was compromised for about three days. Planet paused
+imaging, a UK cubesat was powered down, and ICESat-2 dropped into safe hold. United flew a
+transatlantic flight south of its usual track to keep its communications. Grid control rooms ran
+their geomagnetic disturbance procedures on about six hours' notice.
+
+NOAA saw it coming. Aviation was told. Grid operators were told. The person with 600 acres and a
+machinery loan found out when the planter started wandering, and assumed he had broken something.
+
+## What it does
+
+```
+"Alexa, can I plant the North 40 today?"
+
+"Hold off planting. Kp 6.3 (G2 moderate) puts expected drift near 0.7 metres,
+ about 34 times your normal 0.8 inches, and planting needs it inside 2 inches.
+ Next clear window opens Thursday 7pm and runs about 51 hours."
+```
+
+```
+"Alexa, I run satellites. What should I do about this storm?"
+
+"A geomagnetic storm at G5 and a solar radiation storm at S2 are running now.
+ Treat conjunction warnings as low confidence for about three days. In May 2024
+ collision avoidance was compromised that long, and about half of all active low
+ orbit satellites manoeuvred at once. Choose deliberately between safe mode and
+ staying in service. ... There is 1 more step, ask me for the rest."
+```
+
+The second answer is real output from `probe.mjs`, replaying a G5 storm with R3 radio blackouts
+and an S2 radiation storm. On a quiet day, which is most days, every role gets one plain sentence
+saying nothing needs doing, rather than silence or invented urgency.
+
+It is not a space weather dashboard. Kp means nothing to a farmer and "G3" means little to a
+household. The product is the translation from the forecast into this field, this machine, this
+job, this control room, go or no go, and what to do and when.
+
+## Why it is not a wrapper around a feed
+
+Three things sit between the NOAA data and a field answer.
+
+**The job sets the tolerance.** Planting has to be inside about 2 inches, because those rows must
+be findable again at cultivation and at harvest, so an error today is an error all season. Spraying
+gets about 20 inches because boom section control absorbs more. Tillage gets a metre. Cadastral
+survey gets 3 centimetres, because a boundary you set wrong is a legal problem rather than a yield
+problem.
+
+**The rig sets the baseline.** RTK gives centimetres on a quiet day but degrades hardest in a storm,
+because it assumes the ionosphere is similar over the baseline and that assumption is exactly what
+a storm breaks. Long baselines lose it first. WAAS starts coarse and degrades gently.
+
+**The site sets the exposure, and not by the latitude on the map.** Storms follow the magnetic
+field. The geomagnetic pole sits around 80.65N 72.68W, roughly 11 degrees off the geographic one,
+so two places on the same parallel are not equally exposed. Winnipeg and Kyiv both sit at 49.9
+north; Winnipeg is at 58 degrees geomagnetic and Kyiv at 47, and Winnipeg takes the harder hit from
+the identical storm. It runs the other way too: Punjab at 30.9 north is only 22.8 geomagnetic and
+safer than the map suggests, while Perth at 31.95 south is 41.2 and more exposed. This uses a
+centred dipole conversion, so the answer is correct in either hemisphere.
+
+It also separates two cases that look identical from the outside: the sun being the problem, and
+the rig never having met that tolerance anyway. It only offers to wait when waiting would help.
+
+## Why a field is the vulnerable case
+
+Self-driving cars are barely affected by this, and the reason is instructive. They are deliberately
+built not to depend on GNSS, localising instead against LiDAR maps, inertial measurement and vision.
+Tunnels and urban canyons kill GPS routinely, so operating without it is a designed-for condition.
+
+A tractor in a bare field has nothing to localise against. No lane markings, no buildings, no
+landmarks, just dirt that looks identical in every direction. GPS is not one input among many, it is
+the only absolute reference there is. The SLAM literature makes the same point from the other side,
+naming large open fields alongside tunnels as geometrically degenerate environments where LiDAR
+localisation itself slips.
+
+The places with nothing to look at are the places that break.
+
+## Not only farms
+
+The same ionosphere degrades every trade that stands on GNSS, and the engine does not change
+between them: same Kp, same geomagnetic latitude, same baseline penalty. Only the tolerance differs.
+
+| Job | Needs inside | Why that number |
+|---|---|---|
+| Cadastral and engineering survey | 3 cm | 2 to 3 cm horizontal is what RTK or PPK with placed control reports; a boundary is a legal record |
+| Drone survey | 5 cm | sub-5 cm on a disciplined workflow, and the aircraft is moving, so there is no second pass |
+| Machine control on grade | 5 cm | dozers, graders and excavators plan around 20 to 50 mm horizontal; past that you move dirt twice |
+| Planting, strip-till | 5 cm | rows must be findable again at cultivation and harvest |
+| Spraying, harvest | 50 cm | boom section control absorbs more |
+| Tillage | 1 m | |
+
+## Everyone else the storm reaches
+
+`what_should_i_do` answers by what the person looks after. Each role has its own trigger, taken
+from the source that describes the effect, and its own steps for each phase of a storm.
+
+| Role | Acts from | What it tells them | Where that comes from |
+|---|---|---|---|
+| Satellite operator | G2, or S2 | Orbit predictions degrade; defer ground maintenance and decide on launches a day ahead; treat conjunctions as low confidence for about three days; choose safe mode or service deliberately; fresh orbit determination and a propellant budget afterwards | NOAA scales; Parker and Linares (2024); Knipp, National Academies (2025); LaNeve et al. (2025) |
+| Grid control room | G3, or G2 at high magnetic latitude | A day ahead: black start readiness, crews on notice, return outaged equipment and delay planned outages if studies support it. Hours ahead: watch reactive reserves, MVAR swings, harmonics, transformer heating; 10 A of GIC per phase is the starting point for concern. During: hold reserves, unload susceptible equipment, act on two indicators | NERC GMD Operating Procedure Template; NERC May 2024 event review |
+| Airline dispatch and crews | S1, R3 or G4 | Advisory in the flight packet; delay what can wait; otherwise a lower latitude, lower altitude track, with United's UAL 990 as the worked example; extra fuel; no reliance on HF alone; an approach that does not depend on WAAS | LaNeve et al.; Frontiers (2025); NOAA scales |
+| HF radio | R1, S1, or G2 at high latitude | A non-HF fallback; how long an R2 or R3 blackout lasts; route around the poles in a radiation storm | NOAA scales |
+| GPS timing | G3 | A backup timing source; how long you can run without GPS time; check systems re-acquired cleanly | CISA ICSA-11-084-01; NOAA scales |
+| Drone pilot | G1 | Check Kp before launch; practise attitude mode; keep the aircraft close; postpone mapping at G3 | Drone Academy; NOAA scales |
+| Pipeline integrity | G3, or G2 at high latitude | Move cathodic protection surveys out of the storm; flag readings taken during it | Divett et al. (2023); NOAA scales |
+| Directional drilling | G2, or G1 at high latitude | Line up geomagnetic referencing; do not mistake a storm for a failed tool; hold magnetic surveys without a reference | Halliburton; British Geological Survey |
+| Railway signalling | G4 | Treat unexplained signal changes as possibly storm induced, and log them | Boteler (2021); Patterson et al. (2023) |
+| Vessel positioning | G1 | Put satellite position loss in the risk assessment and set the point where you reduce capability or stop; line up an inertial, acoustic, radar or laser reference and prove it works first; watch for scintillation after dark, worst from about an hour after local sunset to midnight; fall back rather than hold on a degraded fix | IMCA information note on solar activity and GNSS |
+| Automated mining | G1 | Centimetre corrections drop out and autonomous haulage stops rather than guesses; move survey and blast hole setting out away from the worst hours; run on inertial or manual; re-check anything positioned during the storm before drilling on it | Scientific Reports, unmanned mine trucks under weak GNSS; RTI for NIST (2019) |
+| Vehicle fleets | G3 | Ordinary tracking rides through most storms, so it stays quiet until the strong end: satellite messaging in remote areas, yard equipment that needs centimetres, and rough geofences and arrival times at G4 | RTI for NIST (2019); NOAA scales |
+| Aurora watchers | G1 | How far south NOAA says aurora has been seen at that level | NOAA scales |
+| Households | G5 | Charge phones and keep a torch ready; storms do not damage phones, cars or anything in the house | NOAA scales |
+| Field crews | G1 | Hands over to the go or no go for their own field and rig | this project |
+
+**It is timed.** Each answer is in one of five phases: quiet, a watch one to three days out,
+imminent within the day, during, and after. A grid control room two days from a G3 hears about
+black start units, not redispatch. Forecast times are said in UTC, because that is what operators
+run on.
+
+**Flares and proton events only come with odds.** NOAA publishes day ahead probabilities for radio
+blackouts and radiation storms, not timings, so those roles move to a watch at a 25 percent chance
+and always say the actual number.
+
+**It never makes the operator's call.** A 2025 survey of operators found many chose to stay in
+service through the 2024 storms because losing service cost more than the risk. So it puts the
+safe mode trade in front of a satellite team instead of deciding it.
+
+**Voice rules hold.** No more than three steps are read aloud at a time, the rest are offered, and
+nothing spoken refers to a screen.
+
+## What else the storm is hitting
+
+`what_else_is_affected` reads all three NOAA scales, not just G.
+
+| Scale | What it lands on |
+|---|---|
+| G1 | Guidance error grows. Induced currents in transmission lines, weak voltage fluctuation |
+| G2 | Grid voltage alarms, transformer damage possible in a long storm. The same currents run in pipelines and railway signalling. Satellite **timing**, which is not satellite position. Orbit predictions and satellite orientation. Directional drilling surveys |
+| G3 | Drag on low orbit. A minor to moderate storm in February 2022 brought down 38 of 49 Starlink satellites from one launch, and 12 more Starlinks re-entered around the May 2024 storm |
+| R1 | Shortwave between 1 and 30 MHz fades on the daylit side, which is what long-haul aircraft, ships, emergency services and amateurs are using |
+| S1 | Radiation over the poles, so airlines move off polar routes and drop altitude |
+
+It also says the thing most coverage gets wrong: **a storm does not touch your phone, your car or
+anything in the house.** There is a test asserting the spoken answer never claims otherwise.
+
+## Data
+
+Three free NOAA products, no API key, no documented rate limit.
+
+* `noaa-planetary-k-index-forecast.json` for 3-hourly Kp, observed and forecast, about 3 days out
+* `alerts.json` for issued alerts, warnings and watches
+* `noaa-scales.json` for G, S and R: today's levels, yesterday's, and the three day outlook, where
+  R and S are day ahead probabilities rather than levels. The server stores each level as the
+  digit NOAA sends, because the feed's text field is a word ("moderate") and reading that word as a
+  code once made every real storm look quiet
+
+NOAA's live products reach back about seven days. For older questions the retrospective uses the
+GFZ Potsdam archive, who produce the Kp index itself and publish the full record free without a key.
+
+Polled on a 15 minute background timer, never inside a tool call. If NOAA is unreachable the server
+says so rather than guessing, because a wrong go-ahead costs a season.
+
+**The minute, not just the block.** The Kp forecast comes in three hour blocks, which is right for planning a
+day and wrong for "is it turning right now". Two more feeds answer that: an estimated Kp updated every minute,
+and the solar wind measured at L1, about 1.5 million kilometres upstream. At the speed the wind is travelling,
+what that spacecraft sees reaches Earth 30 to 80 minutes later, and that gap is the warning. Since June 2026 the
+measurements come from NOAA's SOLAR-1, the first spacecraft built for this rather than borrowed from a science
+mission.
+
+What makes a storm is a southward field, so a strongly negative Bz is what gets said out loud, with its caveat:
+the field can turn back north before it arrives, and then nothing happens. The two summary feeds are about sixty
+bytes each, so polling them every minute costs nothing.
+
+One definition of "right now" is shared by every tool. Without it, storm_status answered Kp 3.7 while can_i_run
+answered 3.3 in the same minute, which is how a customer stops believing the rest of it.
+
+Times are said where the field is. Each field's timezone is looked up once from Open-Meteo when it
+is added, in the background because that lookup takes about as long as a whole Alexa+ turn, and
+until it lands times are said in UTC and labelled UTC. The first version said them in the server's
+own zone with no label, which on a cloud server would have told an Iowa farmer 7 pm when it meant
+2 pm.
+
+Error magnitudes are calibrated against the published literature on GNSS performance during
+geomagnetic storms: 3D RMS of 0.163 m quiet, 0.393 m moderate, 0.680 m intense and 1.051 m super,
+with short peaks near 3 m, and RTK-fixed availability falling below 91 percent at high Kp.
+
+## Tools
+
+Fourteen tools. Fewer than there were, deliberately: published benchmarks put tool selection above 90 percent
+up to about twenty tools and falling away after that, and several of ours were two doors onto one question.
+
+**Answers**
+* `can_i_run` gives a go or no go for a job on a field, now or at a given time, with a deadline, and says how
+  long it stays clear or when the next clear stretch starts
+* `what_should_i_do` tells a satellite, grid, airline, HF, timing, pipeline, drilling, rail,
+  drone, aurora or household listener what to do about the forecast, and when
+* `what_else_is_affected` answers "my guidance is out, what else is out?"
+* `storm_status` says what the sun is doing, in plain language
+* `farm_status` shows every field and job at a glance
+* `what_happened` looks back at a past day, says whether space weather explains a job that went
+  badly, and mentions any jobs logged that day
+* `what_can_you_do` answers the customer who asks what this is
+
+**Waiting on a job**
+* `watch_jobs` starts a watch on a job the sky is blocking, reports which watched jobs are clear, or stops
+  watching. It refuses to watch a job that is already clear or that the rig could never do anyway
+
+**The crew**
+* `crew_contact` adds, confirms or removes someone to email when a watched job clears or a storm is coming.
+  Nothing is sent to anyone unconfirmed
+
+**The record**
+* `log_job` records a job that actually ran, with the Kp for that three hour block and whether it
+  was inside tolerance
+* `job_report` summarises recent jobs, names the ones space weather put outside tolerance, and emails the same
+  report to a confirmed crew contact when one is named
+
+**Setup**
+* `register_field` and `register_equipment`. Registering the same name twice updates what is there
+  rather than leaving two of it
+
+Every tool also declares what it does to the world, in the annotations the specification carries:
+whether it only reads, whether it can take something away, whether saying it twice changes anything,
+and whether its answer depends on NOAA rather than on this process. A test fails the build if a new
+tool arrives without them, or if a writing tool is not idempotent without that being a decision
+someone wrote down.
+* `remove` takes a field or a machine back off the list, clearing its watches and keeping its job log.
+  A machine is only removed on a real name match, never by falling back to the first one.
+  `what everything` is the fresh start the certification requirements ask for: it says exactly what
+  would go, and only clears it when asked a second time
+
+## Telling the crew, and keeping the record
+
+An add-on cannot make an Echo speak first, so the server does the telling. Every 15 minutes, on
+the same cadence as the NOAA refresh, it checks two things for each farm:
+
+* **A watched job has cleared.** If planting on the North 40 was on hold and accuracy is back,
+  confirmed crew contacts get one email saying so.
+* **A storm is coming.** If, within the next day, the forecast puts one of that farm's usual jobs
+  outside tolerance, confirmed contacts get one email for that storm day, while there is still time
+  to plan around it.
+
+Contacts are staged first and only emailed once the customer confirms them. Email goes through
+Amazon SES when `ORBITA_EMAIL_FROM` is set to a verified sender. Until then every message is still
+written to `data/outbox.jsonl` and the spoken answer says email is not switched on, rather than
+claiming anything was sent.
+
+The job log exists for the week after a storm. "I planted the North 40 this morning" is recorded
+with the Kp for that block and whether the job was inside tolerance, so a season's report can say
+which acres ran while the sky was outside tolerance, and email that to whoever needs it.
+
+## The Echo Show panel
+
+`ui://orbita/window.html` is an MCP App, specification 2026-01-26. Tools link it with a nested
+`_meta.ui.resourceUri`. The panel sends `ui/initialize` declaring inline and fullscreen display
+modes, confirms with `ui/notifications/initialized`, and only then receives
+`ui/notifications/tool-result`; it follows the host's theme and reports its size. Until data
+arrives it shows a labelled example rather than a blank frame. `test-panel.mjs` runs the panel
+script against a simulated host and checks every step of that handshake.
+
+Go and no go are deliberately not encoded as red against green. That pair scores a delta E of 4.1
+under deuteranopia, effectively identical for around 8 percent of men. So bar height carries
+magnitude in a single hue, the verdict comes from position against a drawn tolerance line, and
+every blocked block is additionally hatched and worded.
+
+## The demo page
+
+`npm start` also serves a page at http://localhost:8788 for anyone who wants to try this without an Echo.
+It is not a mock. Every request on it is a real tool call against this server and the live NOAA feed, the
+answer shown is the answer Alexa+ would read out, and the panel beside it is the same file the add-on
+serves, driven through the real MCP Apps handshake rather than pasted in as a screenshot.
+
+Two decisions worth naming:
+
+* **Every visitor gets their own farm.** The page gives each browser an id and sends it as a header, and the
+  server scopes storage to it. Without that, the first visitor's fields, watches and job log would be the
+  second visitor's, and two people trying it at once would overwrite each other.
+* **It says what it is.** Alexa is not in the loop on that page. It calls the same tools in the same way,
+  and the page says so rather than implying a device is answering.
+
+The requests live in `web/requests.json` rather than inside the page's code, so `test-web.mjs` can call
+every one of them against a running server. A renamed tool or a changed argument fails a test instead of
+failing quietly in front of someone.
+
+## Running it
+
+```bash
+npm install
+npm run build
+npm start                   # demo page on http://localhost:8788, MCP endpoint on /mcp
+```
+
+Or without installing Node at all:
+
+```bash
+docker build -t orbita . && docker run -p 8788:8788 orbita
+```
+
+`npm test` runs everything, 442 checks. It is also what CI runs on every push, on Node 20 and 22,
+with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
+
+```bash
+npm run test:unit           # 254 checks, no live data
+npm run test:live           # 188 checks, against the real feed
+
+node test.mjs               # 57: tolerances, geometry, the moving auroral oval, windows, deadlines
+node test-playbook.mjs      # 62: roles, phases, triggers, odds, voice limits, sources, the grid base rate
+node test-actions.mjs       # 63: watches, crew emails, storm alerts, job log, repeats, a fresh start, retention
+node test-solarwind.mjs     # 23: travel time from L1, what counts as incoming, one definition of now
+node test-panel.mjs         # 18: the MCP Apps handshake against a simulated host
+node test-auth.mjs          # 23: OAuth 2.1 with PKCE against a running server
+node test-static-client.mjs # 8: the account linking shape Alexa+ actually uses
+node test-web.mjs           # 48: the demo page, every request on it, one farm per visitor, older hosts
+node test-contract.mjs      # 124: every listed tool invoked for real, on an empty farm and a half set up
+                            #       one, with junk arguments, annotations checked, nothing internal spoken
+node test-latency.mjs       # 11: the voice budget, measured per tool, written to LATENCY.md
+node probe.mjs              # end to end against live NOAA
+```
+
+Expose it with `cloudflared tunnel --url http://localhost:8788`.
+
+## Getting it in front of Alexa+
+
+Alexa+ add-on tooling is in developer preview and gated: Amazon requires developers to sign up
+and accept the release terms, and the add-on path is not open to everyone. Where you have that
+access, the documented route is:
+
+```bash
+alexa-ai configure
+alexa-ai new mcp --name "Orbita" --locale en-US --mcp-server-url <tunnel-url>
+alexa-ai configure-account-linking --addon-id <your-addon-id> --stage development --client-id orbita-alexa-addon
+alexa-ai deploy
+```
+
+That third command matters more than it looks. Alexa+ account linking is not the generic MCP
+OAuth shape: Amazon's own docs state plainly that it "supports only the Authorization Code Grant"
+and that "Dynamic Client Registration isn't supported." You pick your own `client_id`, and the CLI
+hands back Alexa's own set of redirect URIs, one per region, to register on your server, not one
+URI to hardcode. Set them before starting the server:
+
+```bash
+export ORBITA_CLIENT_ID=orbita-alexa-addon
+export ORBITA_REDIRECT_URIS="https://layla.amazon.com/api/skill/link/...,https://pitangui.amazon.com/api/skill/link/..."
+export ORBITA_AUTH=on
+```
+
+The server refuses to start if `ORBITA_CLIENT_ID` is set without `ORBITA_REDIRECT_URIS`, rather
+than linking a client no redirect could ever match. Dynamic registration still works alongside
+this, kept for local testing and the bridge below, but it is never what Alexa+ itself uses. See
+[`FRICTION.md`](FRICTION.md) for how this was found.
+
+Where you do not have access, [`KayLerch/alexa-skill-mcp-bridge`](https://github.com/KayLerch/alexa-skill-mcp-bridge)
+puts an ordinary Alexa Skill where the add-on would go, and stands a Strands agent on Amazon
+Bedrock AgentCore Runtime in for the Alexa+ orchestrator. Its own README is clear that it
+reproduces the mechanics of an Alexa+ MCP client and not Alexa's model judgment, so tool choice
+and phrasing will differ from the real thing. Its Skill track runs in the Alexa developer console
+simulator in a browser, so a physical Echo is optional.
+
+## How far south the storm reaches
+
+The oval is not a fixed band. It widens and pushes equatorward as the storm grows, which is why a
+farm that is unremarkable at Kp 4 can have a bad afternoon at Kp 8. NOAA publishes the relationship
+as an aurora viewline that moves with Kp; the working approximation here is an edge near 66.5
+degrees geomagnetic at Kp 0, travelling about two degrees equatorward per Kp step, so a G5 reaches
+into the high forties.
+
+That matters because of what happened on 11 November 2025. Auroral precipitation expanded across
+most of the continental United States, as far south as Florida, and positioning errors ran over ten
+metres for hours in places that no fixed-band model would have flagged
+([Yizengaw et al. 2026, *Geophysical Research Letters*](https://doi.org/10.1029/2026GL124645)). A
+comparable storm in May 2024 landed in planting season and is estimated to have cost American
+farmers around half a billion dollars. Orbita now adds the storm's own reach to a site's
+climatological exposure, so the same field is judged differently in a G1 and in a G5.
+
+## Another server can ask us too
+
+Orbita's `storm_status` is public and takes no arguments, which makes it usable as a feed by
+something other than a voice host. Sudor, the companion add-on, does exactly that: it opens an MCP
+client twice an hour, calls `storm_status`, and folds a G4 or G5 into what it tells someone who
+keeps insulin cold or runs an oxygen concentrator. Nothing personal travels in that direction, and
+the call is rate limited like any other.
+
+## What it keeps, and for how long
+
+A public endpoint holds records for anyone who calls it, so three limits exist and each one is tested:
+
+* **Reading never creates a record.** Any string can arrive as a demo id, and a read that created a
+  record would be a tap a stranger could leave running.
+* **Nothing grows without a ceiling.** The job log and the record of alerts already sent are both capped. The oldest entries go first, and the caps are far
+  past what real use produces.
+* **Demo records expire after a week.** Anything with a demo id and no write for seven days is swept
+  daily. A record belonging to a linked account is never swept: that one was asked for, and there is
+  a tool to clear it on request.
+
+Writes go to a temporary file and are renamed over the real one, which is atomic on a single
+filesystem. A crash partway through a direct write leaves a truncated file that still parses, which
+is worse than losing it outright because nothing complains.
+
+The endpoint is rate limited per caller, a burst of 600 refilling at ten a second, which is far
+above anything a conversation does and far below a script. The specification asks for it and we had
+nothing.
+
+## Performance
+
+Alexa+ allows roughly 500 ms for a full round trip. Measured against live NOAA data on
+12 September 2026: `storm_status` 24 ms, `can_i_run` 4 to 6 ms, `what_should_i_do` 3 to 6 ms,
+`what_else_is_affected` 4 ms, and the slowest request of the whole probe 21 ms. On 13 September,
+with all twenty one tools, the watch, crew and job log tools answered in 3 to 5 ms and the slowest
+request was 19 ms. Nothing external is touched in the request path; emails are sent after the
+answer, never inside it.
+
+## Prior art
+
+Named deliberately, because it exists.
+
+* NOAA SWPC publishes all of this, including a GPS Community Dashboard. Aviation and grid operators
+  consume it. Nothing translates it for agriculture, and nothing turns it into steps timed to the
+  forecast for each kind of operator.
+* Climate FieldView, Bayer Spray and Pocket Spray Smart give boom-height wind, humidity and inversion
+  risk. That is weather, not GNSS accuracy.
+* NOAA space weather MCP servers exist:
+  [`solarstorm-mcp`](https://github.com/newminya/solarstorm-mcp),
+  [`mcp-noaa-swpc`](https://github.com/pipeworx-io/mcp-noaa-swpc),
+  [`noaa-spaceweather-mcp-server`](https://github.com/cyanheads/noaa-spaceweather-mcp-server),
+  [`spaceweather-mcp`](https://github.com/hoon1983/spaceweather-mcp),
+  [`space-weather-mcp`](https://github.com/mrfentmen/space-weather-mcp), and
+  [`solar-mcp`](https://github.com/qso-graph/solar-mcp), which adds an HF band outlook for amateur
+  radio. They expose the feed. None is an Alexa+ add-on, and none says what a satellite team, a grid
+  control room, a dispatcher or a household should do, or when.
+* Searched GitHub on 12 September 2026: `geomagnetic storm alexa`, `space weather operator playbook`,
+  `geomagnetic disturbance operating procedure` and `aurora alert alexa` returned nothing. On
+  9 September, `space weather gnss accuracy`, `geomagnetic storm gps agriculture`, `rtk gps outage
+  prediction` and `alexa farming gps` returned nothing either.
+* This is not a native Alexa+ feature. Alexa does severe weather alerts from the National Weather
+  Service. Space weather comes from a different NOAA centre and is not in that stream.
+
+## Honest limitations
+
+* The Kp to error model is a calibrated approximation, not a positioning solver.
+* The playbook is decision support, not an operating procedure. It cannot see a control room's GIC
+  monitors, a constellation's ephemerides or a flight's routing, and each operator's own procedure
+  wins over it.
+* The 25 percent point at which a radio blackout or radiation storm probability becomes a watch is
+  this project's choice. The probability itself is NOAA's, and it is always spoken.
+* The airline example is one flight, well documented, not a fleet policy.
+* The geomagnetic latitude is a centred dipole conversion, and neither it nor Kp captures the South
+  Atlantic Anomaly. Kp is planetary and reported in 3 hour blocks.
+* An add-on cannot speak first. The server emails confirmed crew contacts instead, but nothing wakes
+  the Echo itself.
+* Crew email needs Amazon SES with a verified sender, and while an account is in the SES sandbox
+  every recipient must be verified too.
+* Twenty one tools is a lot for a model to choose between. Descriptions carry the words people
+  actually say, but tool choice on real Alexa+ still has to be tested.
+* It needs connectivity, which is not a given on the sites that most need it.
+
+## Roadmap
+
+* Marine and hydrographic survey, and virtual fencing, where a drifting fix moves the fence.
+* Local magnetometer data from USGS observatories in place of planetary Kp.
+* An eccentric dipole or IGRF geomagnetic conversion, and a South Atlantic Anomaly correction.
+
+## Licence
+
+AGPL-3.0. Copyleft, deliberately. Anyone building on this must publish their source under the
+same terms. This protects the code, not the idea, and the commit history is the record of when it
+was done.

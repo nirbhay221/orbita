@@ -1,0 +1,375 @@
+/*
+ * The demo page's client.
+ *
+ * Three jobs: call the MCP endpoint the way a host would, drive the Echo Show
+ * panel through the real MCP Apps handshake rather than faking a screenshot,
+ * and keep each visitor's demo farm separate from everyone else's.
+ *
+ * The separation matters. Without it the first visitor's fields, watches and
+ * job log would be the second visitor's, and two people trying the page at the
+ * same time would overwrite each other. Each browser gets an id, sends it as a
+ * header, and the server scopes storage to it.
+ */
+
+const SESSION_KEY = 'orbita.demo.session';
+const THEME_KEY = 'orbita.demo.theme';
+
+const el = (id) => document.getElementById(id);
+/**
+ * The visitor's own place, if they offer it.
+ *
+ * A demo that answers about a farm in Iowa, or a person in Phoenix, is answering
+ * about nobody. One click makes every number on this page about where the
+ * visitor actually is, which is the only way the answers can be checked against
+ * what they can see out of the window.
+ */
+function askForLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: Number(p.coords.latitude.toFixed(3)), lon: Number(p.coords.longitude.toFixed(3)) }),
+      () => resolve(null),
+      { timeout: 10000, maximumAge: 600000 },
+    );
+  });
+}
+
+const session = (() => {
+  let id = null;
+  try { id = localStorage.getItem(SESSION_KEY); } catch { /* private mode */ }
+  if (!id || !/^[a-z0-9-]{8,64}$/.test(id)) {
+    id = 'd' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+    try { localStorage.setItem(SESSION_KEY, id); } catch { /* nothing to do */ }
+  }
+  return id;
+})();
+
+/* ------------------------------------------------------------------ *
+ * The MCP endpoint. Stateless Streamable HTTP: one POST, one answer,
+ * which may come back as JSON or as a single SSE frame.
+ * ------------------------------------------------------------------ */
+
+let rpcId = 0;
+const latencies = [];
+
+async function callTool(name, args = {}) {
+  const started = performance.now();
+  const res = await fetch('/mcp', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'x-orbita-demo': session,
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: 'tools/call', params: { name, arguments: args } }),
+  });
+  const ms = Math.round(performance.now() - started);
+  const raw = await res.text();
+
+  if (res.status === 401) {
+    throw new Error('This server has account linking switched on, so the demo page cannot call it directly.');
+  }
+  const line = raw.split('\n').find((l) => l.startsWith('data: '));
+  let json;
+  try {
+    json = JSON.parse(line ? line.slice(6) : raw);
+  } catch {
+    throw new Error(`The server answered with something that is not JSON (HTTP ${res.status}).`);
+  }
+  if (json.error) throw new Error(json.error.message || 'The tool call failed.');
+
+  latencies.push(ms);
+  return {
+    ms,
+    text: json.result?.content?.[0]?.text ?? '',
+    structured: json.result?.structuredContent ?? null,
+    result: json.result,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * The panel, hosted properly.
+ *
+ * A view is not allowed to be sent anything until it has asked to start
+ * and confirmed, so a result that arrives early is held rather than
+ * dropped. That is the bug this page would otherwise have on first load,
+ * because the first tool call usually beats the iframe.
+ * ------------------------------------------------------------------ */
+
+const frame = el('panel');
+let panelReady = false;
+let held = null;
+
+const toPanel = (message) => frame.contentWindow?.postMessage({ jsonrpc: '2.0', ...message }, '*');
+
+function showOnPanel(payload) {
+  if (!panelReady) { held = payload; return; }
+  toPanel({ method: 'ui/notifications/tool-result', params: payload });
+}
+
+window.addEventListener('message', (event) => {
+  if (event.source !== frame.contentWindow) return;
+  const m = event.data;
+  if (!m || m.jsonrpc !== '2.0') return;
+
+  if (m.method === 'ui/initialize') {
+    toPanel({
+      id: m.id,
+      result: {
+        protocolVersion: '2026-01-26',
+        hostContext: { theme: currentTheme(), displayMode: 'inline' },
+      },
+    });
+    return;
+  }
+  if (m.method === 'ui/notifications/initialized') {
+    panelReady = true;
+    if (held) { showOnPanel(held); held = null; }
+    return;
+  }
+  if (m.method === 'ui/notifications/size-changed') {
+    const h = Number(m.params?.height);
+    if (Number.isFinite(h)) frame.style.height = `${Math.min(560, Math.max(260, Math.round(h) + 8))}px`;
+  }
+});
+
+/* ------------------------------------------------------------------ *
+ * Theme. The panel follows the page, through the same notification a
+ * real host would send when someone switches an Echo Show to night mode.
+ * ------------------------------------------------------------------ */
+
+function currentTheme() {
+  const set = document.documentElement.getAttribute('data-theme');
+  if (set === 'dark' || set === 'light') return set;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem(THEME_KEY, theme); } catch { /* nothing to do */ }
+  const toggle = el('theme-toggle');
+  toggle.textContent = theme === 'dark' ? 'Light' : 'Dark';
+  toggle.setAttribute('aria-pressed', String(theme === 'dark'));
+  toPanel({ method: 'ui/notifications/host-context-changed', params: { theme } });
+}
+
+/* ------------------------------------------------------------------ *
+ * The requests on offer. Every one is a real tool with real arguments,
+ * written the way the person would say it out loud.
+ * ------------------------------------------------------------------ */
+
+/*
+ * The catalogue lives in requests.json rather than here, so a test can call
+ * every request this page offers and fail if any button points at a tool or an
+ * argument the server does not accept. A demo that quietly breaks is worse than
+ * no demo.
+ */
+const nextFriday = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7 || 7));
+  return d.toISOString().slice(0, 10);
+})();
+
+const catalogue = await fetch('/requests.json').then((r) => r.json());
+const fill = (value) => JSON.parse(JSON.stringify(value).replaceAll('{{next-friday}}', nextFriday));
+
+const GROUPS = fill(catalogue.groups);
+const ALL_TOOLS = catalogue.tools;
+const SEED = catalogue.seed;
+
+/* ------------------------------------------------------------------ *
+ * Rendering
+ * ------------------------------------------------------------------ */
+
+function renderAnswer({ text, ms, tool, structured, result }) {
+  const answer = el('answer');
+  answer.classList.remove('waiting');
+  answer.textContent = text || 'The tool answered with no spoken text.';
+  el('answer-meta').innerHTML =
+    `${tool} <span class="${ms > 400 ? 'slow' : 'ok'}">${ms} ms</span>`;
+  const rawWrap = el('raw-wrap');
+  rawWrap.hidden = false;
+  el('raw').textContent = JSON.stringify(result ?? { text, structured }, null, 2);
+  if (structured) showOnPanel({ content: [{ type: 'text', text }], structuredContent: structured });
+}
+
+function renderFailure(tool, message) {
+  const answer = el('answer');
+  answer.classList.remove('waiting');
+  answer.textContent = message;
+  el('answer-meta').innerHTML = `${tool} <span class="slow">failed</span>`;
+}
+
+function pushLog(tool, ms, ok) {
+  const log = el('log');
+  const empty = log.querySelector('.log-empty');
+  if (empty) empty.remove();
+  const li = document.createElement('li');
+  li.innerHTML = `<span>${tool}</span><span class="${ok ? 'ms' : 'failed'}">${ok ? `${ms} ms` : 'failed'}</span>`;
+  log.prepend(li);
+  while (log.children.length > 8) log.lastElementChild.remove();
+  updateLatencyStat();
+}
+
+function updateLatencyStat() {
+  if (!latencies.length) return;
+  const sorted = [...latencies].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  el('stat-latency').innerHTML = `${median} <small>ms median</small>`;
+}
+
+async function run(tool, args, button) {
+  if (button) { button.disabled = true; button.setAttribute('aria-pressed', 'true'); }
+  document.querySelectorAll('.request[aria-pressed="true"]').forEach((b) => {
+    if (b !== button) b.setAttribute('aria-pressed', 'false');
+  });
+  const answer = el('answer');
+  answer.classList.add('waiting');
+  answer.textContent = 'Asking the server.';
+  try {
+    const out = await callTool(tool, args);
+    renderAnswer({ ...out, tool });
+    pushLog(tool, out.ms, true);
+    return out;
+  } catch (err) {
+    renderFailure(tool, err.message);
+    pushLog(tool, 0, false);
+    return null;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function buildRequests() {
+  const host = el('request-groups');
+  host.textContent = '';
+  for (const group of GROUPS) {
+    const wrap = document.createElement('div');
+    wrap.className = 'group';
+    const heading = document.createElement('p');
+    heading.className = 'label';
+    heading.textContent = group.name;
+    wrap.append(heading);
+    for (const req of group.requests) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'request';
+      button.setAttribute('aria-pressed', 'false');
+      button.innerHTML = `<span>${req.say}</span><span class="tool">${req.tool}</span>`;
+      if (req.slow) button.title = 'This one reaches the Kp archive for an old date, so it takes longer.';
+      button.addEventListener('click', () => run(req.tool, req.args, button));
+      wrap.append(button);
+    }
+    host.append(wrap);
+  }
+
+  const select = el('adv-tool');
+  for (const tool of ALL_TOOLS) {
+    const option = document.createElement('option');
+    option.value = tool;
+    option.textContent = tool;
+    select.append(option);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Setting up this browser's farm, once.
+ * ------------------------------------------------------------------ */
+
+const FARM_NOTE =
+  'Stand-in farm, not a real one: North 40 near Ames, Iowa, with a planter on RTK and a sprayer on SBAS. ' +
+  'Use your own location and the answers are about ground you can see.';
+
+/** Replace the stand-in with the visitor's real coordinates. */
+async function useMyLocation() {
+  const note = el('farm-note');
+  const button = el('use-location');
+  button.disabled = true;
+  button.textContent = 'Asking your browser...';
+  const where = await askForLocation();
+  if (!where) {
+    button.disabled = false;
+    button.textContent = 'Use my location';
+    note.textContent = `${FARM_NOTE} Your browser did not share a location, so the stand-in is still in use.`;
+    return;
+  }
+  await callTool('register_field', { name: 'Your location', lat: where.lat, lon: where.lon, baselineKm: 18 });
+  note.textContent =
+    `Added a field at your own coordinates, ${where.lat}, ${where.lon}. Every answer below is now about real ground ` +
+    'where you are, with the same live NOAA feed.';
+  button.textContent = 'Added';
+  await refreshSky();
+}
+
+async function ensureFarm() {
+  const note = el('farm-note');
+  try {
+    const status = await callTool('farm_status');
+    if (!status.text.startsWith('No fields registered yet')) {
+      note.textContent = FARM_NOTE;
+      return;
+    }
+    note.textContent = 'Setting up a farm for this browser.';
+    await callTool('register_field', SEED.field);
+    for (const machine of SEED.equipment) await callTool('register_equipment', machine);
+    note.textContent = FARM_NOTE;
+  } catch (err) {
+    note.textContent = `Could not set up the demo farm. ${err.message}`;
+  }
+}
+
+async function refreshSky() {
+  try {
+    const out = await callTool('storm_status');
+    const s = out.structured ?? {};
+    el('stat-kp').textContent = typeof s.kpNow === 'number' ? s.kpNow.toFixed(1) : 'unknown';
+    const g = s.scales?.g ?? 0;
+    el('stat-scale').innerHTML = g > 0 ? `G${g}` : 'quiet <small>G0</small>';
+    el('stat-age').innerHTML =
+      typeof s.dataAgeMinutes === 'number' ? `${s.dataAgeMinutes} <small>min old</small>` : 'unknown';
+    el('stats-note').textContent = s.stale
+      ? 'NOAA has not refreshed recently, so this server is saying so rather than guessing.'
+      : 'Live from this server, not a recording.';
+    // Put real NOAA data on the panel straight away. Otherwise it sits on its
+    // labelled example until the visitor clicks something, and an example is the
+    // last thing a panel about accuracy should be showing.
+    if (out.structured) showOnPanel({ content: [{ type: 'text', text: out.text }], structuredContent: out.structured });
+    updateLatencyStat();
+  } catch (err) {
+    el('stats-note').textContent = `Could not reach the server. ${err.message}`;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Wiring
+ * ------------------------------------------------------------------ */
+
+let stored = null;
+try { stored = localStorage.getItem(THEME_KEY); } catch { /* private mode */ }
+if (stored === 'dark' || stored === 'light') setTheme(stored);
+else el('theme-toggle').textContent = currentTheme() === 'dark' ? 'Light' : 'Dark';
+
+el('theme-toggle').addEventListener('click', () => setTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
+
+el('adv-run').addEventListener('click', async () => {
+  const tool = el('adv-tool').value;
+  let args;
+  try {
+    args = JSON.parse(el('adv-args').value || '{}');
+  } catch {
+    renderFailure(tool, 'Those arguments are not valid JSON.');
+    return;
+  }
+  await run(tool, args, null);
+});
+
+el('use-location').addEventListener('click', () => void useMyLocation());
+
+el('reset-demo').addEventListener('click', () => {
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* nothing to do */ }
+  location.reload();
+});
+
+buildRequests();
+await refreshSky();
+await ensureFarm();

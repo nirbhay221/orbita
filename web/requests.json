@@ -1,0 +1,198 @@
+{
+  "_comment": "The demo page's requests live here so a test can call every one of them and prove each button is a real tool with real arguments. {{next-friday}} is filled in at load.",
+  "groups": [
+    {
+      "name": "The field",
+      "requests": [
+        {
+          "say": "Can I plant the North 40 right now?",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "field": "North 40"
+          }
+        },
+        {
+          "say": "When does it clear?",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "field": "North 40"
+          }
+        },
+        {
+          "say": "Could I spray instead?",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "spraying",
+            "field": "North 40",
+            "equipment": "the sprayer"
+          }
+        },
+        {
+          "say": "I have to be planted by {{next-friday}}.",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "field": "North 40",
+            "deadline": "{{next-friday}}"
+          }
+        },
+        {
+          "say": "What can I run at all today?",
+          "tool": "farm_status",
+          "args": {}
+        }
+      ]
+    },
+    {
+      "name": "The sky",
+      "requests": [
+        {
+          "say": "What is the sun doing?",
+          "tool": "storm_status",
+          "args": {}
+        },
+        {
+          "say": "My guidance is out. What else is affected?",
+          "tool": "what_else_is_affected",
+          "args": {}
+        },
+        {
+          "say": "Did space weather ruin 10 May 2024?",
+          "tool": "what_happened",
+          "args": {
+            "when": "10 May 2024",
+            "operation": "planting"
+          },
+          "slow": true
+        }
+      ]
+    },
+    {
+      "name": "Other people, same storm",
+      "requests": [
+        {
+          "say": "I run satellites. What should I do?",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "satellite_operator"
+          }
+        },
+        {
+          "say": "I am on the grid control desk.",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "grid_operator"
+          }
+        },
+        {
+          "say": "I dispatch flights.",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "airline"
+          }
+        },
+        {
+          "say": "I hold a ship on position offshore.",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "maritime_dp"
+          }
+        },
+        {
+          "say": "I run autonomous haul trucks at a mine.",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "mining"
+          }
+        },
+        {
+          "say": "I want to see the aurora tonight.",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "aurora"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Waiting, and the record",
+      "requests": [
+        {
+          "say": "Tell me when planting clears.",
+          "tool": "watch_jobs",
+          "args": {
+            "action": "start",
+            "operation": "planting",
+            "field": "North 40"
+          }
+        },
+        {
+          "say": "Is anything clear yet?",
+          "tool": "watch_jobs",
+          "args": {
+            "action": "check"
+          }
+        },
+        {
+          "say": "I planted 40 acres this morning.",
+          "tool": "log_job",
+          "args": {
+            "operation": "planting",
+            "field": "North 40",
+            "acres": 40
+          }
+        },
+        {
+          "say": "Give me the report for the last week.",
+          "tool": "job_report",
+          "args": {
+            "days": 7
+          }
+        },
+        {
+          "say": "What can you do?",
+          "tool": "what_can_you_do",
+          "args": {}
+        }
+      ]
+    }
+  ],
+  "tools": [
+    "can_i_run",
+    "storm_status",
+    "farm_status",
+    "what_should_i_do",
+    "what_else_is_affected",
+    "what_happened",
+    "what_can_you_do",
+    "watch_jobs",
+    "log_job",
+    "job_report",
+    "crew_contact",
+    "register_field",
+    "register_equipment",
+    "remove"
+  ],
+  "seed": {
+    "field": {
+      "name": "North 40",
+      "lat": 42.03,
+      "lon": -93.62,
+      "crop": "corn",
+      "acres": 40,
+      "baselineKm": 18
+    },
+    "equipment": [
+      {
+        "name": "the planter",
+        "correction": "rtk"
+      },
+      {
+        "name": "the sprayer",
+        "correction": "sbas"
+      }
+    ]
+  }
+}

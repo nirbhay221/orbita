@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orbita, space weather turned into a go or no go</title>
+<meta name="description" content="Orbita is an MCP add-on. It reads the NOAA space weather forecast and answers whether GPS guided work will hold accuracy, and what satellite, grid, airline, rail and drone operators should do about a storm.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12.5' fill='none' stroke='%232a78d6' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%232a78d6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<a class="skip" href="#demo">Skip to the live demo</a>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="/">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12.5" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="16" cy="16" r="3.5" fill="currentColor"/></svg>
+      <span class="brand-name">Orbita</span>
+      <span class="brand-tag">space weather to go or no go</span>
+    </a>
+    <nav class="top-nav">
+      <a href="#demo">Demo</a>
+      <a href="#how">How it works</a>
+      <a href="#limits">Limits</a>
+      <a href="#run">Run it</a>
+      <button id="theme-toggle" type="button" class="ghost" aria-pressed="false">Dark</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap">
+    <p class="eyebrow">MCP add-on, Streamable HTTP, spec 2025-11-25</p>
+    <h1>Space weather, turned into a go or no go.</h1>
+    <p class="lede">
+      A geomagnetic storm pushes satellite navigation off by centimetres, then metres. Orbita reads the live NOAA
+      forecast and answers the question the person actually has: can I run this now, and if not, when. It answers the
+      same way for a satellite team, a control room, a dispatcher, a drilling crew and a household.
+    </p>
+    <div class="hero-actions">
+      <a class="button primary" href="#demo">Try it live</a>
+      <a class="button" href="https://github.com/nirbhay221/orbita">Read the code</a>
+    </div>
+
+    <dl class="stats" id="stats">
+      <div class="stat"><dt>Kp right now</dt><dd id="stat-kp">checking</dd></div>
+      <div class="stat"><dt>Storm level</dt><dd id="stat-scale">checking</dd></div>
+      <div class="stat"><dt>NOAA data age</dt><dd id="stat-age">checking</dd></div>
+      <div class="stat"><dt>Answer time</dt><dd id="stat-latency">checking</dd></div>
+    </dl>
+    <p class="stats-note" id="stats-note">Live from this server, not a recording.</p>
+  </section>
+
+  <section id="demo" class="section wrap">
+    <div class="section-head">
+      <h2>Live demo</h2>
+      <p>
+        Every answer is computed here, from the NOAA feed this server polls in the background. Nothing on this page is
+        scripted. Alexa is not in the loop: the page calls the same tools an Alexa+ add-on would call, and shows what
+        comes back.
+      </p>
+    </div>
+
+    <div class="console">
+      <div class="panel-card requests">
+        <p class="label">Your demo farm</p>
+        <p class="farm-note" id="farm-note">Setting up a farm for this browser.</p>
+        <button class="button small" id="use-location" type="button">Use my location</button>
+        <div id="request-groups"></div>
+
+        <details class="advanced">
+          <summary>Call any tool directly</summary>
+          <label class="field">
+            <span>Tool</span>
+            <select id="adv-tool"></select>
+          </label>
+          <label class="field">
+            <span>Arguments, JSON</span>
+            <textarea id="adv-args" rows="3" spellcheck="false">{}</textarea>
+          </label>
+          <div class="advanced-actions">
+            <button class="button primary small" id="adv-run" type="button">Send</button>
+            <button class="button small" id="reset-demo" type="button">Reset demo farm</button>
+          </div>
+        </details>
+      </div>
+
+      <div class="results">
+        <div class="panel-card answer-card">
+          <div class="answer-head">
+            <p class="label">Spoken answer</p>
+            <p class="meta" id="answer-meta"></p>
+          </div>
+          <p class="answer" id="answer" aria-live="polite">Pick a request on the left and it runs against live data.</p>
+          <details class="raw" id="raw-wrap" hidden>
+            <summary>Raw response</summary>
+            <pre id="raw"></pre>
+          </details>
+        </div>
+
+        <div class="panel-card screen-card">
+          <div class="answer-head">
+            <p class="label">What an Echo Show would display</p>
+            <p class="meta">MCP Apps, spec 2026-01-26</p>
+          </div>
+          <iframe id="panel" title="Accuracy window panel" src="/ui/window.html" sandbox="allow-scripts"></iframe>
+          <p class="caption">
+            The same panel file the add-on serves, driven through the real handshake. It updates on the four tools that
+            carry it. Verdict is never colour alone: bars carry the number, hatching and wording carry the refusal.
+          </p>
+        </div>
+
+        <div class="panel-card log-card">
+          <p class="label">Recent calls</p>
+          <ol class="log" id="log"><li class="log-empty">Nothing yet.</li></ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" class="section wrap">
+    <div class="section-head">
+      <h2>How it works</h2>
+      <p>Three decisions shape everything else.</p>
+    </div>
+    <div class="cards">
+      <article class="panel-card">
+        <h3>The forecast is polled, never fetched mid answer</h3>
+        <p>
+          NOAA is read on a background timer every fifteen minutes and held in memory, so an answer is a few
+          milliseconds of arithmetic. A voice turn has roughly half a second in total, which a live call to an external
+          service can eat on its own.
+        </p>
+      </article>
+      <article class="panel-card">
+        <h3>The verdict is drift against tolerance, not a Kp number</h3>
+        <p>
+          Expected error comes from the correction the machine runs, RTK, PPP, SBAS or none, the geomagnetic latitude of
+          the site rather than its map latitude, and the distance to the RTK base. That is compared against what the job
+          itself needs, which is why planting and tillage get different answers from the same sky.
+        </p>
+      </article>
+      <article class="panel-card">
+        <h3>Same storm, twelve different jobs</h3>
+        <p>
+          One forecast means planting waits, a satellite team defers a manoeuvre, a control room watches transformer
+          heating, a dispatcher plans a lower latitude route and an aurora watcher goes outside. Each gets its own
+          steps, timed to how far off the storm is.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section id="limits" class="section wrap">
+    <div class="section-head">
+      <h2>What it will not do</h2>
+      <p>The honest list, because a wrong go-ahead costs a season.</p>
+    </div>
+    <ul class="limits">
+      <li><b>It will not guess.</b> If NOAA is unreachable it says so and tells you where to look instead.</li>
+      <li><b>It cannot speak first.</b> An add-on answers when it is called, so watched jobs and storms are sent to the crew by email instead.</li>
+      <li><b>It stops at three days.</b> That is how far the Kp forecast runs, and past it the answer is that it does not know.</li>
+      <li><b>It is not a base station.</b> It tells you whether accuracy holds, it does not correct anything.</li>
+      <li><b>This demo farm is temporary.</b> It belongs to this browser and is cleared when the server restarts.</li>
+    </ul>
+  </section>
+
+  <section id="data" class="section wrap">
+    <div class="section-head">
+      <h2>Where the numbers come from</h2>
+      <p>Public sources, called live. No sample files.</p>
+    </div>
+    <ul class="sources">
+      <li><a href="https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json">NOAA SWPC planetary Kp forecast</a><span>three hour blocks, three days ahead</span></li>
+      <li><a href="https://services.swpc.noaa.gov/products/alerts.json">NOAA SWPC alerts and warnings</a><span>what is running right now</span></li>
+      <li><a href="https://services.swpc.noaa.gov/products/noaa-scales.json">NOAA space weather scales</a><span>G, S and R levels, today and the outlook</span></li>
+      <li><a href="https://open-meteo.com/">Open-Meteo</a><span>the timezone of each field, so times are said where the field is</span></li>
+    </ul>
+  </section>
+
+  <section id="run" class="section wrap">
+    <div class="section-head">
+      <h2>Run it yourself</h2>
+      <p>Node 20 or newer. No keys, no accounts, no paid services.</p>
+    </div>
+    <pre class="code"><code>git clone https://github.com/nirbhay221/orbita
+cd orbita
+npm install
+npm run build
+node dist/server.js        # serves this page and the MCP endpoint on 8788</code></pre>
+    <p class="code-note">Or, with nothing installed but Docker: <code>docker build -t orbita . &amp;&amp; docker run -p 8788:8788 orbita</code></p>
+    <p class="code-note">Call a tool the way a host would:</p>
+    <pre class="code"><code>curl -s http://localhost:8788/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+       "params":{"name":"storm_status","arguments":{}}}'</code></pre>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <p>Orbita, an MCP add-on for Alexa+. Built for the Build, Ship, Shape Amazon Developer Hackathon 2026.</p>
+    <p class="foot-links">
+      <a href="https://github.com/nirbhay221/orbita">Source</a>
+      <a href="https://www.swpc.noaa.gov/">NOAA SWPC</a>
+      <a href="/health">Server health</a>
+    </p>
+    <p class="disclaimer">
+      Space weather data is published by NOAA and used as published. Orbita is not affiliated with NOAA or Amazon, and
+      it is not a substitute for your equipment vendor's guidance.
+    </p>
+  </div>
+</footer>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>

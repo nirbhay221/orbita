@@ -1,0 +1,302 @@
+<!--
+  MCP App panel: 72-hour accuracy window, rendered by Alexa+ on an Echo Show.
+
+  Encoding decision: go/no-go is NOT carried by red vs green. The validator scores
+  that pair at ΔE 4.1 under deuteranopia, indistinguishable for roughly 8% of men,
+  and this audience is overwhelmingly male. So magnitude (Kp) is drawn as bar height
+  in a single hue, the verdict comes from position against a drawn tolerance line,
+  and every blocked block is additionally hatched and worded. Colour is the last
+  channel here, never the only one.
+-->
+<style>
+  .viz {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #f1f1ee;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #78776f;
+    --rule:           #dcdcd6;
+    --kp:             #2a78d6;
+    --kp-over:        #1d5698;
+    --good:           #0ca30c;
+    --critical:       #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --surface-2:      #242423;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #8e8d83;
+      --rule:           #34342f;
+      --kp:             #3987e5;
+      --kp-over:        #7fb2ee;
+    }
+  }
+  :root[data-theme="dark"] .viz {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --surface-2:      #242423;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #8e8d83;
+    --rule:           #34342f;
+    --kp:             #3987e5;
+    --kp-over:        #7fb2ee;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .viz {
+    background: var(--surface-1);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 18px 20px 20px;
+  }
+
+  .verdict { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .verdict h1 { font-size: 1.35rem; margin: 0; letter-spacing: -0.015em; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 3px; border: 1.5px solid currentColor;
+  }
+  .chip.go   { color: var(--good); }
+  .chip.hold { color: var(--critical); }
+  .sub { color: var(--text-secondary); font-size: 0.87rem; margin: 0 0 16px; }
+  .sub b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+  .chart-wrap { overflow-x: auto; }
+  svg { display: block; }
+  .axis-label { font-size: 9.5px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .tol-label  { font-size: 9.5px; fill: var(--text-secondary); font-weight: 600; }
+  .band-label { font-size: 9px; font-weight: 700; letter-spacing: 0.07em; }
+
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    margin-top: 12px; font-size: 0.75rem; color: var(--text-secondary);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 11px; height: 11px; border-radius: 2px; }
+
+  .foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule);
+          font-size: 0.72rem; color: var(--text-muted); }
+</style>
+
+<div class="viz">
+  <div class="verdict">
+    <h1 id="title">Planting, North 40</h1>
+    <span class="chip hold" id="chip">&times; Hold</span>
+  </div>
+  <p class="sub" id="sub"></p>
+
+  <div class="chart-wrap"><svg id="chart" role="img" aria-labelledby="chartdesc"></svg></div>
+  <desc id="chartdesc" hidden></desc>
+
+  <div class="legend">
+    <span><i class="swatch" style="background:var(--kp)"></i> Kp forecast</span>
+    <span><i class="swatch" style="background:var(--kp-over)"></i> Above tolerance, hatched</span>
+    <span>&#9644; Tolerance limit for this job</span>
+  </div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+  // Example state so the panel reads correctly before any tool has run.
+  const EXAMPLE = {
+    operation: 'planting', field: 'North 40', equipment: 'the planter', correction: 'rtk',
+    go: false, kp: 6.3, gScale: 'G2 moderate',
+    expectedErrorM: 0.68, toleranceM: 0.05,
+    reason: 'Hold off planting. Kp 6.3 (G2 moderate) puts expected drift near 27 inches, and planting needs it inside 2 inches.',
+    window: null,
+    dataAgeMinutes: 4, thresholdKp: 4.4,
+    slots: (() => {
+      const out = []; const t0 = Date.now() - 6 * 3600e3;
+      const shape = [2.0,2.3,3.0,4.7,6.3,6.0,5.3,4.3,3.3,2.7,2.3,2.0,1.7,2.0,2.3,2.0,1.7,1.3,1.7,2.0,2.3,2.0,1.7,1.3];
+      shape.forEach((kp, i) => out.push({ time: new Date(t0 + i * 3 * 3600e3).toISOString(), kp, observed: i < 2 }));
+      return out;
+    })(),
+  };
+
+  const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const inches = (m) => Math.round(m * 39.37);
+
+  // The Kp at which the verdict flips comes from the server, where the severity
+  // model lives. Deriving it here by dividing was wrong: error steps with the
+  // storm bands, it is not proportional to Kp.
+  const thresholdKp = (d) => (typeof d.thresholdKp === 'number' ? d.thresholdKp : null);
+
+  function render(d, opts = {}) {
+    const opName = String(d.operation || 'work').replace(/_/g, '-');
+    document.getElementById('title').textContent =
+      opName.charAt(0).toUpperCase() + opName.slice(1) + (d.field ? ` - ${d.field}` : '');
+
+    const chip = document.getElementById('chip');
+    // storm_status and farm_status carry no single verdict, so they get no chip
+    // rather than a misleading Hold.
+    chip.hidden = typeof d.go !== 'boolean';
+    chip.className = 'chip ' + (d.go ? 'go' : 'hold');
+    chip.innerHTML = d.go ? '&check; Clear' : '&times; Hold';
+
+    document.getElementById('sub').innerHTML =
+      esc(d.reason || '') +
+      (d.window && !d.go
+        ? ` <b>Next clear: ${new Date(d.window.start).toLocaleString('en-US', { weekday: 'short', hour: 'numeric' })}</b>`
+        : '');
+
+    const slots = (d.slots || []).slice(0, 24);
+    const svg = document.getElementById('chart');
+    if (!slots.length) { svg.innerHTML = ''; return; }
+
+    const W = Math.max(320, slots.length * 26 + 44), H = 168;
+    const padL = 24, padR = 20, padT = 26, padB = 26;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const maxKp = Math.max(9, ...slots.map((s) => s.kp));
+    const bw = plotW / slots.length;
+    const y = (kp) => padT + plotH - (kp / maxKp) * plotH;
+
+    const tKp = thresholdKp(d);
+    const parts = [];
+
+    // Hatch for blocked blocks, the secondary encoding that carries the verdict
+    // for anyone who cannot separate the hues.
+    parts.push(`<defs><pattern id="hatch" width="5" height="5" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="5" height="5" fill="var(--kp-over)"/>
+      <line x1="0" y1="0" x2="0" y2="5" stroke="var(--surface-1)" stroke-width="2"/>
+    </pattern></defs>`);
+
+    // Recessive gridlines
+    for (let k = 0; k <= maxKp; k += 3) {
+      parts.push(`<line x1="${padL}" y1="${y(k)}" x2="${W - padR}" y2="${y(k)}" stroke="var(--rule)" stroke-width="1"/>`);
+      parts.push(`<text class="axis-label" x="${padL - 6}" y="${y(k) + 3}" text-anchor="end">${k}</text>`);
+    }
+
+    // Bars: height is Kp, 2px surface gap, 4px rounded top anchored to baseline.
+    slots.forEach((s, i) => {
+      const over = tKp != null && s.kp > tKp;
+      const x = padL + i * bw + 1;
+      const w = Math.max(2, bw - 2);
+      const top = y(s.kp), h = Math.max(2, padT + plotH - top);
+      const fill = over ? 'url(#hatch)' : 'var(--kp)';
+      parts.push(`<path d="M${x},${top + 4} a4,4 0 0 1 4,-4 h${w - 8} a4,4 0 0 1 4,4 v${h - 4} h-${w} z" fill="${fill}"/>`);
+      if (!s.observed && i > 0) return;
+      if (s.observed) parts.push(`<rect x="${x}" y="${padT + plotH}" width="${w}" height="2" fill="var(--text-secondary)"/>`);
+    });
+
+    // Tolerance line, this is what actually carries the verdict.
+    if (tKp != null && tKp < maxKp) {
+      const ty = y(tKp);
+      parts.push(`<line x1="${padL}" y1="${ty}" x2="${W - padR}" y2="${ty}" stroke="var(--text-primary)" stroke-width="2" stroke-dasharray="5 3"/>`);
+      parts.push(`<text class="tol-label" x="${W - padR}" y="${ty - 5}" text-anchor="end">limit for ${esc(opName)} &middot; ${inches(d.toleranceM)}"</text>`);
+    }
+
+    // Time axis: label every 4th block (12 hours)
+    slots.forEach((s, i) => {
+      if (i % 4) return;
+      const t = new Date(s.time);
+      parts.push(`<text class="axis-label" x="${padL + i * bw + bw / 2}" y="${H - 8}" text-anchor="middle">${
+        t.toLocaleString('en-US', { weekday: 'short', hour: 'numeric' })
+      }</text>`);
+    });
+
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.innerHTML = parts.join('');
+
+    const blocked = tKp != null ? slots.filter((s) => s.kp > tKp).length : 0;
+    document.getElementById('chartdesc').textContent =
+      `Kp forecast over ${slots.length * 3} hours. ${blocked} of ${slots.length} three-hour blocks exceed the tolerance for ${opName}.`;
+
+    document.getElementById('foot').textContent =
+      [
+        // Said out loud, because a made up forecast that looks like a real one is
+        // the one thing this panel must never be mistaken for.
+        opts.example ? 'Example only, not live. Real NOAA data replaces this the moment a tool answers.' : null,
+        d.equipment ? `${d.equipment} on ${String(d.correction || '').toUpperCase()}` : null,
+        d.expectedErrorM != null ? `expected drift ${inches(d.expectedErrorM)}"` : null,
+        opts.example ? null : `NOAA data ${d.dataAgeMinutes ?? '?'} min old`,
+      ].filter(Boolean).join('   /   ');
+  }
+
+  /*
+   * MCP Apps bridge, specification 2026-01-26. The host is not allowed to send
+   * this view anything, the tool result included, until the view has sent
+   * ui/initialize, had it answered, and confirmed with
+   * ui/notifications/initialized. The first version of this file only listened,
+   * so on a real host it would have stayed on the example forever.
+   */
+  const bridge = (() => {
+    let nextId = 1;
+    const pending = new Map();
+    const handlers = {};
+    const post = (msg) => window.parent.postMessage(Object.assign({ jsonrpc: '2.0' }, msg), '*');
+    window.addEventListener('message', (event) => {
+      const m = event.data;
+      if (!m || m.jsonrpc !== '2.0') return;
+      if (m.id != null && !m.method && pending.has(m.id)) {
+        const p = pending.get(m.id);
+        pending.delete(m.id);
+        if (m.error) p.reject(new Error(m.error.message || 'request failed'));
+        else p.resolve(m.result);
+        return;
+      }
+      if (m.method && handlers[m.method]) handlers[m.method](m.params || {});
+    });
+    return {
+      request(method, params) {
+        return new Promise((resolve, reject) => {
+          const id = nextId++;
+          pending.set(id, { resolve, reject });
+          post({ id, method, params });
+          setTimeout(() => {
+            if (pending.delete(id)) reject(new Error(method + ' timed out'));
+          }, 10000);
+        });
+      },
+      notify(method, params) { post({ method, params }); },
+      on(method, fn) { handlers[method] = fn; },
+    };
+  })();
+
+  const applyTheme = (theme) => {
+    if (theme === 'dark' || theme === 'light') document.documentElement.setAttribute('data-theme', theme);
+  };
+  const reportSize = () =>
+    bridge.notify('ui/notifications/size-changed', {
+      width: document.documentElement.scrollWidth,
+      height: document.documentElement.scrollHeight,
+    });
+
+  bridge.on('ui/notifications/tool-result', (result) => {
+    const d = result.structuredContent;
+    if (d && typeof d === 'object' && Array.isArray(d.slots)) {
+      render(d);
+      reportSize();
+    }
+  });
+  bridge.on('ui/notifications/host-context-changed', (ctx) => applyTheme(ctx.theme));
+
+  // The example stays up until real data arrives, so the panel is never blank.
+  // It is labelled as an example on screen the whole time it is showing.
+  render(EXAMPLE, { example: true });
+
+  if (window.parent && window.parent !== window) {
+    bridge
+      .request('ui/initialize', {
+        protocolVersion: '2026-01-26',
+        appInfo: { name: 'orbita-window', version: '0.2.0' },
+        appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
+      })
+      .then((result) => {
+        applyTheme(result && result.hostContext && result.hostContext.theme);
+        bridge.notify('ui/notifications/initialized', {});
+        reportSize();
+      })
+      .catch(() => {
+        // No host answered: keep the example rather than showing nothing.
+      });
+  }
+</script>
