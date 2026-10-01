@@ -3,6 +3,7 @@
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Equipment, Field } from './domain.js';
+import * as vault from './vault.js';
 
 export type NotifyReason = 'window_clear' | 'storm';
 
@@ -61,6 +62,15 @@ export type Farm = {
   alertsSent: string[];
   /** When a fresh start was last asked for, so the second ask is the confirmation. */
   forgetAskedAt?: string | null;
+  /**
+   * When this record was last written, as an ISO string on the record itself.
+   *
+   * It lived in a Map in memory first, which meant a restart forgot every one
+   * of them, and since a deploy restarts the process the seven day expiry never
+   * fired on anything that had been loaded from disk. A promise about deleting
+   * data is worth nothing if a redeploy quietly resets the clock.
+   */
+  touchedAt?: string;
 };
 
 const DATA_PATH = resolve(process.env.ORBITA_DATA ?? './data/farms.json');
@@ -68,29 +78,70 @@ const empty = (): Farm => ({ fields: [], equipment: [], waiting: [], crew: [], j
 
 let cache: Record<string, Farm> | null = null;
 
+/** Binds this file to its purpose, so a different sealed file cannot be swapped in. */
+const PURPOSE = 'orbita:farms:v1';
+
+/**
+ * Set a damaged file aside instead of overwriting it.
+ *
+ * The loader used to end `catch { cache = {} }`. A file that would not parse became
+ * an empty database, and the next ordinary write replaced the unreadable file with
+ * the empty one, so corruption quietly deleted every farm and nothing said so. A
+ * rename keeps every byte, and the server carries on with nothing rather than refusing
+ * to start, and says loudly what happened and where the evidence is.
+ */
+function quarantine(why: string): void {
+  const aside = `${DATA_PATH}.corrupt-${Date.now()}`;
+  try {
+    renameSync(DATA_PATH, aside);
+    console.error(`[store] ${why} The file was set aside at ${aside} and this process is starting empty.`);
+  } catch (err) {
+    throw new Error(`[store] ${why} It could not be set aside either: ${String(err)}`);
+  }
+}
+
 function load(): Record<string, Farm> {
   if (cache) return cache;
-  if (existsSync(DATA_PATH)) {
-    try {
-      cache = JSON.parse(readFileSync(DATA_PATH, 'utf8')) as Record<string, Farm>;
-      return cache;
-    } catch {
-      cache = {};
-      return cache;
-    }
+  if (!existsSync(DATA_PATH)) {
+    cache = {};
+    return cache;
   }
-  cache = {};
-  return cache;
+
+  const raw = readFileSync(DATA_PATH, 'utf8');
+  try {
+    const opened = vault.open(raw, PURPOSE);
+    cache = JSON.parse(opened.plain) as Record<string, Farm>;
+    // A key was configured after this was written in the clear, or it was sealed
+    // under a key since rotated out: seal it under the current one now, not whenever
+    // an unrelated write happens to come along.
+    if (vault.encryptionOn() && (!opened.wasSealed || !vault.isCurrentKey(opened.keyId))) {
+      flush();
+      console.error(opened.wasSealed ? '[store] re-sealed the farms file under the current key.' : '[store] the farms file was plaintext and is now sealed.');
+    }
+    return cache;
+  } catch (err) {
+    if (err instanceof vault.VaultError) {
+      // A wrong or missing key is a configuration mistake and the file is fine.
+      // Touching it would turn a typo in an environment variable into data loss.
+      if (err.code === 'no_key' || err.code === 'unknown_key') throw err;
+      quarantine(`The farms file failed verification (${err.code}).`);
+    } else {
+      quarantine('The farms file could not be parsed.');
+    }
+    cache = {};
+    return cache;
+  }
 }
 
 function flush(): void {
   if (!cache) return;
-  mkdirSync(dirname(DATA_PATH), { recursive: true });
+  mkdirSync(dirname(DATA_PATH), { recursive: true, mode: 0o700 });
   // Written beside the file and renamed over it, which is atomic on one
   // filesystem. A crash partway through a direct write leaves a truncated file,
   // and half a record is worse than none: it still parses, so nothing complains.
+  const text = vault.encryptionOn() ? JSON.stringify(cache) : JSON.stringify(cache, null, 2);
   const tmp = `${DATA_PATH}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(cache, null, 2), 'utf8');
+  writeFileSync(tmp, vault.sealIfConfigured(text, PURPOSE), { mode: 0o600 });
   renameSync(tmp, DATA_PATH);
 }
 
@@ -104,18 +155,40 @@ function flush(): void {
  * to a linked account is never evicted: that one was asked for.
  */
 const MAX_RECORDS = Number(process.env.ORBITA_MAX_RECORDS ?? 5000);
-const touched = new Map<string, number>();
-const startedAt = Date.now();
 
-function makeRoom(): void {
-  const all = load();
-  const ids = Object.keys(all);
-  if (ids.length < MAX_RECORDS) return;
-  const demo = ids.filter((id) => id.startsWith('demo:'));
-  if (!demo.length) return;
+/**
+ * The sandbox has its own, much smaller, ceiling.
+ *
+ * Every farm with a field in it is polled for ground magnetometer and ionosphere
+ * data, and every crew address on a demo farm is somewhere an email could go. So the
+ * number of demo records is, through a side door, the load this server puts on free
+ * public services on behalf of strangers. Three hundred is far more than anyone
+ * clicking through a demo reaches, and when it is full the least recently touched
+ * sandbox goes, so a newcomer is never refused.
+ */
+const MAX_DEMO_RECORDS = Number(process.env.ORBITA_MAX_DEMO_RECORDS ?? 300);
+const touched = new Map<string, number>();
+
+const isDemo = (id: string) => id.startsWith('demo:');
+
+function evictOldestDemo(all: Record<string, Farm>): boolean {
+  const demo = Object.keys(all).filter(isDemo);
+  if (!demo.length) return false;
   const oldest = demo.reduce((a, b) => ((touched.get(a) ?? 0) <= (touched.get(b) ?? 0) ? a : b));
   delete all[oldest];
   touched.delete(oldest);
+  return true;
+}
+
+function makeRoom(forId: string): void {
+  const all = load();
+  if (isDemo(forId)) {
+    while (Object.keys(all).filter(isDemo).length >= MAX_DEMO_RECORDS) if (!evictOldestDemo(all)) break;
+    return;
+  }
+  // A linked account is never refused and never evicted. If the total is full the
+  // sandbox pays for it.
+  if (Object.keys(all).length >= MAX_RECORDS) evictOldestDemo(all);
 }
 
 /** What we hold for this farm, or an empty one. Reading never creates a record. */
@@ -131,16 +204,32 @@ function makeRoom(): void {
  */
 const DEMO_TTL_MS = Number(process.env.ORBITA_DEMO_TTL_DAYS ?? 7) * 24 * 60 * 60 * 1000;
 
+/**
+ * Drop the in-memory cache and read the file again, the way a restart does.
+ * Exported for tests: the expiry clock has to live in the file, and the only
+ * honest way to check that is to throw away everything memory is holding.
+ */
+export function reloadForTest(): void {
+  cache = null;
+  touched.clear();
+}
+
 export function expireDemoRecords(now = Date.now()): number {
   const all = load();
   let gone = 0;
   for (const id of Object.keys(all)) {
     if (!id.startsWith('demo:')) continue;
-    const last = touched.get(id);
-    // Nothing touched since this process started, and nothing written since:
-    // treat the file's own age as the clock rather than keeping it forever.
+    // The record's own timestamp first, because that one survives a restart.
+    // The in-memory map is only a faster answer for records touched since boot.
+    const written = all[id]?.touchedAt ? Date.parse(String(all[id].touchedAt)) : null;
+    const last = touched.get(id) ?? (Number.isFinite(written) ? (written as number) : null);
     if (last != null && now - last <= DEMO_TTL_MS) continue;
-    if (last == null && now - startedAt <= DEMO_TTL_MS) continue;
+    // Written before this field existed: give it one TTL from first sight, then
+    // it goes. Stamping it here means the clock starts rather than never runs.
+    if (last == null) {
+      all[id].touchedAt = new Date(now).toISOString();
+      continue;
+    }
     delete all[id];
     touched.delete(id);
     gone += 1;
@@ -186,20 +275,50 @@ export function forget(farmId: string): void {
 const MAX_JOB_LOG = Number(process.env.ORBITA_MAX_JOB_LOG ?? 2000);
 const MAX_ALERTS_REMEMBERED = 400;
 
-function prune(f: Farm): void {
+/**
+ * What one farm can hold, in two sizes.
+ *
+ * flush() rewrites the whole file, synchronously, on every update, so one record with
+ * a hundred thousand fields does not just sit there: it makes every write for every
+ * other farm slow, and on a single threaded server slow means stopped. Nothing bounded
+ * these.
+ *
+ * The obvious fix, one flat number, is wrong for this product. A real operation has
+ * hundreds of fields, and a limit of sixty would silently drop a genuine farm's data
+ * while protecting nobody. A linked account had to set a passphrase and is given room;
+ * the public sandbox is where a stranger can grow a record for free, and gets very
+ * little, because nobody tries a demo with fifty combines.
+ *
+ * The tools refuse politely before these are reached, and this is the backstop that
+ * guarantees a bound.
+ */
+export const LIMITS = {
+  account: { fields: 500, equipment: 100, waiting: 200, crew: 30 },
+  demo: { fields: 20, equipment: 10, waiting: 10, crew: 3 },
+} as const;
+
+export const limitsFor = (id: string) => (isDemo(id) ? LIMITS.demo : LIMITS.account);
+
+function prune(f: Farm, id: string): void {
+  const lim = limitsFor(id);
+  if (f.fields.length > lim.fields) f.fields = f.fields.slice(-lim.fields);
+  if (f.equipment.length > lim.equipment) f.equipment = f.equipment.slice(-lim.equipment);
+  if (f.waiting.length > lim.waiting) f.waiting = f.waiting.slice(-lim.waiting);
+  if (f.crew.length > lim.crew) f.crew = f.crew.slice(-lim.crew);
   if (f.jobLog.length > MAX_JOB_LOG) f.jobLog = f.jobLog.slice(-MAX_JOB_LOG);
   if (f.alertsSent.length > MAX_ALERTS_REMEMBERED) f.alertsSent = f.alertsSent.slice(-MAX_ALERTS_REMEMBERED);
 }
 
 export function update(farmId: string, fn: (f: Farm) => void): Farm {
   const all = load();
-  if (!all[farmId]) makeRoom();
+  if (!all[farmId]) makeRoom(farmId);
   const f = { ...empty(), ...(all[farmId] ?? {}) };
   f.waiting = f.waiting.map((w, i) => ({ ...w, id: w.id ?? `watch-legacy-${i}`, notifiedAt: w.notifiedAt ?? null }));
   all[farmId] = f;
   touched.set(farmId, Date.now());
+  f.touchedAt = new Date().toISOString();
   fn(f);
-  prune(f);
+  prune(f, farmId);
   flush();
   return f;
 }

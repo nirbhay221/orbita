@@ -41,7 +41,7 @@ if (!up) { console.log('  FAIL  the server never came up'); stop(); process.exit
 
 /** One tool call, the way the page makes it. */
 let rpcId = 0;
-async function call(name, args = {}, sessionId = 'testaaaa0001') {
+async function call(name, args = {}, sessionId = '42816a48288988c1b90e06066deea01d') {
   const res = await fetch(`${BASE}/mcp`, {
     method: 'POST',
     headers: {
@@ -116,7 +116,7 @@ for (const group of catalogue.groups) {
 
 console.log('\nTwo visitors are two farms');
 await call('register_field', { name: 'Somebody Elses Field', lat: 47.92, lon: -97.03 }, 'otheraaa0003');
-const mine = await call('farm_status', {}, 'testaaaa0001');
+const mine = await call('farm_status', {}, '42816a48288988c1b90e06066deea01d');
 const theirs = await call('farm_status', {}, 'otheraaa0003');
 check('the second visitor does not see the first visitor\'s field',
   !theirs.text.includes('North 40') && !mine.text.includes('Somebody Elses Field'), `${mine.text} // ${theirs.text}`);

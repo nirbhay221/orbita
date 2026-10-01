@@ -44,7 +44,7 @@ for (let i = 0; i < 60 && !up; i++) {
 if (!up) { console.log('  FAIL  the server never came up'); stop(); process.exit(1); }
 
 let rpcId = 0;
-async function rpc(method, params, session = 'contractaa01') {
+async function rpc(method, params, session = '9da1d202c3254add05ca39329cac11bd') {
   const res = await fetch(`${BASE}/mcp`, {
     method: 'POST',
     headers: {
@@ -73,6 +73,10 @@ const SPOKEN = {
   can_i_run: { operation: 'planting', field: 'north', equipment: 'planter' },
   storm_status: {},
   farm_status: {},
+  // Registered through the SDK's experimental task surface with
+  // taskSupport 'optional', so it answers a plain tools/call as well as a
+  // task-carrying one. Both paths are exercised: this map covers the plain one.
+  plan_season: {},
   what_happened: { when: '10 May 2024', operation: 'planting' },
   what_should_i_do: { role: 'grid_operator' },
   what_else_is_affected: {},
@@ -198,6 +202,15 @@ for (const name of names) {
     `${status} ${JSON.stringify(body).slice(0, 140)}`);
 }
 
+console.log('\nArguments named after the language itself');
+for (const name of names) {
+  const { status, body } = await callTool(name, { constructor: 'x', prototype: 'y', nonsense: '?' }, 'contractaa02');
+  check(`${name} answers an argument named "constructor" instead of an internal error`,
+    status === 200 && body.error?.code !== -32603, `${status} ${JSON.stringify(body).slice(0, 140)}`);
+}
+const nested = await callTool(names[0], { nested: { constructor: 'x' } }, 'contractaa02');
+check('a nested one is handled the same way', nested.body.error?.code !== -32603, JSON.stringify(nested.body).slice(0, 140));
+
 const wrongWord = await callTool('can_i_run', { operation: 'dancing', field: 'north' }, 'contractaa02');
 const wrongText = wrongWord.body.result?.content?.[0]?.text ?? '';
 check('a word we do not know is answered with the words we do know', /I can do planting/.test(wrongText), wrongText);
@@ -239,6 +252,9 @@ const limited = spawn(process.execPath, ['dist/server.js'], {
     ORBITA_AUTH: 'off',
     ORBITA_BURST: '5',
     ORBITA_REFILL: '0',
+    // One proxy hop, so X-Forwarded-For can stand in for two different callers. Sandbox
+    // callers are charged by address: a demo id is free to invent and cannot be a key.
+    ORBITA_TRUST_PROXY: '1',
   },
   stdio: 'ignore',
 });
@@ -250,7 +266,7 @@ try {
   const hit = async () => {
     const res = await fetch(`http://127.0.0.1:${limitedPort}/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'x-orbita-demo': 'ratelimitaa1' },
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'x-forwarded-for': '203.0.113.10', 'x-orbita-demo': 'ee74208ad57ec4a74674a4945ab22e9e' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'storm_status', arguments: {} } }),
     });
     return res.status;
@@ -262,20 +278,28 @@ try {
     statuses.slice(5).some((s) => s === 429), statuses.join(','));
   const refused = await fetch(`http://127.0.0.1:${limitedPort}/mcp`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'x-orbita-demo': 'ratelimitaa1' },
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'x-forwarded-for': '203.0.113.10', 'x-orbita-demo': 'ee74208ad57ec4a74674a4945ab22e9e' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'storm_status', arguments: {} } }),
   });
   check('...with a retry hint rather than a closed door', !!refused.headers.get('retry-after'), String(refused.status));
   const body = await refused.json();
   check('...and the refusal is in words, not a stack trace',
     /slow down/i.test(body.error?.message ?? '') && !/Error:|at /.test(body.error?.message ?? ''), JSON.stringify(body).slice(0, 120));
-  // A different caller has their own bucket and is unaffected.
+  // The bypass this closes: from the SAME address, a fresh demo id must not reset the
+  // limit, because inventing one costs nothing.
+  const rotated = await fetch(`http://127.0.0.1:${limitedPort}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'x-forwarded-for': '203.0.113.10', 'x-orbita-demo': 'b3f1a9c2d4e5f60718293a4b5c6d7e8f' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'what_can_you_do', arguments: {} } }),
+  });
+  check('a fresh demo id from the same address is still limited', rotated.status === 429, String(rotated.status));
+  // A different address has its own bucket and is unaffected.
   const otherRes = await fetch(`http://127.0.0.1:${limitedPort}/mcp`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'x-orbita-demo': 'ratelimitbb2' },
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'x-forwarded-for': '203.0.113.20', 'x-orbita-demo': '7c4c1db8ad9f3bb4266e7629a9c34875' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'storm_status', arguments: {} } }),
   });
-  check('a different caller is not punished for the first one', otherRes.status === 200, String(otherRes.status));
+  check('a caller at a different address is not punished for the first one', otherRes.status === 200, String(otherRes.status));
 } finally {
   try { limited.kill(); } catch { /* already gone */ }
   rmSync('./data/test-ratelimit.json', { force: true });

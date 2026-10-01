@@ -58,7 +58,7 @@ async function call(name, args = {}) {
     headers: {
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
-      'x-orbita-demo': 'latencyaaa01',
+      'x-orbita-demo': '2d22c53a3dc7b9fead2dab7f2b602f67',
     },
     body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: 'tools/call', params: { name, arguments: args } }),
   });

@@ -30,6 +30,23 @@ Built for the [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonapp
 Alexa+ track, plus the Open Source and AWS Builder mini challenges. Self-hosted MCP server,
 spec 2025-11-25, Streamable HTTP, with an MCP Apps panel for the Echo Show.
 
+## Start here
+
+This file is long because the reasoning is the work. If you are reading it to evaluate the project,
+these are the five things worth your time:
+
+| If you want | Read |
+|---|---|
+| What it does, in one exchange | [What it does](#what-it-does) |
+| Why it is not a wrapper around a feed | [Why it is not a wrapper around a feed](#why-it-is-not-a-wrapper-around-a-feed) |
+| The part that is measured rather than forecast | [Measured, not only forecast](#measured-not-only-forecast) |
+| What the protocol is doing that is unusual | [Asking, instead of guessing](#asking-instead-of-guessing), [The answer that does not fit in a turn](#the-answer-that-does-not-fit-in-a-turn), [Another server can ask us too](#another-server-can-ask-us-too) |
+| Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
+
+Twelve free NOAA and USGS products, no API key. Every tool call is answered from memory; nothing
+external is called inside a turn. `npm test` runs 732 checks, none of which touch the network except
+the three live suites at the end.
+
 ## The problem
 
 In May 2024 a solar storm knocked GPS accuracy out across the Midwest at the peak of planting.
@@ -127,6 +144,31 @@ The places with nothing to look at are the places that break.
 
 ## Not only farms
 
+**Machines nobody is watching.** The sharpest version of this problem is not a
+farmer in a cab noticing the rows wander. Next generation tractors, harvesters and
+drones are built to run "continuously and independently, minimizing labor", which
+means the thing that would have caught the drift has been deliberately removed.
+Research on space weather and positioning names the exposed sectors as security,
+autonomous transportation, precision agriculture and financial transactions, and the
+documented symptoms in agriculture are missed lines, weaker repeatability, and time
+spent reacquiring position. An unattended machine accumulates all three before
+anybody reads a report.
+
+**The low altitude drone economy.** There is a 2026 paper in *Space Weather* on
+exactly this: drones operating below 3,000 m for logistics, inspection, precision
+agriculture and urban air mobility, where space weather can cause "temporary loss of
+control, positioning errors, or reduced awareness of surrounding air traffic". That
+is a wider audience than the drone pilot this add-on already answers, and a more
+consequential one, because the failure is a flight rather than a pass across a field.
+
+**Everything else that surveys from the air.** Drone mapping is routine in
+construction, mining, energy and utilities, forestry, archaeology, real estate,
+insurance and infrastructure inspection, and RTK surveying gets 1 to 3 centimetres
+horizontally when it works. Every one of those breaks the same way for the same
+reason, and every one already has a tolerance it is working to, which is the input
+this add-on needs.
+
+
 The same ionosphere degrades every trade that stands on GNSS, and the engine does not change
 between them: same Kp, same geomagnetic latitude, same baseline penalty. Only the tolerance differs.
 
@@ -195,7 +237,9 @@ anything in the house.** There is a test asserting the spoken answer never claim
 
 ## Data
 
-Three free NOAA products, no API key, no documented rate limit.
+Twelve free NOAA and USGS products, no API key, no documented rate limit.
+
+The forecast, which is where this started:
 
 * `noaa-planetary-k-index-forecast.json` for 3-hourly Kp, observed and forecast, about 3 days out
 * `alerts.json` for issued alerts, warnings and watches
@@ -203,6 +247,28 @@ Three free NOAA products, no API key, no documented rate limit.
   R and S are day ahead probabilities rather than levels. The server stores each level as the
   digit NOAA sends, because the feed's text field is a word ("moderate") and reading that word as a
   code once made every real storm look quiet
+* solar wind speed and magnetic field at L1, and an estimated Kp updated every minute
+
+What was measured rather than predicted:
+
+* **GloTEC**, a global map of total electron content on a 5 by 2.5 degree grid every ten minutes.
+  This is the physical quantity that actually delays a GNSS signal. See the next section
+* **USGS INTERMAGNET observatories**, the ground magnetic field at one sample a minute
+* **Dst** once a minute, the ring current index, which is the global companion to those observatories
+* **OVATION Prime**, an aurora probability for every one degree cell on Earth
+
+The rest of the catalogue, each one for somebody this add-on already answers:
+
+* **ICAO space weather advisories**, the formal product civil aviation runs on. Orbita was answering
+  an airline dispatcher out of the generic NOAA scales while the product written for them sat unread
+* **GOES X-ray flux** at one minute, so a flare shows up while it is happening rather than in
+  tomorrow's summary. The R scale is defined on this channel
+* **WSA-Enlil**, a model of the whole inner heliosphere, which is the only feed here that gives days
+  of warning rather than minutes
+* **45 day Ap and F10.7**, the only feed on the timescale of the decision it informs. A planting
+  season is not a three day question
+* **Solar flare and proton probabilities** for the HF radio operator and the dispatcher, and
+  **electron fluence** for the satellite operator
 
 NOAA's live products reach back about seven days. For older questions the retrospective uses the
 GFZ Potsdam archive, who produce the Kp index itself and publish the full record free without a key.
@@ -234,9 +300,60 @@ Error magnitudes are calibrated against the published literature on GNSS perform
 geomagnetic storms: 3D RMS of 0.163 m quiet, 0.393 m moderate, 0.680 m intense and 1.051 m super,
 with short peaks near 3 m, and RTK-fixed availability falling below 91 percent at high Kp.
 
+## Measured, not only forecast
+
+Everything above is a forecast, and Kp is a planetary index published in three hour blocks. Orbita
+converted it into an expected positional error through a table built from what operators reported
+during past storms. That table still answers when nothing better is available, and it is a
+correlation. The thing it correlates with is not the thing that moves the tractor.
+
+What moves the tractor is electrons. A GNSS signal crossing the ionosphere is delayed in proportion
+to the total electron content along its path, and at the L1 carrier that works out at about 16
+centimetres per TEC unit. NOAA's GloTEC assimilates real observations into a map of exactly that,
+so the number Orbita was inferring can instead be measured.
+
+**The gradient matters, not the amount.** RTK does not care how much ionosphere there is. It cancels
+the ionosphere by differencing a rover against a base station, and that cancellation rests on one
+assumption: that the sky over the base and the sky over the rover are the same. A storm is what makes
+them different. What survives the differencing is the TEC difference across the baseline, which is
+the spatial gradient times the baseline length:
+
+```
+residual metres = |grad TEC| (TECU/km) x baseline (km) x 0.1624 (m/TECU)
+```
+
+That is why RTK "degrades hardest in a storm" and why long baselines lose it first, which this README
+asserted for a long time and can now compute. It also turns `baselineKm`, recorded on every field
+since the beginning, from documentation into an input. On a quiet day a 30 km baseline carries about
+2 centimetres of unmodelled error; the arithmetic is checked in `test-glotec.mjs` against synthetic
+grids with analytically known gradients, because a wrong gradient still looks like a plausible one.
+
+Two limits, because they bound what this can claim. Five degrees of longitude is about 400 km at
+Nebraska's latitude, so the gradient is a regional slope and not the small-scale structure that causes
+cycle slips; scintillation lives entirely below this resolution and is invisible here. And each cell
+carries a quality flag: zero means the assimilation had observations, anything else means it is
+leaning on climatology, and a reading built from those cells says so rather than being quietly
+averaged in. This is a floor on the error, not a ceiling.
+
+**And whether the storm has arrived.** A planetary average is an average over a planet. The auroral
+electrojet sits over the night side, so two places at the same geomagnetic latitude and the same Kp
+can be having very different afternoons depending on where local midnight is. The USGS observatories
+close that: the horizontal component H drops as the ring current builds, and its rate of change is the
+better substorm detector because a substorm is fast rather than deep. Paired with global Dst, the two
+separate three cases Kp cannot: a real storm that has not reached this longitude yet, a substorm
+overhead that is not a planetary storm at all, and a storm that has not bottomed out.
+
+The honest limit here is coverage. Thirteen of the observatories in the USGS directory are partners it
+names but does not serve; every Canadian one answers the data endpoint with 422, which was found by
+checking all of them rather than trusting the list. So ground truth is the United States plus single
+stations at Guam, Honolulu, San Juan, Kakioka and Hermanus. Winnipeg, the worked example earlier in
+this file, gets the forecast and no corroboration, and the distance gate turns that into silence
+rather than a wrong answer: inside 600 km the reading speaks fully, out to 2,000 km only about the
+slow regional part, and beyond that not at all.
+
 ## Tools
 
-Fourteen tools. Fewer than there were, deliberately: published benchmarks put tool selection above 90 percent
+Fifteen tools. Still deliberately few: published benchmarks put tool selection above 90 percent
 up to about twenty tools and falling away after that, and several of ours were two doors onto one question.
 
 **Answers**
@@ -369,6 +486,34 @@ node probe.mjs              # end to end against live NOAA
 
 Expose it with `cloudflared tunnel --url http://localhost:8788`.
 
+## It runs in more than Alexa+
+
+MCP is client agnostic, which this file has claimed and never demonstrated. The server
+is remote and reachable over HTTPS, which is the shape every compliant host accepts, so
+it works today in Claude Desktop, Claude Code, ChatGPT in developer mode, Cursor,
+VS Code with Copilot, Windsurf, Cline, Zed and Replit. Nothing needs building for any of
+them.
+
+ChatGPT is worth calling out because it only takes remote HTTPS servers and cannot run
+the local stdio kind, which is exactly the half of the ecosystem this already is.
+
+```json
+{
+  "mcpServers": {
+    "orbita": {
+      "type": "streamable-http",
+      "url": "https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/mcp"
+    }
+  }
+}
+```
+
+**One warning if you run this alongside the companion add-on.** Cursor has a soft
+ceiling of roughly 40 active tools across every connected server, and past it the agent
+silently loses access to some of them rather than telling you. Orbita publishes 15 and
+Sudor 18, so the pair is 33 before anything else is connected. On a host with a ceiling,
+connect one or the other.
+
 ## Getting it in front of Alexa+
 
 Alexa+ add-on tooling is in developer preview and gated: Amazon requires developers to sign up
@@ -419,8 +564,156 @@ most of the continental United States, as far south as Florida, and positioning 
 metres for hours in places that no fixed-band model would have flagged
 ([Yizengaw et al. 2026, *Geophysical Research Letters*](https://doi.org/10.1029/2026GL124645)). A
 comparable storm in May 2024 landed in planting season and is estimated to have cost American
-farmers around half a billion dollars. Orbita now adds the storm's own reach to a site's
-climatological exposure, so the same field is judged differently in a G1 and in a G5.
+farmers around half a billion dollars. Orbita adds the storm's own reach to a site's climatological
+exposure, so the same field is judged differently in a G1 and in a G5.
+
+**The straight line is now the fallback, not the method.** That approximation is a straight line
+through something that is not straight. The real oval is not a circle centred on the geomagnetic pole
+and is not the same width all the way round: it is pulled towards the night side, which means the
+same site at the same Kp is inside it at 2am and outside it at 2pm. A linear rule cannot express that,
+and the case it gets worst is the sudden equatorward expansion during a substorm, which is exactly
+what happened in November 2025.
+
+NOAA's OVATION Prime publishes the whole thing, an aurora probability for every one degree cell,
+forecast about half an hour ahead. Live, on a quiet evening, it reads 13 percent at Tromso and 0
+percent at Fairbanks. Fairbanks is the *lower* latitude of the two at 64.8 degrees against 69.7, and
+it reads zero because it is a different longitude and therefore a different local time. No
+latitude-only rule can produce that pair, which is the argument for the model in one line.
+
+The linear rule stays, for two reasons. OVATION publishes a nowcast only, so the three day forecast
+still has to use it; and it is what answers when the feed is missing. Orbita uses the model when the
+model is current and the approximation when it is not, and the answer says which.
+
+## Where the corrections actually come from
+
+`baselineKm` is the most consequential number this server holds. It is what the
+measured ionospheric gradient gets multiplied by, so it decides whether a job is
+clear or blocked, and until recently it was whatever the customer typed.
+
+It does not have to be. RTK corrections reach a rover over NTRIP, and the casters
+that carry them publish a sourcetable: every mountpoint, with the position of the
+station behind it. RTK2go is the free community caster and carries over 700 stations
+worldwide, so the nearest real correction source to a field is a lookup rather than a
+recollection. This is the closest thing here to a device integration and it needs no
+device: the hardware exists, other people own it, and the network says where it is.
+
+What it found is the useful part, and it is not good news:
+
+```
+Grand Island, Nebraska  ->  Bremen, Kansas    174 km    8 others within 500 km
+central Iowa            ->  Titonka, Iowa     137 km   14 others within 500 km
+Winnipeg                ->  Larimore, ND      217 km    7 others within 500 km
+```
+
+RTK assumes the ionosphere is the same over the base and the rover. Over 137 km
+during a storm it is emphatically not, and per the limitation on tropospheric delay
+below, it is past where the weather alone starts costing accuracy too. A farmer
+relying on a community stream at that distance is getting considerably less than the
+centimetres the technology advertises, and this is the audience the whole add-on
+exists to warn.
+
+**It only speaks when nobody has said.** The first version of this compared a stored
+baseline against the public network and offered a correction when the stored one
+looked optimistic. That was wrong and it would have cost trust: a base station on a
+grain bin 18 km from a field is an ordinary thing for a farm to own, and network RTK
+subscriptions give short effective baselines too. The customer knows where their base
+is; this knows where other people's are. When they have told us, believe them. When
+they have not, the alternative was a default quietly driving the arithmetic.
+
+Two things worth recording for anyone reading the same feed. The caster answers 403
+to an ordinary HTTP request: NTRIP requires a `User-Agent` that literally begins with
+the word NTRIP. And nothing here subscribes to a mountpoint or decodes RTCM, because
+whether a volunteer station is actually up, and whether its published position is
+accurate, is not something a sourcetable can be trusted for. It offers a distance and
+names a station, and never claims the correction works.
+
+## Asking, instead of guessing
+
+`findField` used to end with "if no name was given, return the first field". For a farm with one
+field that is correct and convenient. For a farm with three it is a silent wrong answer: somebody asks
+"can I plant?" and gets a verdict about whichever field they happened to register first, with nothing
+in the sentence saying which. The tolerance, the baseline and the exposure all differ between fields,
+so that is not a cosmetic slip.
+
+Elicitation, new in spec 2025-11-25, is the protocol's answer: the server stops mid-call and asks the
+host a question with a typed answer. Amazon's functional requirements ask for the behaviour in as many
+words, twice, under "prompt for missing required parameters" and "present clarifying questions for
+ambiguous matches".
+
+Three outcomes, and keeping them distinct is the whole point. **Chosen** uses the answer. **Declined**
+means the customer was asked and said no, and no verdict follows, because a default that overrides a
+no is worse than never asking. **Unsupported** means this host cannot be asked at all, in which case
+the old behaviour stands but the sentence now discloses it: "That is for North 40 with the planter;
+name a different one and I will check that instead."
+
+That third case is not hypothetical. Elicitation is a *client* capability, so Alexa+ may or may not
+offer it, and a script certainly does not. The capability is checked rather than attempted, because a
+voice turn has roughly half a second and a request that hangs is worse than a guess.
+
+## The answer that does not fit in a turn
+
+`plan_season` is a task rather than an ordinary tool, and tasks are the headline addition to spec
+2025-11-25: the host calls, gets a handle, polls, and collects the result when it has somewhere to put
+it.
+
+Not because the server needs minutes. Five fields against ten operations across forty-five days
+finishes in milliseconds. It is the shape of the result. A season plan is a table with a row per field
+and per window, and that belongs on a screen, fetched when the panel is ready to render it, rather
+than read aloud at somebody in one breath. It is also the only thing here that can answer "which week
+should I book a crew for", because it is the only thing reading a forty-five day feed.
+
+It reuses the same `assess` the go/no-go answer uses, so a season plan and "can I plant now" cannot
+disagree about the same field at the same Kp. Two code paths computing tolerance separately is how a
+product ends up saying different things on Tuesday and Friday.
+
+It also separates two things a list of empty windows blurs. An operation that fails at Kp 0, which is
+as good as the sky ever gets, is limited by the correction the machine runs and not by space weather,
+and no quiet week will change it. Those come back as `neverHolds` rather than as an absence.
+
+`taskSupport` is `optional`, not `required`, which turned out to matter: a host that can poll gets the
+task shape, and a host that cannot gets the plan directly from an ordinary call. Both paths are
+tested.
+
+## An Alexa+ stand-in
+
+MCP add-on support is in preview and access has to be requested, so this cannot be demonstrated on a
+real Echo. Every serious entry in this hackathon hit that wall, and the demo page's answer until now
+was a catalogue of buttons, each hardcoded to a tool and a set of arguments.
+
+That proves the server answers. It proves nothing about the part of MCP that is actually hard, because
+a human wrote `can_i_run` and filled in `operation: planting`. The interesting step is a model reading
+`tools/list` cold and deciding that "could I spray the North 40 this afternoon" means that tool with
+those arguments. Certification tests that and little else: clear tool descriptions mapping to distinct
+intents, synonyms and alternate spellings in the parameter descriptions, every example utterance
+working when spoken. A button exercises none of it.
+
+So `/agent` is a test of the tool descriptions, not of the tools. A model chooses; the choice is then
+executed through a real in-memory MCP transport, so the schemas it read are the schemas the protocol
+publishes and the call is dispatched exactly as a host's would be. Both halves come back, because a
+wrong choice is more informative than a plausible answer, and a decline is reported as a result rather
+than an error: a host that calls nothing when nothing fits is behaving correctly.
+
+It is not Alexa. It does not share Alexa's prompt, its turn budget or its judgment about when to call
+something, and that disclaimer travels in the response payload rather than living here. Off unless
+`ORBITA_ANTHROPIC_KEY` is set, and the rest of the page works without it.
+
+## Hearing it
+
+Every sentence this server produces is written to be heard once, by somebody with their hands busy,
+who cannot scroll back. That is the property the whole thing is designed around, and a page that
+renders it as text is the one place it cannot be judged. Long numbers are where it bites: "0.7 metres,
+about 34 times your normal 0.8 inches" reads fine and is a lot to hold in your head at the speed of
+speech.
+
+`/speak` runs the same string the tool returned through Polly, so a listener finds out whether the
+phrasing actually works. For the demo page and the video only; it is deliberately not in the MCP path,
+because Alexa+ does its own speech and a server that also synthesised audio would be duplicating work
+the host does better and billing for it.
+
+Polly charges per character, so it is fenced: a content-hash cache, a 2,000 character ceiling, and
+angle brackets refused outright rather than escaped. That last one matters, because passing caller text
+through as SSML would let anyone who can reach the endpoint change the voice, insert silence, or spell
+text out at a different rate and price.
 
 ## Another server can ask us too
 
@@ -449,6 +742,58 @@ is worse than losing it outright because nothing complains.
 The endpoint is rate limited per caller, a burst of 600 refilling at ten a second, which is far
 above anything a conversation does and far below a script. The specification asks for it and we had
 nothing.
+
+### Sealing, linking and spend limits
+
+* **Encrypted at rest.** With `ORBITA_DATA_KEY` set, the whole data file and the token file are sealed with
+  AES-256-GCM, with a key id and the purpose bound in as associated data. The key lives in SSM Parameter
+  Store. Losing it is losing the data, and there is no recovery. `ORBITA_DATA_KEY_PREVIOUS` supports
+  rotation. A wrong key is treated as different from a corrupt file: the server refuses to start rather
+  than quarantine data it could not open. `ORBITA_REQUIRE_ENCRYPTION=on` makes a missing key fatal.
+* **Linking needs a passphrase.** The first person to present a name claims it (trust on first use, so a
+  name can be squatted before its owner arrives; accounts that predate passphrases are claimed by the first
+  presenter). Passphrases are hashed with scrypt at the OWASP parameters, wrong guesses lock out, and the
+  failure messages do not reveal whether a name exists.
+* **Tokens are hashed and persisted.** Access and refresh tokens are stored as SHA-256 digests, so a deploy
+  does not sign anyone out and a stolen file holds no usable token. Refresh tokens rotate, and replaying a
+  spent one revokes the whole family (RFC 9700).
+* **The demo page has its own door.** Ids of the form `demo:<128-bit hex>` live in a separate namespace
+  that cannot reach a linked account. `ORBITA_DEMO=off` closes it. Email is disabled for sandbox callers,
+  so the endpoint cannot be used to send mail to a stranger.
+* **Spend and size limits.** `/agent` and `/speak` have a per-caller bucket and a daily cap, sandbox callers
+  are keyed by address so rotating ids does not help, and records, crew, fields and timers have ceilings
+  (higher for linked farms). These counters are in memory and reset when the service restarts.
+* **Behind API Gateway.** `ORBITA_TRUST_PROXY=1` counts one hop, and the origin secret is armed only after
+  the gateway sends it. See `deploy/README.md` for the order.
+
+## Evaluating tool selection
+
+`npm test` shows the server gives the right answer once a tool is chosen. It cannot show that a host would
+choose that tool from what a person said, which is what Amazon's certification list tests, so there is a
+separate golden eval: 64 spoken sentences, 13 of them expecting no tool at all, each with the tool and
+arguments a correct host should pick. It covers plain requests, speech-recognition noise ("north forty"),
+missing information, indirect phrasing, out-of-scope requests and prompt injection.
+
+```sh
+ORBITA_ANTHROPIC_KEY=... npm run eval                # 3 trials per sentence
+npm run eval -- --trials 5 --save-baseline     # keep this run as the baseline
+```
+
+It reads the server's real `tools/list`, asks a model to choose, scores the choice, and then calls the chosen
+tool if it is read-only to check the extracted arguments are accepted. Routing, declining and arguments have
+separate floors, because a blended number would let a host that always reaches for a tool look fine. Every
+sentence runs several times and is reported as stable, flaky or never right, with pass^k (the chance that all
+k trials succeed), because a sample that works two times in three looks the same as one that works every
+time in a single pass. A sentence that was stable at the saved baseline and is not now fails the run.
+
+It costs one model call per sentence per trial, so it is not part of `npm test`. `npm run eval -- --preflight` asks the API to count the tokens of the real request, which is free, proves the request is accepted, and prints what a full run would cost; the tool list is cached across calls, which cuts the input bill by about nine tenths, and `--budget <dollars>` stops a run that reaches its limit rather than finishing it. What needs no model is: the
+golden file is checked against the live tool list (a renamed tool, an argument that no longer exists or an
+enum value nobody can pass fails the build), and the scorer and the runner are tested against a fake host
+that is deliberately flaky, over-eager or sends bad arguments. Last live run (Opus 5.5, 3 trials, all sentences stable, routing, declining and arguments all 100%, every chosen
+read-only call answered, $0.96). Read that with care: the first live runs missed several sentences, and the
+fixes were tool descriptions plus a few golden sentences that were not fair single-turn tests (a required value only
+the customer knows, so asking back is correct), so 100% is a regression baseline and not a blind score. A golden set is also fixed, so it cannot notice a failure it does not contain, and cases should be
+added from real misses.
 
 ## Performance
 
@@ -502,6 +847,40 @@ Named deliberately, because it exists.
 * Twenty one tools is a lot for a model to choose between. Descriptions carry the words people
   actually say, but tool choice on real Alexa+ still has to be tested.
 * It needs connectivity, which is not a given on the sites that most need it.
+* **The ionosphere is not the only atmosphere in the way.** Research on RTK names two
+  main error sources, and this add-on models one of them. The other is tropospheric
+  delay, which splits into a hydrostatic part, roughly 90 percent of the total,
+  stable and predictable from surface pressure, and a wet part driven by water
+  vapour, roughly 10 percent, which varies rapidly and is not consistently
+  modellable to millimetre precision by any existing empirical model. In zenith the
+  dry part reaches 2 to 2.5 metres and the wet part runs from a few centimetres in
+  arid air to about 0.35 metres in humid air. RTK cancels the dry part well; the
+  residual difference in wet delay between base and rover becomes a noticeable
+  position error once the baseline exceeds roughly 10 to 20 km.
+  That number is worth sitting next to the base station distances in
+  [Where the corrections actually come from](#where-the-corrections-actually-come-from):
+  the nearest public streams to a Nebraska or Iowa field are 137 to 217 km out, which
+  is five to twenty times past where the troposphere starts costing accuracy on its
+  own. So on a long baseline, part of the error Orbita cannot account for is weather
+  rather than space weather. Nothing here estimates it, deliberately, because a wet
+  delay model that cannot be trusted to millimetres would add a number without
+  adding confidence. Treat every figure this server gives as a floor.
+* The measured ionosphere is a 5 by 2.5 degree grid. That is about 400 km of longitude at Nebraska's
+  latitude, so the TEC gradient it yields is a regional slope, not the small-scale structure that
+  causes cycle slips. Scintillation is below this resolution and invisible to it. Treat the residual
+  as a floor on the error and not a ceiling.
+* Ground truth is the United States. Thirteen observatories the USGS directory lists are partners it
+  does not serve, including every Canadian one, so Winnipeg gets the forecast and no corroboration.
+  Beyond 2,000 km from a reporting observatory the module says nothing rather than something weaker.
+* The 45 day outlook is a statistical Ap forecast, not a prediction of individual storms. It is for
+  choosing between weeks, not for committing to a morning.
+* WSA-Enlil arrival times run a few hours either way and an ejection can miss entirely. Worth
+  planning around, not worth cancelling on, and the sentence says so.
+* The Alexa+ stand-in on the demo page is a model reading the real tool list, not Alexa. It does not
+  share Alexa's prompt, its turn budget or its judgment about when to call a tool, so a description
+  that works there can still fail on the device.
+* Spoken answers come from Polly and exist for the demo and the video. Alexa+ does its own speech;
+  nothing in the MCP path synthesises audio.
 
 ## Roadmap
 
@@ -511,6 +890,14 @@ Named deliberately, because it exists.
 
 ## Licence
 
-AGPL-3.0. Copyleft, deliberately. Anyone building on this must publish their source under the
-same terms. This protects the code, not the idea, and the commit history is the record of when it
-was done.
+Apache-2.0. Permissive, deliberately, and it is a change of mind worth recording rather than
+quietly making.
+
+This was AGPL-3.0 first, on the reasoning that anyone building on it should have to publish their
+own source. That reasoning protects the code. It does not serve the thing the code is for, which is
+a farmer finding out that guidance will not hold before the planter is in the ground, and the
+fastest route to that is a manufacturer or a correction network being able to lift the geomagnetic
+model into their own stack without their lawyers getting involved. Copyleft is a toll on exactly
+the people best placed to make this useful.
+
+Apache rather than MIT for the patent grant, which matters more than the extra paragraph costs.

@@ -18,7 +18,11 @@ npm run build
 # Written inside the repository rather than /tmp, because the AWS CLI on Windows
 # is a native program and cannot open a Unix style temp path.
 mkdir -p .deploy
-tar -czf .deploy/app.tar.gz dist web ui package.json package-lock.json
+# deploy/ carries the secrets fetcher and the systemd drop-in, so the host installs
+# the service definition from the same bundle as the code it starts. The two can no
+# longer drift apart, which is how a deploy ended up running new code under old
+# settings.
+tar -czf .deploy/app.tar.gz dist web ui package.json package-lock.json deploy/orbita-secrets.sh deploy/orbita-hardening.conf
 
 "$AWS" s3 cp .deploy/app.tar.gz "s3://${BUCKET}/${KEY}"
 echo "uploaded s3://${BUCKET}/${KEY}"

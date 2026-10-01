@@ -1,0 +1,100 @@
+/**
+ * Everyone else the same storm reaches.
+ *
+ * One of the grouped tool modules split out of tools.ts. The code is unchanged
+ * from when it lived there; only the file it lives in is new.
+ */
+
+import { z } from 'zod';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  assess, nextWindow, thresholdKp, TOLERANCE_M, degradedOptions, deadlinePressure, geomagneticLatitude,
+  auroralBoundaryDeg,
+  type Correction, type Operation,
+} from '../domain.js';
+import { activeImpacts, speakImpacts } from '../impacts.js';
+import * as swpc from '../swpc.js';
+import * as solarwind from '../solarwind.js';
+import * as geomag from '../geomag.js';
+import * as glotec from '../glotec.js';
+import * as swpcplus from '../swpcplus.js';
+import * as aurora from '../aurora.js';
+import { chooseOne, canAsk } from '../elicit.js';
+import * as season from '../season.js';
+import * as store from '../store.js';
+import * as history from '../history.js';
+import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
+import { sendEmail, emailConfigured } from '../notify.js';
+import { lookupTimeZone, spokenTime } from '../timezone.js';
+import {
+  NOAA_DOWN,
+  say,
+} from './shared.js';
+
+export function register(server: McpServer, farmOf: () => string): void {
+  /* ---------------------------------------------------------------- *
+   * What to do about it. The same forecast means planting waits, a
+   * satellite team defers ground maintenance, a grid control room checks
+   * black start units and a dispatcher plans a lower track. Timed to how
+   * far off the storm is, because most of these only help a day early.
+   * ---------------------------------------------------------------- */
+  server.registerTool(
+    'what_should_i_do',
+    {
+      title: 'What should I do about the space weather',
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+      description:
+        'Protective steps for the person asking, by what they look after: flying drones, running satellites, the power ' +
+        'grid, flight operations, HF radio, GPS timing, pipeline surveys, directional drilling, railway signalling, ' +
+        'holding a vessel on position, automated mining, tracking a vehicle fleet, watching for aurora, or a ' +
+        'household. Timed to the NOAA forecast: a day ahead, hours ahead, during and after. ' +
+        'Call this when someone asks what they should do, how to protect something, whether to postpone, or asks for ' +
+        'the rest of the steps, and also when they say what they operate, for example "I fly HF" or "I run a grid ' +
+        'control room", and ask whether it will affect them. Read the answer aloud as given. It is not for whether a field job can run (use can_i_run) ' +
+        'or for the current Kp (use storm_status).',
+      inputSchema: {
+        role: z.enum(ROLES).optional().describe(ROLE_HINT),
+        step: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('Where to continue from when the customer asks for the rest; use nextStep from the last answer'),
+      },
+    },
+    async ({ role, step }) => {
+      const id = farmOf();
+      const farm = store.get(id);
+      const chosen = (role ?? farm.role) as Role | undefined;
+      if (!chosen) {
+        return say(
+          'Tell me what you look after, for example flying drones, running satellites, the power grid, flights or HF ' +
+            'radio, and I will tell you what to do about the space weather.',
+          { needsRole: true },
+        );
+      }
+      if (role && role !== farm.role) store.update(id, (f) => void (f.role = role));
+
+      const snap = swpc.current();
+      if (!snap?.slots.length) return say(NOAA_DOWN, { unavailable: true });
+
+      // Exposure follows the magnetic field, so use the first registered site when there is one.
+      const site = farm.fields[0];
+      const gmLat = site ? geomagneticLatitude(site.lat, site.lon) : null;
+      const advice = advise(
+        chosen,
+        {
+          now: new Date(),
+          levels: { g: snap.scales.g, s: snap.scales.s, r: snap.scales.r },
+          yesterday: snap.scales.yesterday,
+          days: snap.scales.days,
+          slots: snap.slots,
+        },
+        gmLat,
+        step ?? 0,
+      );
+      return say(advice.spoken, { ...advice, geomagneticLatitude: gmLat, dataAgeMinutes: swpc.ageMinutes() });
+    },
+  );
+
+}

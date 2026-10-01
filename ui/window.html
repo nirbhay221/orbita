@@ -1,3 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accuracy window</title>
 <!--
   MCP App panel: 72-hour accuracy window, rendered by Alexa+ on an Echo Show.
 
@@ -15,11 +21,11 @@
     --surface-2:      #f1f1ee;
     --text-primary:   #0b0b0b;
     --text-secondary: #52514e;
-    --text-muted:     #78776f;
+    --text-muted:     #686860;
     --rule:           #dcdcd6;
     --kp:             #2a78d6;
     --kp-over:        #1d5698;
-    --good:           #0ca30c;
+    --good:           #0b7a0b;
     --critical:       #d03b3b;
   }
   @media (prefers-color-scheme: dark) {
@@ -33,6 +39,7 @@
       --rule:           #34342f;
       --kp:             #3987e5;
       --kp-over:        #7fb2ee;
+      --good:           #4cc26a;
     }
   }
   :root[data-theme="dark"] .viz {
@@ -45,6 +52,7 @@
     --rule:           #34342f;
     --kp:             #3987e5;
     --kp-over:        #7fb2ee;
+      --good:           #4cc26a;
   }
 
   * { box-sizing: border-box; }
@@ -83,16 +91,37 @@
 
   .foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule);
           font-size: 0.72rem; color: var(--text-muted); }
-</style>
 
-<div class="viz">
+  /*
+    Alexa's Color Tools, which certification names explicitly, surfaces to a page
+    as prefers-contrast. The panel's own encoding already avoids leaning on
+    colour: magnitude is bar height, the verdict is position against a drawn
+    line, and blocked blocks are hatched and worded as well as tinted. What high
+    contrast still has to fix is the low-contrast furniture, the muted greys and
+    the hairline rules that carry no meaning on their own but make the ones that
+    do harder to read.
+  */
+  @media (prefers-contrast: more) {
+    .viz {
+      --text-secondary: var(--text-primary);
+      --text-muted:     var(--text-primary);
+      --rule:           var(--text-primary);
+      --surface-2:      var(--surface-1);
+    }
+    .viz svg [stroke-dasharray] { stroke-dasharray: none; }
+  }
+</style>
+</head>
+<body>
+
+<main class="viz">
   <div class="verdict">
     <h1 id="title">Planting, North 40</h1>
     <span class="chip hold" id="chip">&times; Hold</span>
   </div>
   <p class="sub" id="sub"></p>
 
-  <div class="chart-wrap"><svg id="chart" role="img" aria-labelledby="chartdesc"></svg></div>
+  <div class="chart-wrap"><svg id="chart" role="img" aria-labelledby="chartdesc" aria-label="Forecast of geomagnetic activity over the next 72 hours against the limit for this job"></svg></div>
   <desc id="chartdesc" hidden></desc>
 
   <div class="legend">
@@ -101,7 +130,7 @@
     <span>&#9644; Tolerance limit for this job</span>
   </div>
   <div class="foot" id="foot"></div>
-</div>
+</main>
 
 <script>
   // Example state so the panel reads correctly before any tool has run.
@@ -300,3 +329,5 @@
       });
   }
 </script>
+</body>
+</html>

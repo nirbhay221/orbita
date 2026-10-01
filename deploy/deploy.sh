@@ -48,12 +48,27 @@ if ! "$AWS" iam get-role --role-name "${NAME}-host" >/dev/null 2>&1; then
   "$AWS" iam create-instance-profile --instance-profile-name "${NAME}-host" >/dev/null
   "$AWS" iam add-role-to-instance-profile --instance-profile-name "${NAME}-host" --role-name "${NAME}-host"
 fi
-# Read the bundle, and send crew email. Nothing else.
+# Read the bundle, send crew email, and read its own secrets. Nothing else.
+#
+# The secrets are the data-at-rest key and the origin secret, held in SSM Parameter
+# Store as SecureStrings under /orbita/ and /sudor/ (the two add-ons share this host).
+# The instance can also send email (SES) and synthesise speech (Polly, which has no resource-level
+# permissions, so it is "*"). The demo page's /speak endpoint needs Polly, and without this line it
+# fails on the instance even though it works on a developer machine with broader credentials.
+# Re-running this script applies the policy to an existing role.
+# Read access is scoped to exactly those two prefixes, so a bug in either server
+# cannot read anything else in the account's parameter store, and the values are
+# fetched at service start into a tmpfs file rather than written into this script,
+# the unit file or the AMI.
 "$AWS" iam put-role-policy --role-name "${NAME}-host" --policy-name "${NAME}-app" --policy-document "{
   \"Version\":\"2012-10-17\",
   \"Statement\":[
     {\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\"],\"Resource\":\"arn:aws:s3:::${BUCKET}/*\"},
-    {\"Effect\":\"Allow\",\"Action\":[\"ses:SendEmail\"],\"Resource\":\"*\"}
+    {\"Effect\":\"Allow\",\"Action\":[\"ses:SendEmail\"],\"Resource\":\"*\"},
+    {\"Effect\":\"Allow\",\"Action\":[\"polly:SynthesizeSpeech\"],\"Resource\":\"*\"},
+    {\"Effect\":\"Allow\",\"Action\":[\"ssm:GetParameter\",\"ssm:GetParameters\"],\"Resource\":[
+      \"arn:aws:ssm:${REGION}:*:parameter/orbita/*\",
+      \"arn:aws:ssm:${REGION}:*:parameter/sudor/*\"]}
   ]}"
 
 say "security group"

@@ -18,7 +18,7 @@ import * as swpc from './swpc.js';
 import * as solarwind from './solarwind.js';
 import { assess, type Operation } from './domain.js';
 import { statusOperations } from './tools.js';
-import { sendEmail, type Delivery } from './notify.js';
+import { sendEmail, canEmailFor, type Delivery } from './notify.js';
 import { spokenTime } from './timezone.js';
 
 const HOUR = 3_600_000;
@@ -37,6 +37,8 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
   const attempted: Delivery[] = [];
 
   for (const [id, farm] of store.allEntries()) {
+    // A sandbox never causes an email. See canEmailFor in notify.ts for the reason.
+    if (!canEmailFor(id)) continue;
     // ---- watched jobs that have cleared ----
     const clearTo = recipients(farm, 'window_clear');
     if (clearTo.length) {

@@ -108,21 +108,29 @@ demo video.
 
 **Severity: low. This one is praise with a placement note.**
 
-`functional-requirements.html` is the most useful page in the set. It is specific and testable:
-never return an empty response, give an actionable next step on every error, no jargon or internal
-IDs in customer-facing text, complete every critical feature by voice alone, never reference a
-screen on a screenless device, keep spoken and displayed content from contradicting, cap options
-at five, and put synonyms and abbreviations in parameter descriptions.
+**Task.** Find out what Alexa+ will test an add-on against, early enough to build to it.
 
-Four defects in this codebase were found by reading it rather than by testing: a bare "I can't
-reach NOAA right now" with no next step, a status sweep hardcoded to three agriculture jobs so
-newer trades were unreachable, a guard reporting "no fields" when equipment was the missing thing,
-and an enum with no synonyms in its description, which is the parameter the entire verdict turns
-on.
+**Steps.** Read `functional-requirements.html` from top to bottom, then checked each line against this
+codebase.
 
-**Suggestion.** Link it from the QuickStart and from the hackathon resources page. It reads as a
-certification gate, so it is easy to file under "later", when it is really a build checklist.
-Everything on it is cheaper to do on day one than to retrofit.
+**Expected.** That a page this useful would be linked from the QuickStart, as the build checklist it is.
+
+**Actual.** `functional-requirements.html` is the most useful page in the set. It is specific and
+testable: never return an empty response, give an actionable next step on every error, no jargon or
+internal IDs in customer-facing text, complete every critical feature by voice alone, never reference a
+screen on a screenless device, keep spoken and displayed content from contradicting, cap options at
+five, and put synonyms and abbreviations in parameter descriptions. It is not linked from the
+QuickStart, so it is easy to file under "later" as a certification gate.
+
+Four defects in this codebase were found by reading it rather than by testing: a bare "I can't reach
+NOAA right now" with no next step, a status sweep hardcoded to three agriculture jobs so newer trades
+were unreachable, a guard reporting "no fields" when equipment was the missing thing, and an enum with
+no synonyms in its description, which is the parameter the entire verdict turns on.
+
+**Workaround.** Treated the page as the build checklist and fixed those four.
+
+**Suggestion.** Link it from the QuickStart and from the hackathon resources page. Everything on it is
+cheaper to do on day one than to retrofit.
 
 ---
 
@@ -130,11 +138,19 @@ Everything on it is cheaper to do on day one than to retrofit.
 
 **Severity: informational. Not an Amazon issue, recorded because it shaped the design.**
 
-`services.swpc.noaa.gov/products/alerts.json` returns JSON whose `message` field is a fixed-width
-plain-text bulletin, so the message code and the human-readable sentence have to be pulled out with
-a regex. It works and the feed is free with no key and no documented rate limit, which is why it is
-used here, but any consumer has to write a small parser and re-check it whenever the bulletin
-format shifts.
+**Task.** Turn NOAA's space weather alerts into short spoken sentences.
+
+**Steps.** Fetched `services.swpc.noaa.gov/products/alerts.json` and read the `message` field.
+
+**Expected.** Structured fields, with the alert code and the human-readable sentence separate.
+
+**Actual.** The JSON's `message` is a fixed-width plain-text bulletin, so the message code and the
+sentence have to be pulled out with a regex. The feed is free with no key and no documented rate limit,
+which is why it is used here.
+
+**Workaround.** A small parser, re-checked whenever the bulletin format shifts.
+
+**Suggestion.** For NOAA rather than Amazon: publish the code and the sentence as separate JSON fields.
 
 ---
 
@@ -179,15 +195,25 @@ static-registration requirement into the QuickStart directly.
 
 **Severity: informational. Not an Amazon issue, recorded because it silently broke a feature.**
 
-`services.swpc.noaa.gov/products/noaa-scales.json` gives each scale two fields: `Scale`, a digit
-such as `"2"`, and `Text`, a word such as `"moderate"`. This project read `Text` and then looked
-for codes like `"G2"`, so during any real storm every level scored zero and "what else is this
-storm hitting" would have answered that nothing was affected. The tests passed throughout,
-because they fed in `"G2"` rather than what NOAA actually sends. The feed also mixes kinds of
-value by key: `"0"` is today's observed level, `"-1"` yesterday, and `"1"` to `"3"` are the
-outlook, where R and S become day-ahead probabilities (`MinorProb`, `MajorProb`, `Prob`) instead
-of levels. The server now stores the digit, keeps yesterday and the three day outlook, and the
+**Task.** Read the current geomagnetic, radio and radiation storm levels from
+`services.swpc.noaa.gov/products/noaa-scales.json`.
+
+**Steps.** Read each scale's `Text` field and looked for codes like `"G2"`. The tests passed throughout,
+because they fed in `"G2"` rather than what NOAA actually sends.
+
+**Expected.** That `Text` would carry the level code.
+
+**Actual.** Each scale has two fields: `Scale`, a digit such as `"2"`, and `Text`, a word such as
+`"moderate"`. During any real storm every level would have scored zero, and "what else is this storm
+hitting" would have answered that nothing was affected. The feed also mixes kinds of value by key: `"0"`
+is today's observed level, `"-1"` yesterday, and `"1"` to `"3"` are the outlook, where R and S become
+day-ahead probabilities (`MinorProb`, `MajorProb`, `Prob`) instead of levels.
+
+**Workaround.** The server now stores the digit, keeps yesterday and the three day outlook, and the
 level reader accepts digits, codes and NOAA's words alike.
+
+**Suggestion.** For NOAA rather than Amazon: document the mixed shape of this feed, or give outlook
+probabilities their own keys.
 
 ---
 
@@ -197,6 +223,10 @@ level reader accepts digits, codes and NOAA's words alike.
 
 **Task.** Meet the functional requirement *"Detect and prevent duplicate transactions"*, whose own
 example is a customer who already has a booking being offered a modification rather than a second one.
+
+**Steps.** Read the functional requirements and the add-on pages for any statement about host retries, read the MCP
+specification for a request identifier a stateless server could use, then sent the same write twice, a
+millisecond apart, to a running server.
 
 **Expected.** Somewhere in the add-on documentation, a sentence saying whether Alexa+ retries a tool
 call it believes failed, and if so, what arrives with the retry that a server can recognise.
@@ -233,6 +263,9 @@ then, every add-on that writes anything is inventing the same window, and choosi
 
 **Task.** Confirm the MCP endpoint answers, the way anyone would: `curl` it.
 
+**Steps.** Started the server and sent it an `initialize` request with `curl`, which sends `Accept: */*` by
+default.
+
 **Expected.** A JSON-RPC answer, or an error that says what is wrong.
 
 **Actual.** `406 Not Acceptable: Client must accept both application/json and text/event-stream`.
@@ -262,6 +295,9 @@ wildcard case belongs upstream in the SDK, but the documentation gap is Amazon's
 **Task.** Make sure a mis-heard word produces something a customer can act on, as
 *"Provide actionable next step for every error"* and *"Surface no API codes, tool names, JSON, or
 internal IDs in any customer-facing response"* both require.
+
+**Steps.** Called a tool with a word its schema does not allow, `dancing` for an operation, and read the
+result the way the host would.
 
 **Expected.** That a schema mismatch produces an error the host turns into a question.
 
