@@ -17,17 +17,22 @@ import * as swpc from '../swpc.js';
 import * as solarwind from '../solarwind.js';
 import * as geomag from '../geomag.js';
 import * as glotec from '../glotec.js';
+import * as crewheat from '../crewheat.js';
+import * as crewday from '../crewday.js';
 import * as ntrip from '../ntrip.js';
 import * as swpcplus from '../swpcplus.js';
 import * as aurora from '../aurora.js';
 import { chooseOne, canAsk } from '../elicit.js';
 import * as season from '../season.js';
 import * as store from '../store.js';
+import { sentences } from '../brief.js';
+import { geocode, spoken as spokenPlace } from '../geocode.js';
 import * as history from '../history.js';
 import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
 import { sendEmail, emailConfigured } from '../notify.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
+  CORRECTIONS,
   NOAA_DOWN,
   NO_EQUIP,
   NO_FIELDS,
@@ -35,10 +40,14 @@ import {
   OPERATION_HINT,
   UI,
   asked,
+  clean,
   forHours,
   kpRightNow,
   localTime,
+  namesOf,
   say,
+  spokenJob,
+  upcomingSlots,
 } from './shared.js';
 
 export function register(server: McpServer, farmOf: () => string): void {
@@ -61,7 +70,9 @@ export function register(server: McpServer, farmOf: () => string): void {
         operation: z.enum(OPERATIONS).describe(OPERATION_HINT),
         field: z.string().optional().describe('Field name as spoken; defaults to the only/first field'),
         equipment: z.string().optional().describe('Machine name; defaults to the first registered'),
-        when: z.string().optional().describe('ISO timestamp; defaults to now'),
+        place: z.string().optional().describe('Only for somebody with no field registered yet: the nearest town, as spoken, so they can be answered straight away'),
+        correction: z.enum(CORRECTIONS).optional().describe('Only for somebody with no machine registered yet: the correction they say they run. rtk, ppp, sbas (also WAAS or EGNOS) or autonomous for none'),
+        when: z.string().optional().describe('When, if not now: ISO, or as spoken, such as "tomorrow morning", "Thursday" or "this afternoon". The forecast reaches about three days ahead.'),
         deadline: z
           .string()
           .optional()
@@ -73,10 +84,27 @@ export function register(server: McpServer, farmOf: () => string): void {
       },
       _meta: { ui: { resourceUri: UI }, 'openai/outputTemplate': UI },
     },
-    async ({ operation, field, equipment, when, deadline }) => {
-      const farm = store.get(farmOf());
-      if (!farm.fields.length) return say(NO_FIELDS);
-      if (!farm.equipment.length) return say(NO_EQUIP);
+    async ({ operation, field, equipment, when, deadline, place, correction }) => {
+      const held = store.get(farmOf());
+      // A first question should get an answer, not a form. Somebody who says "can I plant near Fargo on RTK"
+      // has given everything the verdict needs, so it is judged for that town and that correction without
+      // anything being registered. Nothing is stored: the answer ends by offering to remember it.
+      let farm = held;
+      let trial = false;
+      if (!held.fields.length && place) {
+        const found = await geocode(clean(place, 80));
+        if (!found) return say(`I couldn't find ${clean(place, 80)}. Try the nearest town with its state or country.`, { unavailable: true });
+        // The lookup that found the town also says what time zone it keeps. Without it a first answer gave
+        // "clear until Wed 3 AM UTC" to somebody in Arizona.
+        farm = { ...farm, fields: [{ id: 'trial-field', name: spokenPlace(found), lat: found.lat, lon: found.lon, ...(found.timeZone ? { timeZone: found.timeZone } : {}) }] };
+        trial = true;
+      }
+      if (!held.equipment.length && correction) {
+        farm = { ...farm, equipment: [{ id: 'trial-machine', name: 'your machine', correction: correction as Correction }] };
+        trial = true;
+      }
+      if (!farm.fields.length) return say(NO_FIELDS, { needs: 'field' });
+      if (!farm.equipment.length) return say(NO_EQUIP, { needs: 'equipment' });
 
       // Which field. With one registered there is nothing to ask about. With
       // several and no name spoken, store.findField falls back to the first one,
@@ -96,7 +124,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       }
 
       const f = store.findField(farm, chosenName ?? '');
-      if (!f) return say(`I don't have a field called "${field}".`);
+      if (!f) return say(`I don't have a field called "${clean(field)}".${namesOf(farm.fields)} Which one did you mean?`);
 
       // Same for the machine: the correction it runs is most of the answer, so
       // guessing between an RTK planter and a WAAS sprayer changes the verdict.
@@ -115,16 +143,38 @@ export function register(server: McpServer, farmOf: () => string): void {
 
       const eq = store.findEquipment(farm, chosenEquip);
       if (!eq) return say(NO_EQUIP);
+      // A machine that was named and not found is answered for the first machine, which is only honest if
+      // the answer says so. Otherwise "can I run the drill" is silently a verdict about the planter.
+      const guessedMachine = !!chosenEquip && !store.equipmentNamed(farm, chosenEquip);
 
       // When nobody could be asked, the answer still has to say which field and
       // machine it is about, because the customer named neither and the old
       // behaviour was to pick silently.
       const assumed = !field && farm.fields.length > 1 && chosenName === undefined;
 
-      const at = when ? new Date(when) : new Date();
-      const kp = when ? swpc.kpAt(at) : kpRightNow() ?? swpc.kpAt(at);
+      // "when" arrives as speech as often as it arrives as a timestamp. It used to go straight into
+      // new Date(), so "tomorrow morning" became an invalid date, and an invalid date was then answered with
+      // the oldest block in NOAA's file: a week-old Kp, stated as the answer for tomorrow.
+      const now = new Date();
+      const at = when ? history.parseWhen(when, now, { prefer: 'future', timeZone: f.timeZone }) : now;
+      if (!at) {
+        return say(`I could not work out when "${clean(when)}" is. Say a day, like tomorrow or Thursday, or ask about right now.`, { unavailable: true });
+      }
+      if (when && at.getTime() < now.getTime() - 3 * 3_600_000) {
+        return say('That is in the past. Ask me what happened that day and I will look it up.', { unavailable: true });
+      }
       const age = swpc.ageMinutes();
       const snap = swpc.current();
+      const until = swpc.horizon();
+      if (when && until && at.getTime() >= until.getTime()) {
+        return say(
+          `NOAA's forecast only reaches ${localTime(until.toISOString(), f.timeZone)}, so I cannot judge that far ahead. ` +
+            'Ask me nearer the time, or ask me to plan the season for a rougher look at the weeks ahead.',
+          { unavailable: true, forecastEnds: until.toISOString() },
+        );
+      }
+      const asksAboutNow = !when || Math.abs(at.getTime() - now.getTime()) < 30 * 60_000;
+      const kp = asksAboutNow ? kpRightNow() ?? swpc.kpAt(at) : swpc.kpAt(at);
 
       if (!kp) {
         return say(
@@ -133,10 +183,44 @@ export function register(server: McpServer, farmOf: () => string): void {
         );
       }
 
-      const verdict = assess(operation as Operation, kp.kp, eq, f);
+      const verdict = assess(operation as Operation, kp.kp, eq, f, at);
+      let measuredBlock = false;
       const win = nextWindow(snap?.slots ?? [], operation as Operation, eq, f, at);
 
+      /*
+       * What is measured over the field right now outranks a forecast that says clear.
+       *
+       * NOAA's ionosphere map is the electron content actually overhead, ten minutes old. When the slope of it
+       * across this rig's baseline leaves more uncorrected error than the job tolerates, the job is not clear,
+       * whatever Kp says: that is a measurement against a table. It only ever turns a yes into a no. The map
+       * is too coarse to see the small structure that does much of the damage, so a calm map is not evidence
+       * of a calm sky and never clears a job the forecast has blocked. Only for a question about now, only
+       * from a cell that was observed and not filled from climatology, and only for RTK, which is what a
+       * baseline means.
+       */
+      const iono = asksAboutNow && eq.correction === 'rtk' && f.baselineKm ? glotec.ionosphere(f.lat, f.lon) : null;
+      const leftOver = iono?.observed && f.baselineKm ? glotec.residual(f.lat, f.lon, f.baselineKm) : null;
+      const tolM = TOLERANCE_M[operation as Operation];
+      if (verdict.go && leftOver != null && leftOver > tolM) {
+        const cm = Math.round(leftOver * 100);
+        verdict.go = false;
+        verdict.limitedBy = 'space_weather';
+        verdict.expectedErrorM = Number(Math.max(verdict.expectedErrorM, leftOver).toFixed(3));
+        verdict.reason =
+          `Hold off ${spokenJob(operation)} for now. The forecast alone would call it clear at Kp ${kp.kp.toFixed(1)}, but what is measured over the field is not: ` +
+          `the ionosphere across your ${Math.round(f.baselineKm as number)} kilometre baseline is leaving about ${cm} centimetres your base station cannot correct, ` +
+          `and this job needs it inside ${Math.round(tolM * 100)}.`;
+        measuredBlock = true;
+      }
+
       let text = verdict.reason;
+      // When it clears is the second thing anybody wants to know, so it is said second. It used to come after
+      // the ionosphere, the magnetometer and the aurora, by which time nobody was listening.
+      if (!verdict.go && verdict.limitedBy === 'space_weather') {
+        text += win
+          ? ` Next clear window opens ${localTime(win.start, f.timeZone)} and runs ${forHours(win.hours)}.`
+          : ` Nothing clear in the next three days on this forecast.`;
+      }
       // How long the yes lasts. Without this, "can I plant" and "how long have
       // I got" were two tools answering one question.
       if (verdict.go && win) {
@@ -148,15 +232,20 @@ export function register(server: McpServer, farmOf: () => string): void {
       // A go that the solar wind is about to take away is worth saying out
       // loud, because the job that gets started is the one that gets ruined.
       const upstream = solarwind.incoming();
+      const mustSay: string[] = [];
       if (verdict.go && upstream?.level === 'likely') {
-        text += ` Watch this one though: ${upstream.say.charAt(0).toLowerCase()}${upstream.say.slice(1)}`;
+        const warning = `Watch this one though: ${upstream.say.charAt(0).toLowerCase()}${upstream.say.slice(1)}`;
+        text += ` ${warning}`;
+        // A storm about to arrive on a job just called clear is not detail. It is said even when the rest waits.
+        mustSay.push(sentences(warning)[0]);
       }
       // The measured half. Everything above reasons from Kp through a table;
       // this is the electron content actually over the field, and the part of it
       // the base station cannot difference away across this rig's baseline. It
       // speaks only when that residual alone passes the job's tolerance, which
       // is a thing the forecast genuinely cannot know.
-      const measured = glotec.explain(f.lat, f.lon, f.baselineKm, TOLERANCE_M[operation as Operation]);
+      // Already the reason for the answer when the measurement is what blocked it.
+      const measured = measuredBlock ? '' : glotec.explain(f.lat, f.lon, f.baselineKm, TOLERANCE_M[operation as Operation]);
       if (measured) text += ` ${measured}`;
       // Where the corrections come from, when nobody has said. This matters
       // because baselineKm is what the residual above is multiplied by.
@@ -170,7 +259,10 @@ export function register(server: McpServer, farmOf: () => string): void {
       if (placed) text += ` ${placed}`;
       // Where the oval actually is, which the linear Kp rule cannot know,
       // because the oval is offset towards the night side.
-      const oval = aurora.explain(f.lat, f.lon, geomagneticLatitude(f.lat, f.lon) - auroralBoundaryDeg(kp.kp));
+      // Positive means the Kp rule puts the field clear of the oval, on its equatorward side, which is the
+      // case aurora.explain is written for. This used to pass the opposite sign, and the signed latitude, so the
+      // sentence fired for fields the rule already put inside the oval and never for the southern hemisphere.
+      const oval = aurora.explain(f.lat, f.lon, auroralBoundaryDeg(kp.kp) - Math.abs(geomagneticLatitude(f.lat, f.lon)));
       if (oval) text += ` ${oval}`;
       // Days of notice rather than minutes. Only on a go: telling someone who
       // already cannot run today about Thursday is noise, and the window
@@ -178,12 +270,6 @@ export function register(server: McpServer, farmOf: () => string): void {
       if (verdict.go) {
         const inbound = swpcplus.cmeSentence();
         if (inbound) text += ` ${inbound}`;
-      }
-      // Only talk about waiting when waiting would actually help.
-      if (!verdict.go && verdict.limitedBy === 'space_weather') {
-        text += win
-          ? ` Next clear window opens ${localTime(win.start, f.timeZone)} and runs ${forHours(win.hours)}.`
-          : ` Nothing clear in the next three days on this forecast.`;
       }
       // If the job cannot simply be postponed, say whether waiting is even on offer,
       // and if it is not, what is still runnable rather than a bare refusal.
@@ -208,16 +294,57 @@ export function register(server: McpServer, farmOf: () => string): void {
         }
       }
 
+      // The people on the machine, for the hours the job would actually run: from now while it is clear, or
+      // the clear window it is waiting for. Nothing is said for a job the rig can never hold. See crewheat.ts.
+      const workFrom = verdict.go ? at : win ? new Date(win.start) : null;
+      const workHours = Math.min(12, verdict.go ? (win && new Date(win.start).getTime() <= at.getTime() + 60_000 ? win.hours : 8) : win?.hours ?? 0);
+      const crew = workFrom && verdict.limitedBy !== 'equipment' ? crewheat.during(f.lat, f.lon, workFrom, workHours) : null;
+      if (crew) {
+        const line = crewheat.sentence(crew, (iso) => localTime(iso, f.timeZone));
+        text += ` ${line}`;
+        // Past 90 is a decision about people, so it is heard with the verdict. Past 80 waits to be asked for.
+        if (crew.level === 'high') mustSay.push(line);
+      }
+      // And the people by name, for a job that would run today: whoever is still getting used to the heat,
+      // and whoever it turns risky for earlier. Asked of the heat safety server in the background. See crewday.ts.
+      const named = asksAboutNow && workFrom ? crewday.sentences(held.crew.map((c) => ({ name: c.name, link: c.dayLink }))) : [];
+      for (const line of named) {
+        text += ` ${line}`;
+        mustSay.push(line);
+      }
+
       if (assumed) {
-        text += ` That is for ${f.name} with ${eq.name}; name a different one and I will check that instead.`;
+        const note = `That is for ${f.name} with ${eq.name}; name a different one and I will check that instead.`;
+        text += ` ${note}`;
+        mustSay.push(note);
+      } else if (guessedMachine) {
+        const note = `I don't have a machine called "${clean(chosenEquip)}", so that is for ${eq.name}.`;
+        text += ` ${note}`;
+        mustSay.push(note);
       }
 
       if (snap?.stale && age != null && age > 60) {
         text += ` Note: my NOAA data is ${age} minutes old.`;
       }
 
+      // The step that finishes the job, put as one question. A blocked job that will clear can be watched;
+      // somebody trying it out can have it remembered.
+      const watching = held.waiting.some((w) => w.operation === operation && w.fieldId === f.id && w.equipmentId === eq.id);
+      const offer = trial
+        ? 'Want me to remember this field and machine?'
+        : !verdict.go && verdict.limitedBy === 'space_weather' && win && !watching && asksAboutNow
+          ? 'Want me to watch it and tell you when it clears?'
+          : '';
+
       return say(text, {
         ...verdict,
+        ...(offer ? { offer } : {}),
+        ...(mustSay.length ? { mustSay } : {}),
+        ...(trial ? { trial: true } : {}),
+        nextAction:
+          offer && !trial
+            ? { tool: 'watch_jobs', arguments: { action: 'start', operation, field: f.name, equipment: eq.name } }
+            : null,
         pressure,
         stillRunnable: degraded?.stillRunnable?.slice(0, 5) ?? null,
         tierChangeWarning: degraded?.advice ?? null,
@@ -226,10 +353,15 @@ export function register(server: McpServer, farmOf: () => string): void {
         correction: eq.correction,
         observed: kp.observed,
         window: win,
-        slots: (snap?.slots ?? []).slice(0, 24),
+        slots: upcomingSlots(snap?.slots ?? [], at.getTime()),
         thresholdKp: thresholdKp(operation as Operation, eq, f),
         toleranceM: TOLERANCE_M[operation as Operation],
         dataAgeMinutes: age,
+        // Null with checked true means under 80. Checked false means no forecast was held, which is not the same as fine.
+        crewHeat: crew ? { ...crew, rule: 'https://www.osha.gov/heat-exposure/rulemaking' } : null,
+        crewHeatChecked: crewheat.known(f.lat, f.lon),
+        crewDays: named.length,
+        decidedBy: measuredBlock ? 'measured' : 'forecast',
       });
     },
   );
@@ -263,7 +395,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       const peak = ahead.length ? ahead.reduce((a, b) => (b.kp > a.kp ? b : a)) : null;
       const lines = [
         estimated
-          ? `Kp is ${estimated.kp.toFixed(1)} right now, estimated a minute ago${snap.scales.g > 0 ? `, storm level G${snap.scales.g}` : ''}.`
+          ? `Kp is ${estimated.kp.toFixed(1)} right now, from the one minute estimate${snap.scales.g > 0 ? `, storm level G${snap.scales.g}` : ''}.`
           : `Kp is ${now?.kp.toFixed(1) ?? '?'} right now${snap.scales.g > 0 ? `, storm level G${snap.scales.g}` : ''}.`,
         upstream && upstream.level !== 'quiet' ? upstream.say : null,
         peak ? `Peak in the forecast is ${peak.kp.toFixed(1)} around ${localTime(peak.time, store.get(farmOf()).fields[0]?.timeZone)}.` : null,
@@ -271,7 +403,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         // neighbour flying a polar route deserves to hear that they are running.
         snap.scales.r > 0 ? `Radio blackout at R${snap.scales.r}, so HF is degraded on the daylit side.` : null,
         snap.scales.s > 0 ? `Solar radiation storm at S${snap.scales.s}, mainly a polar and high-altitude concern.` : null,
-        snap.alerts.length ? `Latest NOAA alert: ${snap.alerts[0].summary}` : 'No active alerts.',
+        snap.alerts.length ? `Latest NOAA alert: ${snap.alerts[0].summary}` : 'No recent NOAA alerts.',
       ].filter(Boolean) as string[];
       return say(lines.join(' '), {
         kpNow: estimated?.kp ?? now?.kp ?? null,
@@ -282,7 +414,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         scales: snap.scales,
         impacts: activeImpacts(snap.scales).map((i) => ({ scale: i.scale, system: i.system, audience: i.audience })),
         alerts: snap.alerts.slice(0, 3),
-        slots: snap.slots.slice(0, 24),
+        slots: upcomingSlots(snap.slots),
         dataAgeMinutes: age,
         stale: snap.stale,
       });

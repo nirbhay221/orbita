@@ -74,8 +74,8 @@ export function register(server: McpServer, farmOf: () => string): void {
         description:
           'Work out which jobs hold accuracy on which fields across the next 45 days, from the NOAA 45 day Ap ' +
           'forecast. Use this for questions about weeks rather than today: when to book a custom crew, which ' +
-          'week to plan planting, whether a machine can hold a tolerance at all. Returns a table, so prefer it ' +
-          'when there is a screen.',
+          'week to plan planting, whether a machine can hold a tolerance at all. The spoken answer gives the ' +
+          'longest clear run; the full table is in the structured result for a host that has a screen.',
         inputSchema: {},
         outputSchema: SPOKEN_ANSWER,
         annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },

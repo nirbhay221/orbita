@@ -1,3 +1,5 @@
+// Every tool, including the ones outside the default scope, so they stay tested. See src/brief.ts.
+process.env.ORBITA_SCOPE ??= 'all';
 /**
  * A plan for a season, not an answer for an afternoon.
  *
@@ -128,7 +130,7 @@ console.log('\nThe spoken summary stays one sentence, and is honest when empty')
   const said = season.summarise(season.plan([field], [rtk], ['planting']));
   check('it names the longest run', said.includes('12 days'), said);
   check('it names the field', said.includes('North 40'), said);
-  check('it points at the screen for the rest', said.includes('on screen'), said);
+  check('it never points at a screen, which a voice-only device does not have', !/on screen|on the screen|see the table/i.test(said) && /Ask about a field or a job/.test(said), said);
 
   seed(Array.from({ length: 12 }, (_, i) => day(i, 9)));
   const none = season.summarise(season.plan([field], [rtk], ['planting']));

@@ -66,6 +66,7 @@ fi
     {\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\"],\"Resource\":\"arn:aws:s3:::${BUCKET}/*\"},
     {\"Effect\":\"Allow\",\"Action\":[\"ses:SendEmail\"],\"Resource\":\"*\"},
     {\"Effect\":\"Allow\",\"Action\":[\"polly:SynthesizeSpeech\"],\"Resource\":\"*\"},
+    {\"Effect\":\"Allow\",\"Action\":[\"geo-places:SearchNearby\"],\"Resource\":\"*\"},
     {\"Effect\":\"Allow\",\"Action\":[\"ssm:GetParameter\",\"ssm:GetParameters\"],\"Resource\":[
       \"arn:aws:ssm:${REGION}:*:parameter/orbita/*\",
       \"arn:aws:ssm:${REGION}:*:parameter/sudor/*\"]}

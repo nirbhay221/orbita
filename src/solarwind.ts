@@ -99,7 +99,7 @@ export function incoming(): Incoming | null {
       level: 'likely',
       minutes,
       say:
-        `The solar wind is turning: the field is ${Math.abs(Math.round(w.bzNt))} nanotesla south at ` +
+        `The solar wind is turning: its magnetic field is ${Math.abs(Math.round(w.bzNt))} nanotesla south at ` +
         `${Math.round(w.speedKms)} kilometres a second, which is the shape that drives a storm. What the satellite is ` +
         `measuring now reaches Earth in about ${minutes} minutes. It can still turn back north before it gets here.`,
     };
@@ -130,15 +130,25 @@ async function fetchJson(url: string, timeoutMs = 6000): Promise<unknown> {
 
 export async function refresh(): Promise<void> {
   try {
-    const [speed, field, kp] = await Promise.all([fetchJson(SPEED), fetchJson(FIELD), fetchJson(KP_1M)]);
-    const s = (speed as { proton_speed?: number; time_tag?: string }[])[0];
-    const f = (field as { bz_gsm?: number; bt?: number; time_tag?: string }[])[0];
-    const rows = kp as { time_tag?: string; estimated_kp?: number }[];
-    const last = rows[rows.length - 1];
+    // Settled one by one: the wind summary failing used to throw away a perfectly good Kp estimate, and
+    // the other way round.
+    const [speedR, fieldR, kpR] = await Promise.allSettled([fetchJson(SPEED), fetchJson(FIELD), fetchJson(KP_1M)]);
+    if (speedR.status === 'rejected' && fieldR.status === 'rejected' && kpR.status === 'rejected') throw speedR.reason;
+    const one = <T>(r: PromiseSettledResult<unknown>): T[] => (r.status === 'fulfilled' && Array.isArray(r.value) ? (r.value as T[]) : []);
+    const s = one<{ proton_speed?: number; time_tag?: string }>(speedR)[0];
+    const f = one<{ bz_gsm?: number; bt?: number; time_tag?: string }>(fieldR)[0];
+    const rows = one<{ time_tag?: string; estimated_kp?: number }>(kpR);
+    // A feed can answer 200 and still be hours behind. "Right now" is only said of a row that is.
+    const recent = (tag?: string): boolean => {
+      const at = tag ? Date.parse(/z$/i.test(tag) ? tag : `${tag}Z`) : NaN;
+      return Number.isFinite(at) && Math.abs(Date.now() - at) < STALE_MS;
+    };
+    const lastRow = rows[rows.length - 1];
+    const last = lastRow && recent(lastRow.time_tag) ? lastRow : undefined;
 
     state = {
       wind:
-        s?.proton_speed != null && f?.bz_gsm != null
+        s?.proton_speed != null && f?.bz_gsm != null && recent(f.time_tag ?? s.time_tag)
           ? { speedKms: s.proton_speed, bzNt: f.bz_gsm, btNt: f.bt ?? 0, at: f.time_tag ?? s.time_tag ?? '' }
           : null,
       kp: last?.estimated_kp != null ? { kp: last.estimated_kp, at: last.time_tag ?? '' } : null,

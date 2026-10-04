@@ -1,4 +1,6 @@
-import { assess, expectedErrorM, nextWindow, TOLERANCE_M, geomagneticLatitude, auroralBoundaryDeg, degradedOptions, deadlinePressure } from './dist/domain.js';
+// Every tool, including the ones outside the default scope, so they stay tested. See src/brief.ts.
+process.env.ORBITA_SCOPE ??= 'all';
+import { assess, expectedErrorM, nextWindow, TOLERANCE_M, geomagneticLatitude, auroralBoundaryDeg, degradedOptions, deadlinePressure, rtkMultiplier, dayShiftDeg } from './dist/domain.js';
 import { activeImpacts, speakImpacts } from './dist/impacts.js';
 
 let pass = 0, fail = 0;
@@ -82,9 +84,12 @@ console.log('\nThe southern hemisphere is not an afterthought');
 const pampas    = { id: 'f6', name: 'Pampas',    lat: -34.60, lon: -58.38, baselineKm: 18 };
 const patagonia = { id: 'f7', name: 'Patagonia', lat: -51.62, lon: -69.22, baselineKm: 18 };
 check('southern sites get a real verdict', typeof assess('planting', 6, rtk, pampas).go === 'boolean');
-check('higher southern magnetic latitude means more error',
-  expectedErrorM(6, rtk, patagonia) > expectedErrorM(6, rtk, pampas),
-  `${expectedErrorM(6, rtk, patagonia)} vs ${expectedErrorM(6, rtk, pampas)}`);
+// In a severe storm. At Kp 6 both are far from the oval and both hold, which is what measurements show.
+check('higher southern magnetic latitude means more error in a severe storm',
+  expectedErrorM(8, rtk, patagonia) > expectedErrorM(8, rtk, pampas),
+  `${expectedErrorM(8, rtk, patagonia)} vs ${expectedErrorM(8, rtk, pampas)}`);
+check('...and at Kp 6, far from the oval, both still hold planting tolerance',
+  assess('planting', 6, rtk, pampas).go && assess('planting', 6, rtk, patagonia).go);
 
 console.log('\nTrades beyond agriculture share the engine');
 check('cadastral survey is the tightest tolerance of all',
@@ -130,8 +135,30 @@ const quietGrowth = expectedErrorM(8, rtk, gulf) / expectedErrorM(4, rtk, gulf);
 const midGrowth = expectedErrorM(8, rtk, iowa) / expectedErrorM(4, rtk, iowa);
 check('a superstorm costs a mid-latitude field more than it costs a Gulf one',
   midGrowth > quietGrowth, `${midGrowth.toFixed(2)} vs ${quietGrowth.toFixed(2)}`);
-check('...while a quiet sky leaves the two in their usual order',
-  expectedErrorM(2, rtk, iowa) > expectedErrorM(2, rtk, gulf));
+check('...while under a quiet sky neither is degraded by the sky at all',
+  rtkMultiplier(2, iowa.lat, iowa.lon) === 1 && rtkMultiplier(2, gulf.lat, gulf.lon) === 1);
+
+console.log('\nThe RTK model, against what was measured');
+const lowLat = { id: 'c', name: 'low', lat: 23, lon: 113 };
+const norway = { id: 'n', name: 'Tromso', lat: 69.6, lon: 18.9 };
+const fargo = { id: 'fg', name: 'Fargo', lat: 46.88, lon: -96.79 };
+const flat = (kp, f) => 0.02 * rtkMultiplier(kp, f.lat, f.lon);
+check('Kp 7.3 at low latitude is about 8 cm, as a network there measured', Math.abs(flat(7.3, lowLat) - 0.08) < 0.005, String(flat(7.3, lowLat)));
+check('inside the oval in a storm it is a metre, as a Norwegian network measured', flat(6, norway) >= 1, String(flat(6, norway)));
+check('Kp 9 puts the central United States at a metre', flat(9, iowa) >= 1, String(flat(9, iowa)));
+check('Kp 4 at Fargo holds planting tolerance: the replay of 2025 had this as a no', assess('planting', 4, { id: 'r', name: 'p', correction: 'rtk' }, fargo).go === true);
+check('...and so does Kp 5, a minor storm', assess('planting', 5, { id: 'r', name: 'p', correction: 'rtk' }, fargo).go === true);
+check('...and Kp 7 does not', assess('planting', 7, { id: 'r', name: 'p', correction: 'rtk' }, fargo).go === false);
+const saskatoon = { id: 'sk', name: 'Saskatoon', lat: 52.13, lon: -106.67 };
+const noonThere = new Date('2026-06-01T19:00:00Z'); // about local solar noon at 107 west
+const midnightThere = new Date('2026-06-01T07:00:00Z');
+check('the oval sits eight degrees further north at local noon than at local midnight', Math.abs(dayShiftDeg(noonThere, -106.67) - 8) < 0.2 && dayShiftDeg(midnightThere, -106.67) < 0.2, `${dayShiftDeg(noonThere, -106.67)} ${dayShiftDeg(midnightThere, -106.67)}`);
+check('with no time given, nothing is shifted: the cautious answer', dayShiftDeg(undefined, -106.67) === 0 && dayShiftDeg(new Date('nonsense'), 0) === 0);
+check('the same Kp 6 at Saskatoon is a no at midnight and a yes at noon', assess('planting', 6, { id: 'r', name: 'p', correction: 'rtk' }, saskatoon, midnightThere).go === false && assess('planting', 6, { id: 'r', name: 'p', correction: 'rtk' }, saskatoon, noonThere).go === true);
+check('...and an extreme storm is a no at any hour', assess('planting', 8.5, { id: 'r', name: 'p', correction: 'rtk' }, saskatoon, noonThere).go === false);
+check('daylight never makes it worse', [iowa, gulf, fargo, norway, saskatoon].every((f) => [2, 4, 6, 8].every((k) => rtkMultiplier(k, f.lat, f.lon, noonThere) <= rtkMultiplier(k, f.lat, f.lon))));
+check('a site the oval sits over at night is not told its equipment is the problem', assess('planting', 3, { id: 'r', name: 'p', correction: 'rtk' }, norway, new Date('2026-06-01T22:00:00Z')).limitedBy === 'space_weather');
+check('it never gets better as the storm gets worse', [iowa, gulf, fargo, norway, lowLat].every((f) => [0, 1, 2, 3, 4, 5, 6, 7, 8].every((k) => rtkMultiplier(k + 1, f.lat, f.lon) >= rtkMultiplier(k, f.lat, f.lon))));
 check('...and the same field is worse at Kp 8 than at Kp 7, not merely different',
   expectedErrorM(8, rtk, iowa) > expectedErrorM(7, rtk, iowa));
 
@@ -154,12 +181,28 @@ const gulfCoast = { lat: 29.7, lon: -95.4, baselineKm: 18 };
 const dLoose = degradedOptions(9, sbas, gulfCoast, 'planting');
 check('finds the loosest job that genuinely survives a G5', dLoose.stillRunnable.includes('scouting'),
   JSON.stringify(dLoose.stillRunnable));
-// The same storm in the Red River valley is a different sky. At Kp 9 the oval
-// is overhead there, SBAS runs past three metres, and the honest answer is that
-// there is no looser job to move to.
-const dValley = degradedOptions(9, sbas, dakota, 'planting');
-check('...and says nothing survives when nothing does, rather than offering a job that fails',
-  dValley.stillRunnable.length === 0, JSON.stringify(dValley.stillRunnable));
+// The same storm in the Red River valley, on RTK: at Kp 9 that rig is a metre out, past every job but
+// the loosest, and what it is offered must be a job that really still holds.
+const dValley = degradedOptions(9, rtk, dakota, 'planting');
+check('...and only offers jobs that genuinely still hold, never one that fails',
+  dValley.stillRunnable.every((op) => assess(op, 9, rtk, dakota).go), JSON.stringify(dValley.stillRunnable));
+
+console.log('\nEvery job, not only planting');
+const fargoSite = { id: 'fa', name: 'Fargo', lat: 46.88, lon: -96.79 };
+const sask = { id: 'sa', name: 'Saskatoon', lat: 52.13, lon: -106.67 };
+const phone = { id: 'e8', name: 'a phone', correction: 'autonomous' };
+check('a sprayer on WAAS at Fargo holds spraying tolerance on a quiet day (the old model said never)', assess('spraying', 2, sbas, fargoSite).go === true && assess('spraying', 2, sbas, fargoSite).limitedBy === 'clear');
+check('...and at Saskatoon', assess('spraying', 2, sbas, sask).go === true);
+check('walking a field with no correction is possible in Saskatchewan (the old model said never)', assess('scouting', 2, phone, sask).go === true);
+check('a harvest on WAAS survives an ordinary active day at Kp 4', assess('harvest', 4, sbas, fargoSite).go === true);
+check('...and not a severe storm', assess('harvest', 8, sbas, fargoSite).go === false);
+check('survey work on RTK is stricter than planting, so it stops earlier', assess('surveying', 5, rtk, sask).go === false && assess('planting', 5, rtk, sask).go === true);
+check('grade control and a drone flight are judged like planting, at two inches', assess('machine_control', 6, rtk, fargoSite).go === assess('planting', 6, rtk, fargoSite).go && assess('drone_survey', 6, rtk, fargoSite).go === assess('planting', 6, rtk, fargoSite).go);
+check('a survey on PPP is told it is the equipment, not the sky', assess('surveying', 2, { id: 'p', name: 'rover', correction: 'ppp' }, fargoSite).limitedBy === 'equipment');
+const severe = assess('planting', 8.7, rtk, fargoSite);
+check('in a severe storm the answer says the fix is lost, as real receivers showed, and gives no drift figure', severe.go === false && /lose their precise fix altogether, as they did in May 2024/.test(severe.reason) && !/expected drift near/.test(severe.reason), severe.reason);
+check('...a lesser storm still gives the figure', /expected drift near/.test(assess('planting', 7.2, rtk, fargoSite).reason));
+check('the further from RTK, the less a storm changes it', (() => { const k = 8; const q = (c) => expectedErrorM(k, { id: 'x', name: 'x', correction: c }, fargoSite) / expectedErrorM(0, { id: 'x', name: 'x', correction: c }, fargoSite); return q('rtk') > q('ppp') && q('ppp') > q('sbas') && q('sbas') > q('autonomous') && q('autonomous') > 1; })());
 // No correction at all in the same storm is metres out, past every tolerance there is.
 const none = { id: 'e9', name: 'the old rig', correction: 'autonomous' };
 const dNone = degradedOptions(9, none, dakota, 'planting');

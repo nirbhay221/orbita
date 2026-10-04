@@ -3,6 +3,11 @@
 **"Alexa, can I run the planter today?"**
 **"Alexa, there's a storm coming. What should I do?"**
 
+**Live:** [on a screen, with a crew member's day beside it](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html) ·
+[try it in a browser](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/) ·
+MCP endpoint `https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/mcp` (account linking required) ·
+[health](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/health)
+
 An Alexa+ add-on that turns NOAA's space weather forecast into decisions. It does two jobs from
 the same live data.
 
@@ -17,9 +22,10 @@ pipeline crew, a directional driller, railway signalling, someone hoping to see 
 household wondering whether any of this is their problem. Every step is timed to how far off the
 storm is and names where it comes from.
 
-It works anywhere. Kp is a planetary index, and exposure is computed from geomagnetic latitude
+The forecast works anywhere. Kp is a planetary index, and exposure is computed from geomagnetic latitude
 rather than the number on the map, so a site in Punjab, Manitoba or Patagonia is judged on the
-field it is actually sitting in.
+field it is actually sitting in. The check against a magnetometer on the ground is United States only, and is
+silent everywhere else.
 
 The Latin `orbita` meant a track or rut cut into the ground by a wheel. The astronomical sense,
 the path of a heavenly body, came later from the same root, and `exorbitant` comes from
@@ -29,6 +35,22 @@ the thing that ruins it, and what happens when the two meet.
 Built for the [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com),
 Alexa+ track, plus the Open Source and AWS Builder mini challenges. Self-hosted MCP server,
 spec 2025-11-25, Streamable HTTP, with an MCP Apps panel for the Echo Show.
+
+## What is real, and what is not
+
+Nothing here is mocked for the demo. Where something stands in for a thing we could not reach, it is named.
+
+| Part | Status |
+|---|---|
+| MCP server, spec 2025-11-25, Streamable HTTP, 15 tools by default | **Real and deployed** on AWS, behind account linking. 1,622 automated checks |
+| Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
+| Ground magnetometers | **Real** (USGS), **United States only** |
+| The past: "what happened on May 10 2024" | **Real**, from the archived Kp record |
+| Crew heat | **Real**: Open-Meteo's hourly forecast over each field |
+| Kp to expected drift | **A model**, anchored to three published measurements and scored against real receivers at four sites for the 2024 season ([BACKTEST.md](BACKTEST.md)). In a severe storm it says the fix is lost and gives no figure, because that is what the receivers did |
+| Emails to the crew | **Real code, switched off on the deployed server**: no sending address is configured, so nothing is sent and every answer says so |
+| Alexa+ itself | **Not available to us.** The demo page's assistant is Claude Opus reading the real tool list. Routing measured with it is routing for that model, not for Alexa+ |
+| Echo Show panel | **Real MCP App**, tested against a simulated host. Not seen on a real device |
 
 ## Start here
 
@@ -44,7 +66,7 @@ these are the five things worth your time:
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
 Twelve free NOAA and USGS products, no API key. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 732 checks, none of which touch the network except
+external is called inside a turn. `npm test` runs 1,622 checks, none of which touch the network except
 the three live suites at the end.
 
 ## The problem
@@ -353,48 +375,47 @@ slow regional part, and beyond that not at all.
 
 ## Tools
 
-Fifteen tools. Still deliberately few: published benchmarks put tool selection above 90 percent
-up to about twenty tools and falling away after that, and several of ours were two doors onto one question.
+Fifteen tools by default, and two more with `ORBITA_SCOPE=all`.
 
 **Answers**
-* `can_i_run` gives a go or no go for a job on a field, now or at a given time, with a deadline, and says how
-  long it stays clear or when the next clear stretch starts
-* `what_should_i_do` tells a satellite, grid, airline, HF, timing, pipeline, drilling, rail,
-  drone, aurora or household listener what to do about the forecast, and when
-* `what_else_is_affected` answers "my guidance is out, what else is out?"
+* `can_i_run` gives a go or no go for a job on a field, now or at a time said aloud ("tomorrow afternoon"), with a
+  deadline, and says how long it stays clear or when the next clear stretch starts. Somebody with nothing
+  registered can name a town and a correction and be answered straight away. When the heat index over the field
+  passes 90 for the hours the job would run, the crew's side is said in the same answer
 * `storm_status` says what the sun is doing, in plain language
-* `farm_status` shows every field and job at a glance
-* `what_happened` looks back at a past day, says whether space weather explains a job that went
-  badly, and mentions any jobs logged that day
+* `farm_status` shows every field and machine at a glance, and names the hottest field for the day ahead
+* `what_happened` looks back at a past day and says whether space weather explains a job that went badly
+* `plan_season` a longer look across the weeks ahead, as a task that reports back
 * `what_can_you_do` answers the customer who asks what this is
+* `tell_me_more` the rest of the last answer
 
 **Waiting on a job**
 * `watch_jobs` starts a watch on a job the sky is blocking, reports which watched jobs are clear, or stops
   watching. It refuses to watch a job that is already clear or that the rig could never do anyway
 
 **The crew**
-* `crew_contact` adds, confirms or removes someone to email when a watched job clears or a storm is coming.
-  Nothing is sent to anyone unconfirmed
+* `crew_contact` adds, confirms or removes someone to email when a watched job clears or a storm is coming. The
+  customer's yes sends one invitation; nothing else is sent until that person agrees
+* `share_access` gives a one-time code so a second person can ask about the farm's fields and change nothing
 
 **The record**
-* `log_job` records a job that actually ran, with the Kp for that three hour block and whether it
-  was inside tolerance
-* `job_report` summarises recent jobs, names the ones space weather put outside tolerance, and emails the same
-  report to a confirmed crew contact when one is named
+* `log_job` records a job that actually ran, with the Kp for that three hour block and whether it was inside
+  tolerance
+* `job_report` summarises recent jobs, names the ones space weather put outside tolerance, and emails the report
+  to a crew contact who has agreed
 
 **Setup**
-* `register_field` and `register_equipment`. Registering the same name twice updates what is there
-  rather than leaving two of it
+* `register_field` by the nearest town, and `register_equipment` by the correction it runs. Registering the same
+  name twice updates what is there
+* `remove` takes a field or a machine back off the list. `what everything` is the fresh start, done only when
+  asked a second time
 
-Every tool also declares what it does to the world, in the annotations the specification carries:
-whether it only reads, whether it can take something away, whether saying it twice changes anything,
-and whether its answer depends on NOAA rather than on this process. A test fails the build if a new
-tool arrives without them, or if a writing tool is not idempotent without that being a decision
-someone wrote down.
-* `remove` takes a field or a machine back off the list, clearing its watches and keeping its job log.
-  A machine is only removed on a real name match, never by falling back to the first one.
-  `what everything` is the fresh start the certification requirements ask for: it says exactly what
-  would go, and only clears it when asked a second time
+**Published only with `ORBITA_SCOPE=all`:** `what_should_i_do` (advice for satellite, grid, airline, HF, timing,
+pipeline, drilling, rail, drone, aurora and household listeners) and `what_else_is_affected`.
+
+Every tool declares what it does to the world, in the annotations the specification carries. A test fails the build
+if a new tool arrives without them, or if a writing tool is not idempotent without that being a decision someone
+wrote down.
 
 ## Telling the crew, and keeping the record
 
@@ -408,9 +429,11 @@ the same cadence as the NOAA refresh, it checks two things for each farm:
   to plan around it.
 
 Contacts are staged first and only emailed once the customer confirms them. Email goes through
-Amazon SES when `ORBITA_EMAIL_FROM` is set to a verified sender. Until then every message is still
-written to `data/outbox.jsonl` and the spoken answer says email is not switched on, rather than
-claiming anything was sent.
+Amazon SES when `ORBITA_EMAIL_FROM` is set to a verified sender. Until then every attempt is still
+logged to `data/outbox.jsonl` and the spoken answer says email is not switched on, rather than
+claiming anything was sent. The log holds a short hash of the address and no subject line, and one
+address is sent at most eight emails a day and one account thirty, because a contact is confirmed by
+the account holder and not by the person who owns the address.
 
 The job log exists for the week after a storm. "I planted the North 40 this morning" is recorded
 with the Kp for that block and whether the job was inside tolerance, so a season's report can say
@@ -429,6 +452,14 @@ Go and no go are deliberately not encoded as red against green. That pair scores
 under deuteranopia, effectively identical for around 8 percent of men. So bar height carries
 magnitude in a single hue, the verdict comes from position against a drawn tolerance line, and
 every blocked block is additionally hatched and worded.
+
+## On a screen
+
+`/echo.html` is a stand-in for an Echo Show. Down the page are the lines somebody might say; each is a real tool
+call with real arguments (`web/echo-scenes.json`), and a test calls every one. No assistant model runs on that
+page, so the lines are fixed and the answers are whatever the server says today. One line takes something typed:
+the eight digits a crew member reads out from their own Sudor. After that this server asks that one directly, and
+the answer about the job names that person and their hours.
 
 ## The demo page
 
@@ -463,24 +494,24 @@ Or without installing Node at all:
 docker build -t orbita . && docker run -p 8788:8788 orbita
 ```
 
-`npm test` runs everything, 442 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 1,622 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 254 checks, no live data
-npm run test:live           # 188 checks, against the real feed
+npm run test:unit           # 1,386 checks, no live data
+npm run test:live           # 236 checks, against a running server and the real feed
 
-node test.mjs               # 57: tolerances, geometry, the moving auroral oval, windows, deadlines
-node test-playbook.mjs      # 62: roles, phases, triggers, odds, voice limits, sources, the grid base rate
-node test-actions.mjs       # 63: watches, crew emails, storm alerts, job log, repeats, a fresh start, retention
-node test-solarwind.mjs     # 23: travel time from L1, what counts as incoming, one definition of now
-node test-panel.mjs         # 18: the MCP Apps handshake against a simulated host
-node test-auth.mjs          # 23: OAuth 2.1 with PKCE against a running server
-node test-static-client.mjs # 8: the account linking shape Alexa+ actually uses
-node test-web.mjs           # 48: the demo page, every request on it, one farm per visitor, older hosts
-node test-contract.mjs      # 124: every listed tool invoked for real, on an empty farm and a half set up
+node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines
+node test-playbook.mjs      # roles, phases, triggers, odds, voice limits, sources, the grid base rate
+node test-actions.mjs       # watches, crew emails, storm alerts, job log, repeats, a fresh start, retention
+node test-solarwind.mjs     # travel time from L1, what counts as incoming, one definition of now
+node test-panel.mjs         # the MCP Apps handshake against a simulated host
+node test-auth.mjs          # OAuth 2.1 with PKCE against a running server
+node test-static-client.mjs # the account linking shape Alexa+ actually uses
+node test-web.mjs           # the demo page, every request on it, one farm per visitor, older hosts
+node test-contract.mjs      # every listed tool invoked for real, on an empty farm and a half set up
                             #       one, with junk arguments, annotations checked, nothing internal spoken
-node test-latency.mjs       # 11: the voice budget, measured per tool, written to LATENCY.md
+node test-latency.mjs       # the voice budget, measured per tool, written to LATENCY.md
 node probe.mjs              # end to end against live NOAA
 ```
 
@@ -531,7 +562,8 @@ That third command matters more than it looks. Alexa+ account linking is not the
 OAuth shape: Amazon's own docs state plainly that it "supports only the Authorization Code Grant"
 and that "Dynamic Client Registration isn't supported." You pick your own `client_id`, and the CLI
 hands back Alexa's own set of redirect URIs, one per region, to register on your server, not one
-URI to hardcode. Set them before starting the server:
+URI to hardcode. Once `ORBITA_CLIENT_ID` is set, this server's own registration endpoint is closed, so
+nobody else can register a client that calls itself Alexa+. Set them before starting the server:
 
 ```bash
 export ORBITA_CLIENT_ID=orbita-alexa-addon
@@ -763,10 +795,77 @@ nothing.
 * **Spend and size limits.** `/agent` and `/speak` have a per-caller bucket and a daily cap, sandbox callers
   are keyed by address so rotating ids does not help, and records, crew, fields and timers have ceilings
   (higher for linked farms). These counters are in memory and reset when the service restarts.
-* **Behind API Gateway.** `ORBITA_TRUST_PROXY=1` counts one hop, and the origin secret is armed only after
+* **Behind API Gateway.** No proxy is trusted unless told to: with `ORBITA_TRUST_PROXY` unset, `X-Forwarded-For`
+  is ignored, so an invented address does not buy a fresh allowance. `ORBITA_TRUST_PROXY=1` counts one hop, and the origin secret is armed only after
   the gateway sends it. See `deploy/README.md` for the order.
 
+## The crew, in the same answer
+
+A go for the receiver is not a go for the people on the machine. When a job is judged, the heat over that field for
+the hours it would run is checked as well (`src/crewheat.ts`): from now while it is clear, or the clear window it is
+waiting for. Below a heat index of 80 nothing is said. Past 80 the answer carries one sentence about water and
+shade, which is spoken when asked for more. Past 90 it is spoken with the verdict and never held back: a fifteen
+minute break in the shade at least every two hours, and nobody working alone. Those are the two lines in the
+workplace heat rule OSHA proposed in 2024. `farm_status` names the hottest field for the day ahead.
+
+The forecast is Open-Meteo's hourly temperature and humidity, fetched in the background per field. When no forecast
+is held the crew is not mentioned and the structured answer says it was not checked, so unknown is never read as
+cool. It knows nothing about the people themselves. Judging the same heat against one person's medicines and
+conditions is what Sudor does.
+
+This applies to every crew the add-on already answers for: planting and spraying, a survey party setting out, a
+drone mapping flight, and a dozer on design grade.
+
+## Who agrees to be emailed
+
+A crew contact used to be confirmed by the customer alone. Now the customer's yes sends one invitation, and nothing
+else goes to that address until the person who owns it opens the link and presses yes (`src/consent.ts`). Only a hash
+of the invitation is stored, every email after that ends with a link that stops them, and an address is invited at
+most once a day. Wrong passphrases are counted per address, so five wrong guesses lock out the address that made
+them and not the farm whose name was typed.
+
+## One decision for the machines and the people
+
+A crew member who uses Sudor, the heat safety add-on, can share their working day with the farm using a one-time
+code (`crew_contact`, with `dayCode`). Orbita exchanges the code for a link and asks Sudor over MCP, in the
+background, how that person's day looks (`src/crewday.ts`). The answer about a job then names who it matters for:
+"Clear for planting. Dana is on day 2 in the heat: 4 hours of it today, done by 11 am. For Lee the risky part starts
+at 10 am." Somebody with an ordinary day is not mentioned. Nothing about anyone's health crosses, because Sudor does
+not send it, and when they stop sharing they stop being mentioned at once. This is the half of the answer that
+matters most: 79 percent of outdoor workers who died of heat were in their first two weeks or just back.
+
+## How the conversation is designed
+
+* **Short answers.** A read-only answer is spoken as its first three sentences: the verdict, the number, and when it
+  clears. The rest is returned as `more` in the structured result and spoken when the customer says "tell me more"
+  (`tell_me_more`). Measured on live data, "can I plant right now" went from 151 words to 32. An answer that mentions
+  911, a write, and a tool that pages its own steps are never shortened. See `src/brief.ts`.
+* **No setup to get a first answer.** "Can I plant near Fargo on RTK" is answered for that town and that correction with
+  nothing registered, and ends by offering to remember it. A field is added by its nearest town; coordinates are optional.
+* **One story by default.** The default tool set is the field job: can it run, when does it clear, watch it, tell the crew,
+  log it, report it. The advice for satellite operators, grids and other roles is published only with `ORBITA_SCOPE=all`.
+* **An answer ends on the next step.** A blocked job that will clear ends with "Want me to watch it and tell you when it
+  clears?", and the structured result names the tool call that does it.
+* **A card that fits the task.** The chart (`ui/window.html`) is for a verdict. A watch list, a job report, a contact
+  being confirmed and a sharing code use `ui/card.html`, a card or a list.
+* **A second person.** The owner asks for a one-time code (`share_access`); an operator joins with it from their own
+  account and can ask about the owner's fields. They can read and change nothing, and the owner can end it.
+
+## Is the answer worth having
+
+[BACKTEST.md](BACKTEST.md) replays three planting seasons of measured Kp (2023 to 2025) through the same decision code
+the server runs, for RTK planting at four real places. The answer would have been "not now" in 1 to 5 percent of
+three-hour blocks, on the days that had real storms, including 10 and 11 May 2024. The first run of this replay is what
+showed the earlier model was wrong and led to it being rebuilt. `node evals/backtest.mjs` regenerates it.
+
 ## Evaluating tool selection
+
+The model in the saved run was Claude Opus 5.5 standing in for Alexa+: it shows the descriptions work for that
+model, and nothing about the one Alexa+ uses. The crew-heat sentence was added after that run.
+
+The golden set and the saved baseline were run with the full tool set (`SCOPE=all`) and before the sharing and
+"tell me more" tools were added; the new sentences for those are checked against the tool list but have not been
+run against a model.
 
 `npm test` shows the server gives the right answer once a tool is chosen. It cannot show that a host would
 choose that tool from what a person said, which is what Amazon's certification list tests, so there is a
@@ -832,6 +931,31 @@ Named deliberately, because it exists.
 ## Honest limitations
 
 * The Kp to error model is a calibrated approximation, not a positioning solver.
+* **The RTK model was rebuilt after it failed a replay.** Three real planting seasons of measured Kp
+  ([BACKTEST.md](BACKTEST.md)) had the first model calling RTK planting outside tolerance in 26 percent of blocks at
+  Fargo in 2025. It now works from how far the auroral oval has come, anchored to three published measurements, and
+  the same replay gives a few percent. The steps between those three anchors are interpolation.
+* **Checked against real receivers, with limits.** `node evals/receivers.mjs` scores the model block by block against
+  five-minute positions from permanent GPS stations at Saskatoon, Fargo, Grand Island and Lubbock for the 2024 season.
+  They agree in 92 to 96 percent of blocks, and all four receivers lost precise positioning for twelve hours or more
+  on 10 and 11 May, which the model calls. Those positions are worked out afterwards from both GPS frequencies, so
+  they show when precise positioning was lost, not how far an RTK rover in a cab drifted. That has still not been
+  measured. At Saskatoon the model looks a little too easy at Kp 4 to 5 at night.
+* **Every job was replayed, not only planting, and that found a second fault.** The rules for WAAS, PPP and no
+  correction made every northern site 60 percent worse on a quiet day, so a sprayer on WAAS at Fargo was told it could
+  never hold spraying tolerance. Every correction is now judged from one measure of how disturbed the sky is. Only RTK
+  is anchored to published measurements; WAAS, PPP and uncorrected are scaled from it and are this project's estimate.
+  The FAA's own report on 10 to 12 May 2024 (WAAS Technical Report DR 158) says WAAS lost its vertical approach
+  service across the United States for about fifteen hours and that horizontal navigation service was not impacted.
+  It gives no sub-metre horizontal figure, so there is nothing published to pin the WAAS number to.
+* **The hour of day counts.** The oval sits about eight degrees further north at local noon than at local midnight, so
+  the same Kp is judged more gently in daylight, when field work is done. Extreme storms are a no at any hour.
+* **A measurement can only add a no.** For a question about now, on RTK with a known baseline, the slope NOAA's
+  ionosphere map measures across that baseline blocks a job the forecast would clear. The map is too coarse to see
+  the small structure that does much of the damage, so a calm map never clears a job the forecast has blocked.
+* Ground truth from magnetometers is United States only. Everywhere else the answer rests on the forecast alone.
+* No email is sent from the deployed server until a sending address is set, and a crew contact has to agree before
+  they are sent anything but the invitation.
 * The playbook is decision support, not an operating procedure. It cannot see a control room's GIC
   monitors, a constellation's ephemerides or a flight's routing, and each operator's own procedure
   wins over it.

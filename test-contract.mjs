@@ -1,3 +1,5 @@
+// Every tool, including the ones outside the default scope, so they stay tested. See src/brief.ts.
+process.env.ORBITA_SCOPE ??= 'all';
 /**
  * The certification contract, checked against a running server.
  *
@@ -81,6 +83,8 @@ const SPOKEN = {
   what_should_i_do: { role: 'grid_operator' },
   what_else_is_affected: {},
   what_can_you_do: {},
+  share_access: { action: 'invite' },
+  tell_me_more: {},
   watch_jobs: { action: 'check' },
   log_job: { operation: 'planting', field: 'north', equipment: 'planter', acres: 40 },
   job_report: { days: 7 },
@@ -114,8 +118,9 @@ check('...and the destructive ones are exactly the ones that take something away
  * something that slipped in unnoticed.
  */
 const repeatable = names.filter((n) => ann(n)?.readOnlyHint === false && ann(n)?.idempotentHint !== true).sort();
-check('...and every writing tool folds a repeat, except the two we chose',
-  JSON.stringify(repeatable) === JSON.stringify(['crew_contact', 'job_report']), repeatable.join(', '));
+// share_access is the third: asking for a code twice gives two codes on purpose, and only the newer one works.
+check('...and every writing tool folds a repeat, except the three we chose',
+  JSON.stringify(repeatable) === JSON.stringify(['crew_contact', 'job_report', 'share_access']), repeatable.join(', '));
 const openWorld = names.filter((n) => ann(n)?.openWorldHint).length;
 check('...and the tools that depend on the outside world say so', openWorld >= 8, String(openWorld));
 

@@ -1,3 +1,5 @@
+// Every tool, including the ones outside the default scope, so they stay tested. See src/brief.ts.
+process.env.ORBITA_SCOPE ??= 'all';
 /**
  * The Echo Show panel, run the way an MCP Apps host runs it.
  *
@@ -106,7 +108,7 @@ registerTools({ registerTool: (name, config) => { tools[name] = config; } }, () 
 const withMeta = Object.entries(tools).filter(([, c]) => c._meta);
 check('some tools do link a panel', withMeta.length >= 3, String(withMeta.length));
 check('every link is the nested _meta.ui.resourceUri',
-  withMeta.every(([, c]) => c._meta.ui?.resourceUri === 'ui://orbita/window.html'),
+  withMeta.every(([, c]) => ['ui://orbita/window.html', 'ui://orbita/card.html'].includes(c._meta.ui?.resourceUri)),
   JSON.stringify(withMeta.map(([n, c]) => [n, c._meta])));
 check('no tool still uses the flat key that no host reads',
   withMeta.every(([, c]) => !Object.prototype.hasOwnProperty.call(c._meta, 'ui.resourceUri')));

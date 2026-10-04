@@ -21,16 +21,24 @@ import * as swpcplus from '../swpcplus.js';
 import * as aurora from '../aurora.js';
 import { chooseOne, canAsk } from '../elicit.js';
 import * as season from '../season.js';
+import { perCaller } from '../budget.js';
 import * as store from '../store.js';
 import * as history from '../history.js';
 import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
-import { sendEmail, emailConfigured } from '../notify.js';
+import { sendEmail, emailConfigured, canEmailFor } from '../notify.js';
+import { consentRequired, newInvite, invitation } from '../consent.js';
+import * as crewday from '../crewday.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
+  CARD,
+  count,
   clean,
   sameName,
   say,
 } from './shared.js';
+
+/** Guessing codes is the only way in without one, so tries are counted per account. */
+const joins = perCaller(5, 5 / 60);
 
 export function register(server: McpServer, farmOf: () => string): void {
   /* ---------------------------------------------------------------- *
@@ -56,12 +64,14 @@ export function register(server: McpServer, farmOf: () => string): void {
     'crew_contact',
     {
       title: 'Who to email about a job',
+      _meta: { ui: { resourceUri: CARD } },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
       description:
         'Manage who gets emailed when a watched job clears or a storm is coming. action add stages someone, and ' +
         'nothing is ever sent until action confirm, which the customer has to say yes to first. action remove stops ' +
         'emailing them. Call this when someone says to tell, notify, add, confirm or stop telling a crew member, ' +
-        'operator or manager.',
+        'operator or manager. To link a crew member\'s working day from their heat safety add-on, pass action add with their ' +
+        'name and the dayCode they read out.',
       inputSchema: {
         action: z.enum(['add', 'confirm', 'remove']).describe(
           'add to stage someone new, confirm after the customer says yes to adding them, remove to stop emailing them',
@@ -70,11 +80,35 @@ export function register(server: McpServer, farmOf: () => string): void {
         email: z.string().email().optional().describe('Required when adding'),
         role: z.string().optional().describe('e.g. "planter operator", "crew lead", "survey party chief"'),
         when: z.enum(['window_clear', 'storm', 'both']).optional().describe('both by default, only used when adding'),
+        dayCode: z.string().optional().describe('The eight digit code this person read out from their Sudor heat safety add-on, when they are sharing their working day with the crew'),
       },
     },
-    async ({ action, name, email, role, when }) => {
+    async ({ action, name, email, role, when, dayCode }) => {
       const id = farmOf();
       name = clean(name, 60);
+
+      // Somebody already on the crew sharing their working day. The code is exchanged for a link, once, with
+      // the server that knows them, and nothing about their health ever comes back. See crewday.ts.
+      if (action === 'add' && dayCode && !email) {
+        const known = store.get(id).crew.find((c) => sameName(c.name, name));
+        if (!known) return say(`${name} isn't on your crew list yet. Add them with an email address first, then link their day.`, { linked: false, reason: 'unknown' });
+        if (!crewday.configured()) return say('This server is not connected to the heat safety add-on, so I cannot link their day.', { linked: false, reason: 'not_configured' });
+        const joined = await crewday.join(dayCode);
+        if (!joined.ok) {
+          return say(
+            joined.why === 'unreachable'
+              ? 'I could not reach the heat safety add-on just now. Try again in a few minutes.'
+              : 'That code did not work. Codes are eight digits, work once and last a day, so ask them for a new one.',
+            { linked: false, reason: joined.why },
+          );
+        }
+        store.update(id, (x) => {
+          const c = x.crew.find((y) => sameName(y.name, name));
+          if (c) c.dayLink = joined.link;
+        });
+        void crewday.refresh(joined.link, true);
+        return say(`Done. When I answer about a job I will say how the day looks for ${known.name}, and nothing about their health.`, { linked: true, name: known.name });
+      }
 
       if (action === 'add') {
         if (!email) {
@@ -99,7 +133,19 @@ export function register(server: McpServer, farmOf: () => string): void {
         return say(
           `I'll email ${name}${role ? `, your ${role},` : ''} at ${email} ${describeCrew(notifyOn)}. ` +
             `Nothing is sent until you confirm. Should I add ${name}?`,
-          { staged: true, name, notifyOn },
+          {
+            staged: true,
+            name,
+            notifyOn,
+            // A commit screen: everything that saying yes will do, in full, before it is done.
+            card: {
+              kind: 'card',
+              title: `Add ${name}?`,
+              status: { label: 'not confirmed', tone: 'neutral' },
+              lines: [email, role ?? '', `Emailed ${describeCrew(notifyOn)}.`].filter(Boolean),
+              confirm: `Say yes to add ${name}. Nothing is sent until you do.`,
+            },
+          },
         );
       }
 
@@ -110,6 +156,34 @@ export function register(server: McpServer, farmOf: () => string): void {
           const c = x.crew.find((y) => sameName(y.name, name));
           if (c && !c.confirmedAt) c.confirmedAt = new Date().toISOString();
         });
+        // The customer has said yes. Now the person who owns the address is asked, once, and nothing else
+        // goes to them until they agree. See consent.ts.
+        if (consentRequired() && !contact.acceptedAt) {
+          if (!canEmailFor(id)) {
+            return say(`Email is turned off in the public demo, so ${contact.name} has not been asked and will not be emailed.`, { confirmed: true, accepted: false, demo: true });
+          }
+          if (!emailConfigured()) {
+            return say(`Noted. Email isn't switched on for this server yet, so I can't ask ${contact.name} to agree, and nothing will be sent until it is.`, { confirmed: true, accepted: false, emailConfigured: false });
+          }
+          const askedRecently = !!contact.invitedAt && Date.now() - new Date(contact.invitedAt).getTime() < 60 * 60 * 1000;
+          if (!askedRecently) {
+            const invite = newInvite();
+            store.update(id, (x) => {
+              const c = x.crew.find((y) => sameName(y.name, name));
+              if (c) {
+                c.acceptHash = invite.hash;
+                c.stopId = invite.stopId;
+                c.invitedAt = new Date().toISOString();
+              }
+            });
+            void sendEmail({ to: contact.email, sender: id, reason: 'invite', ...invitation(contact.name, describeCrew(contact.notifyOn), invite.token) });
+          }
+          return say(
+            `${askedRecently ? `I have already emailed ${contact.name} to ask if they agree.` : `Done. I've emailed ${contact.name} to ask if they agree.`} ` +
+              `They will get an email ${describeCrew(contact.notifyOn)} once they say yes, and not before.`,
+            { confirmed: true, accepted: false, invited: true, emailConfigured: true },
+          );
+        }
         return say(
           `Done. ${contact.name} will get an email ${describeCrew(contact.notifyOn)}.` +
             (emailConfigured() ? '' : " Email isn't switched on for this server yet, so nothing can actually be sent until it is."),
@@ -122,6 +196,75 @@ export function register(server: McpServer, farmOf: () => string): void {
       }
       store.update(id, (x) => void (x.crew = x.crew.filter((c) => !sameName(c.name, name))));
       return say(`Removed ${name}. They won't be emailed.`, { removed: true });
+    },
+  );
+
+  /* ---------------------------------------------------------------- *
+   * A second person who can ask for themselves. See store.ts.
+   * ---------------------------------------------------------------- */
+  server.registerTool(
+    'share_access',
+    {
+      title: 'Let somebody else ask about the farm',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      description:
+        'Let another person ask about this farm from their own account, without being able to change anything. ' +
+        'action invite gives the owner a one-time code to read to them. action join is said by the other person, ' +
+        'with the code, from their own account. action leave is the other person stopping. action stop is the owner ' +
+        'ending it for everybody. Call this when someone says let my operator check for himself, give Dale access, ' +
+        'I have a code, or stop sharing. It is not for adding somebody to be emailed; that is crew_contact.',
+      inputSchema: {
+        action: z.enum(['invite', 'join', 'leave', 'stop']).describe('invite for the owner, join with a code, leave to stop looking, stop to end all sharing'),
+        code: z.string().optional().describe('The eight digit code, as spoken, only when joining'),
+      },
+      _meta: { ui: { resourceUri: CARD } },
+    },
+    async ({ action, code }) => {
+      const id = farmOf();
+      if (action === 'invite') {
+        const farm = store.get(id);
+        if (!farm.fields.length) return say('There is nothing to share yet. Add a field first.', { shared: false });
+        const made = store.createInvite(id);
+        const read = `${made.slice(0, 4).split('').join(' ')}, ${made.slice(4).split('').join(' ')}`;
+        return say(
+          `The code is ${read}. It works once and lasts a day. They link their own account, then say join with that code. ` +
+            'They will be able to ask about your fields and change nothing.',
+          {
+            shared: false,
+            code: made,
+            card: {
+              kind: 'card',
+              title: 'Share this farm',
+              status: { label: 'code ready', tone: 'neutral' },
+              lines: [`${made.slice(0, 4)} ${made.slice(4)}`, 'Works once. Lasts a day. They can ask, and change nothing.'],
+            },
+          },
+        );
+      }
+      if (action === 'join') {
+        if (!joins.allow(id)) return say('Too many codes tried. Wait a while and try again.', { joined: false, reason: 'limit' });
+        const r = store.joinWithCode(id, code ?? '');
+        if (!r.ok) {
+          return say(
+            r.why === 'own'
+              ? 'That is your own code. Read it to the person you want to share with.'
+              : r.why === 'full'
+                ? 'That farm is already shared with as many people as it can be.'
+                : 'That code did not work. Codes are eight digits, work once and last a day, so ask for a new one.',
+            { joined: false, reason: r.why },
+          );
+        }
+        const farm = store.get(r.farmId);
+        return say(
+          `You can now ask about ${count(farm.fields.length, 'field')}: ${farm.fields.slice(0, 5).map((f) => f.name).join(', ')}. Ask me whether a job can run.`,
+          { joined: true, fields: farm.fields.map((f) => f.name) },
+        );
+      }
+      if (action === 'leave') {
+        return say(store.leave(id) ? 'Done. You are back to your own fields.' : 'You were not looking at anybody else\'s farm.', { left: true });
+      }
+      const n = store.stopSharing(id);
+      return say(n ? `Done. ${count(n, 'person', 'people')} can no longer ask about your farm.` : 'Nobody else had access.', { stopped: n });
     },
   );
 

@@ -237,7 +237,10 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
    */
   mining: {
     label: 'automated mining',
-    drivers: [{ scale: 'G', from: at(1) }],
+    // From G3, not G1. This used to tell a mine to expect its centimetre corrections to drop out at a minor
+    // storm. Permanent receivers at four North American sites held about 2 cm through Kp 5 and 6 and lost
+    // precise positioning at Kp 8 and 9 (evals/receivers.mjs), so the warning starts where the loss does.
+    drivers: [{ scale: 'G', from: at(3) }],
     actions: [
       {
         when: ['watch', 'imminent'],

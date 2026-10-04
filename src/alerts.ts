@@ -20,12 +20,13 @@ import { assess, type Operation } from './domain.js';
 import { statusOperations } from './tools.js';
 import { sendEmail, canEmailFor, type Delivery } from './notify.js';
 import { spokenTime } from './timezone.js';
+import { reachable, stopFooter } from './consent.js';
 
 const HOUR = 3_600_000;
 const label = (op: string) => op.replace(/_/g, ' ');
 const inches = (m: number) => Math.max(1, Math.round(m * 39.37));
 const recipients = (farm: store.Farm, reason: store.NotifyReason) =>
-  farm.crew.filter((c) => c.confirmedAt && c.notifyOn.includes(reason));
+  farm.crew.filter((c) => reachable(c) && c.notifyOn.includes(reason));
 
 export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
   const snap = swpc.current();
@@ -46,7 +47,7 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
         const f = farm.fields.find((x) => x.id === w.fieldId);
         const eq = farm.equipment.find((x) => x.id === w.equipmentId);
         if (!f || !eq) continue;
-        const v = assess(w.operation as Operation, kpNow.kp, eq, f);
+        const v = assess(w.operation as Operation, kpNow.kp, eq, f, now);
         if (!v.go) continue;
         // Marked before sending, so a slow or failing send can never turn into repeated emails.
         store.update(id, (x) => {
@@ -57,12 +58,13 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
           attempted.push(
             await sendEmail({
               to: c.email,
+          sender: id,
               reason: 'window_clear',
               subject: `Clear now: ${label(w.operation)} on ${f.name}`,
               text:
                 `Space weather has settled enough for ${label(w.operation)} on ${f.name} with ${eq.name}. ` +
                 `Kp is ${kpNow.kp.toFixed(1)}, so expected drift is about ${inches(v.expectedErrorM)} inches against a ` +
-                `${inches(v.toleranceM)} inch tolerance.\n\nYou are getting this because you were added as a crew contact and it was confirmed.`,
+                `${inches(v.toleranceM)} inch tolerance.\n\nYou are getting this because you were added as a crew contact and agreed to it.${stopFooter(c)}`,
             }),
           );
         }
@@ -83,7 +85,7 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
       for (const f of farm.fields) {
         for (const eq of farm.equipment) {
           for (const op of statusOperations(eq.correction) as Operation[]) {
-            const v = assess(op, s.kp, eq, f);
+            const v = assess(op, s.kp, eq, f, new Date(new Date(s.time).getTime() + 90 * 60_000));
             if (!v.go && v.limitedBy === 'space_weather') jobs.push(`${label(op)} on ${f.name} with ${eq.name}`);
           }
         }
@@ -103,12 +105,14 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
       attempted.push(
         await sendEmail({
           to: c.email,
+          sender: id,
           reason: 'storm',
           subject: `Storm ahead: ${first.jobs.length} job${first.jobs.length === 1 ? '' : 's'} outside tolerance from ${when}`,
           text:
             `NOAA's forecast reaches Kp ${first.kp.toFixed(1)} around ${when}. At that level these jobs go outside ` +
             `tolerance: ${first.jobs.slice(0, 6).join('; ')}.\n\nAsk Orbita when it clears, or what to do about it.\n\n` +
-            'You are getting this because you were added as a crew contact for storms and it was confirmed.',
+            'You are getting this because you were added as a crew contact for storms and agreed to it.' +
+            stopFooter(c),
         }),
       );
     }

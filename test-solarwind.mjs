@@ -1,3 +1,5 @@
+// Every tool, including the ones outside the default scope, so they stay tested. See src/brief.ts.
+process.env.ORBITA_SCOPE ??= 'all';
 /**
  * The extra half hour of warning.
  *
@@ -77,7 +79,7 @@ seedWind(-1, 500, 4.7);
 await tools.register_field({ name: 'North 40', lat: 42.03, lon: -93.62, baselineKm: 18 });
 await tools.register_equipment({ name: 'the planter', correction: 'rtk' });
 const status = text(await tools.storm_status({}));
-check('the status uses the minute estimate, and says so', /Kp is 4\.7 right now, estimated a minute ago/.test(status), status);
+check('the status uses the minute estimate, and says so', /Kp is 4\.7 right now, from the one minute estimate/.test(status), status);
 const run = text(await tools.can_i_run({ operation: 'planting', field: 'north' }));
 check('the go or no go uses the same number, not the three hour block', /Kp 4\.7/.test(run), run);
 const later = text(await tools.can_i_run({ operation: 'planting', field: 'north', when: new Date(Date.now() + 6 * 3600e3).toISOString() }));

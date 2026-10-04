@@ -47,6 +47,8 @@
  * Source: RTK2go community NTRIP caster, http://rtk2go.com:2101/
  */
 
+import { backoff } from './backoff.js';
+
 const CASTER = process.env.ORBITA_NTRIP_CASTER ?? 'http://rtk2go.com:2101/';
 
 /**
@@ -218,7 +220,6 @@ export function explain(lat: number, lon: number, storedKm: number | undefined):
   );
 }
 
-import { backoff } from './backoff.js';
 
 const gate = backoff();
 

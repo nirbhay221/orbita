@@ -187,6 +187,9 @@ export function speakImpacts(
     );
   }
   const parts = active.slice(0, limit).map((i) => `${i.system}: ${i.effect}`);
-  const more = active.length > limit ? ` There are ${active.length - limit} more if you want them.` : '';
+  // The tool takes no argument to ask for the rest, so it does not offer a rest. It names what was left out,
+  // which the customer can ask about directly.
+  const rest = active.slice(limit).map((i) => i.system.split(',')[0]);
+  const more = rest.length ? ` It also reaches ${rest.slice(0, 3).join(', ')}.` : '';
   return `${parts.join(' ')}${more}`;
 }

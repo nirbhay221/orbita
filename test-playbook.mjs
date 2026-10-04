@@ -1,3 +1,5 @@
+// Every tool, including the ones outside the default scope, so they stay tested. See src/brief.ts.
+process.env.ORBITA_SCOPE ??= 'all';
 /**
  * The playbook: what each kind of person should do, timed to NOAA's forecast.
  *

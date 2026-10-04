@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orbita on a screen: the machines and the people in one answer</title>
+<meta name="description" content="A stand-in for an Echo Show. Every line is a real call to the live Orbita server, and a crew member's day comes from the Sudor server beside it.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="/echo.css">
+</head>
+<body>
+<a class="skip" href="#lines">Skip to the things to say</a>
+
+<header class="bar">
+  <a class="home" href="/">Orbita</a>
+  <p class="what">A stand-in for an Echo Show. Every line below is a real call to this server, with NOAA's live space weather and a real forecast over the field. No assistant model runs on this page: the lines are fixed, the answers are not.</p>
+  <label class="voice"><input type="checkbox" id="voice"> Read answers aloud</label>
+</header>
+
+<main class="stage">
+  <section class="echo" aria-labelledby="echo-title">
+    <h1 id="echo-title" class="label">The Echo Show in the shop</h1>
+    <div class="screen">
+      <p class="heard" id="heard">Pick a line below.</p>
+      <p class="answer" id="answer" aria-live="polite"></p>
+      <div class="card" id="card" hidden></div>
+      <p class="meta" id="meta"></p>
+    </div>
+  </section>
+
+  <section class="phone" aria-labelledby="phone-title">
+    <h2 id="phone-title" class="label">Dana, on her own Sudor</h2>
+    <div class="handset">
+      <p class="note">Dana is a crew member. Her medicines and conditions are in Sudor, a separate add-on on a separate server, and never leave it.</p>
+      <ol class="steps">
+        <li>Open <a id="sudor-link" href="https://2f2opzcjui.execute-api.us-east-1.amazonaws.com/echo.html" target="_blank" rel="noopener">Sudor on a screen</a> in another tab.</li>
+        <li>Say who she is there, then <strong>"I just started a roofing job, seven to five."</strong></li>
+        <li>Say <strong>"Share my working day with my crew."</strong> It reads out eight digits.</li>
+        <li>Come back here, type the digits under <em>The people on the crew</em>, and ask about the job again.</li>
+      </ol>
+      <p class="note">Orbita then asks Sudor, server to server, how her day looks. What comes back is how hot her shift gets, when it turns risky for her, and how many hours of heat she should do. Never why.</p>
+    </div>
+  </section>
+</main>
+
+<section class="lines" id="lines" aria-label="Things to say"></section>
+
+<footer class="foot">
+  <p>Your farm here is private to this browser and expires on its own. <button type="button" class="link" id="reset">Start again</button></p>
+</footer>
+
+<script src="/echo.js" type="module"></script>
+</body>
+</html>

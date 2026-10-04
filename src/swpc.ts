@@ -69,8 +69,10 @@ export async function refresh(): Promise<Snapshot> {
 
     const slots: Slot[] = (kpRaw as { time_tag: string; kp: number; observed: string }[])
       .filter((r) => r && r.time_tag != null && r.kp != null)
+      // One malformed row used to throw out of toISOString and discard the whole forecast.
+      .filter((r) => Number.isFinite(Date.parse(`${String(r.time_tag).replace(/Z$/, '')}Z`)) && Number.isFinite(Number(r.kp)))
       .map((r) => ({
-        time: new Date(`${r.time_tag}Z`).toISOString(),
+        time: new Date(`${String(r.time_tag).replace(/Z$/, '')}Z`).toISOString(),
         kp: Number(r.kp),
         observed: r.observed === 'observed',
       }));
@@ -148,16 +150,29 @@ export function kpAt(when: Date): { kp: number; observed: boolean } | null {
   });
   if (containing) return { kp: containing.kp, observed: containing.observed };
   // Nearest start alone picked the next block for the last hour and a half of every block.
-  let best = snap.slots[0];
+  // Outside every block. The nearest one is only an answer when it is the neighbouring block, across a small
+  // gap in the file. This used to return the nearest block however far away it was, so a question about next
+  // week was answered with the last forecast block, an invalid date with the first block in the file (a week
+  // old), and a feed that had been down for days kept answering with its final number.
+  let best: Slot | null = null;
   let bestGap = Infinity;
   for (const s of snap.slots) {
-    const gap = Math.abs(new Date(s.time).getTime() - t);
+    const start = new Date(s.time).getTime();
+    const gap = t < start ? start - t : t - (start + 3 * 3_600_000);
     if (gap < bestGap) {
       bestGap = gap;
       best = s;
     }
   }
+  if (!best || !(bestGap <= 3 * 3_600_000)) return null;
   return { kp: best.kp, observed: best.observed };
+}
+
+/** The last instant the forecast covers, or null when there is no forecast. */
+export function horizon(): Date | null {
+  const slots = snapshot?.slots ?? [];
+  if (!slots.length) return null;
+  return new Date(Math.max(...slots.map((s) => new Date(s.time).getTime())) + 3 * 3_600_000);
 }
 
 export async function start(): Promise<void> {

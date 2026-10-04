@@ -1,3 +1,5 @@
+// Every tool, including the ones outside the default scope, so they stay tested. See src/brief.ts.
+process.env.ORBITA_SCOPE ??= 'all';
 /**
  * What Orbita now does, not just says: watches that report back, crews that
  * are emailed only once confirmed, a job log that turns a bad week into a
@@ -265,7 +267,7 @@ const markup = text(await tools.register_field({ name: '<script>alert(1)</script
 check('markup in a name never reaches the answer or the store',
   !markup.includes('<') && !JSON.stringify(store.get('crew-test').fields).includes('<'), markup);
 const huge = text(await tools.register_field({ name: 'x'.repeat(5000), lat: 41, lon: -95 }));
-check('a five thousand character name is cut to something speakable', huge.length < 120, String(huge.length));
+check('a five thousand character name is cut to something speakable', huge.length < 220 && !huge.includes('x'.repeat(81)), String(huge.length));
 const spaced = text(await tools.register_equipment({ name: '  the   big  planter  ', correction: 'rtk' }));
 check('ragged whitespace is tidied rather than spoken', spaced.includes('Added the big planter on RTK.'), spaced);
 

@@ -18,6 +18,9 @@ import * as swpc from './swpc.js';
 import * as solarwind from './solarwind.js';
 import * as geomag from './geomag.js';
 import * as glotec from './glotec.js';
+import * as crewheat from './crewheat.js';
+import * as crewday from './crewday.js';
+import { mountConsent } from './consent.js';
 import * as swpcplus from './swpcplus.js';
 import * as aurora from './aurora.js';
 import { checkFieldAlerts } from './alerts.js';
@@ -70,6 +73,7 @@ vault.assertRequirementMet();
 
 const PORT = Number(process.env.PORT ?? 8788);
 const WINDOW_HTML = resolve('./ui/window.html');
+const CARD_HTML = resolve('./ui/card.html');
 
 /**
  * Whose fields these are. After account linking that is the OAuth subject, so
@@ -138,25 +142,38 @@ function build(farmId: string): McpServer {
     }),
   );
 
+  server.registerResource(
+    'card',
+    'ui://orbita/card.html',
+    { title: 'Orbita card', mimeType: 'text/html;profile=mcp-app' },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: 'text/html;profile=mcp-app', text: readFileSync(CARD_HTML, 'utf8') }],
+    }),
+  );
+
   return server;
 }
 
 const app = express();
-// Behind cloudflared the scheme and host come from the proxy, and every OAuth
-// URL we publish has to match the address the client actually dialled.
-app.set('trust proxy', true);
+// How many proxies in front of this process to believe.
+//
+// This used to be `trust proxy: true` unless a hop count was set, which is the opposite of what the
+// comment beside it said: with no count configured, Express believed whatever X-Forwarded-For the
+// caller sent. Every limit keyed on the caller's address (the sandbox rate limit, the stand-in and
+// speech budgets, new-account claims) could then be walked around by sending a different made-up
+// address with each request. The default is now to trust nothing.
+//
+// Behind API Gateway, set ORBITA_TRUST_PROXY=1: every request arrives from the gateway, so without
+// it one noisy visitor would spend everyone's allowance, and with it Express reads the address the
+// gateway recorded. It must stay unset when the process is reachable directly. The origin secret is
+// what makes one hop safe to trust. Behind a tunnel in development, set it to 1 as well, so the
+// OAuth URLs carry the scheme and host the client dialled (or set ORBITA_PUBLIC_URL).
+const trustedHops = Number(process.env.ORBITA_TRUST_PROXY ?? 0);
+app.set('trust proxy', Number.isInteger(trustedHops) && trustedHops > 0 ? trustedHops : false);
+
 // Spec 2025-11-25: a Streamable HTTP server must answer 403 to an Origin it
 // does not accept. Mounted before the body parser so a rejected request never
 // has its payload read.
-// Behind API Gateway, every request reaches this process from the gateway. Left alone,
-// req.ip is then the same address for every visitor, and a limiter keyed on it would
-// let one noisy visitor lock everyone out. Setting the number of trusted hops makes
-// Express read the client address the gateway recorded. It must stay at 0 when the
-// process is reachable directly, because X-Forwarded-For is then whatever the caller
-// says it is. The origin secret is what makes one hop safe to trust.
-const trustedHops = Number(process.env.ORBITA_TRUST_PROXY ?? 0);
-if (trustedHops > 0) app.set('trust proxy', trustedHops);
-
 app.use(requireOrigin);
 // And that it came through the gateway rather than off the street. See origin.ts
 // for why a security group rule cannot express this.
@@ -165,6 +182,8 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false }));
 
 mountAuth(app);
+// Where somebody who was added to the crew list agrees to it, or stops it. See consent.ts.
+mountConsent(app);
 
 app.get('/health', (_req, res) => {
   const snap = swpc.current();
@@ -176,6 +195,8 @@ app.get('/health', (_req, res) => {
     noaa: snap ? { slots: snap.slots.length, alerts: snap.alerts.length, ageMinutes: swpc.ageMinutes(), stale: snap.stale } : null,
     ground: { observatories: geomag.watched(), ageMinutes: geomag.ageMinutes() },
     ionosphere: glotec.status(),
+    crewHeat: crewheat.status(),
+    crewDays: crewday.status(),
     swpc: swpcplus.status(),
     aurora: aurora.status(),
     corrections: ntrip.status(),
@@ -529,6 +550,7 @@ for (const [, farm] of store.allEntries()) {
   for (const field of farm.fields) {
     geomag.watch(field.lat, field.lon);
     glotec.watch(field.lat, field.lon);
+    crewheat.watch(field.lat, field.lon);
   }
 }
 await geomag.start();
@@ -541,6 +563,31 @@ await geomag.start();
 // Where the RTK base stations actually are, so baselineKm can be measured rather
 // than remembered. Six hourly: the directory changes as volunteers come and go.
 await Promise.allSettled([glotec.start(), swpcplus.start(), aurora.start(), ntrip.start()]);
+// The crew's half of the same decision: the heat over each field for the hours a job would run. Not awaited,
+// because nothing about whether the receiver holds its line should wait on a weather forecast.
+void crewheat.start();
+
+// Crew members who shared their working day: asked of the heat safety server every twenty minutes, one at a
+// time, so an answer about a job never waits on another server. A link that server says has stopped is dropped.
+const refreshCrewDays = async () => {
+  if (!crewday.configured()) return;
+  for (const [id, farm] of store.allEntries()) {
+    for (const c of farm.crew) {
+      if (!c.dayLink) continue;
+      await crewday.refresh(c.dayLink);
+      if (crewday.stopped(c.dayLink)) {
+        const dead = c.dayLink;
+        store.update(id, (x) => {
+          const hit = x.crew.find((y) => y.dayLink === dead);
+          if (hit) hit.dayLink = null;
+        });
+      }
+    }
+  }
+};
+void refreshCrewDays();
+const crewDayTimer = setInterval(() => void refreshCrewDays(), 20 * 60 * 1000);
+crewDayTimer.unref?.();
 
 // Crew emails for watched jobs that clear and storms that are coming, on the NOAA refresh cadence.
 const alertTimer = setInterval(() => {

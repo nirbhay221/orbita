@@ -25,6 +25,7 @@ import * as store from '../store.js';
 import * as history from '../history.js';
 import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
 import { sendEmail, emailConfigured } from '../notify.js';
+import { reachable } from '../consent.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
   NOAA_DOWN,
@@ -34,11 +35,13 @@ import {
   OPERATION_HINT,
   UI,
   andList,
+  CARD,
   asked,
   clean,
   count,
   kpRightNow,
   localTime,
+  namesOf,
   say,
 } from './shared.js';
 
@@ -69,12 +72,15 @@ export function register(server: McpServer, farmOf: () => string): void {
       const farm = store.get(farmOf());
       if (!farm.fields.length) return say(NO_FIELDS);
       const f = store.findField(farm, field ?? '');
+      // This used to answer "no equipment registered" when it was the field that was not found.
+      if (!f) return say(`I don't have a field called "${clean(field)}".${namesOf(farm.fields)} Which one did you mean?`);
       const eq = store.findEquipment(farm, equipment);
-      if (!f || !eq) return say(NO_EQUIP);
+      if (!eq) return say(NO_EQUIP);
 
-      const at = history.parseWhen(when);
-      if (!at) return say(`I could not work out what date "${when}" means. Try a day name or a date.`);
+      const at = history.parseWhen(when, new Date(), { prefer: 'past', timeZone: f.timeZone });
+      if (!at) return say(`I could not work out what date "${clean(when)}" means. Try a day name or a date.`);
       if (at.getTime() > Date.now()) return say('That is in the future. Ask me whether you can run instead.');
+      if (at.getTime() < history.EARLIEST) return say('The Kp record only goes back to 1932, so I cannot check that day.');
 
       // The 15 minute NOAA poll already holds roughly the last seven days in memory.
       // Use it when the date falls inside that, and only reach for the archive for
@@ -101,8 +107,8 @@ export function register(server: McpServer, farmOf: () => string): void {
 
       const op = (operation ?? 'planting') as Operation;
       const peak = slots.reduce((a, b) => (b.kp > a.kp ? b : a));
-      const worst = assess(op, peak.kp, eq, f);
-      const badBlocks = slots.filter((sl) => !assess(op, sl.kp, eq, f).go);
+      const worst = assess(op, peak.kp, eq, f, new Date(new Date(peak.time).getTime() + 90 * 60_000));
+      const badBlocks = slots.filter((sl) => !assess(op, sl.kp, eq, f, new Date(new Date(sl.time).getTime() + 90 * 60_000)).go);
       // Kp is a UTC index. Rendering the label in local time shifted the date back
       // a day, so a question about 11 May came back answered about 10 May.
       const dayLabel = at.toLocaleDateString('en-US', {
@@ -117,9 +123,12 @@ export function register(server: McpServer, farmOf: () => string): void {
           `and your drift would have stayed around ${worst.expectedErrorM < 0.076 ? (worst.expectedErrorM * 39.37).toFixed(1) : Math.round(worst.expectedErrorM * 39.37)} inches all day. ` +
           `Something else caused that.`
         : `That was the sun. On ${dayLabel} Kp peaked at ${peak.kp.toFixed(1)} (${worst.gScale}) around ` +
-          `${peakTime}, putting expected drift near ` +
-          `${worst.expectedErrorM >= 1 ? `${worst.expectedErrorM.toFixed(1)} metres` : `${Math.round(worst.expectedErrorM * 39.37)} inches`}, ` +
-          `about ${(worst.expectedErrorM / worst.quietErrorM).toFixed(0)} times your normal. ` +
+          `${peakTime}, ` +
+          // A storm that strong does not move a fix by so many inches. Receivers lose it. See evals/receivers.mjs.
+          (worst.expectedErrorM / worst.quietErrorM >= 25 && eq.correction === 'rtk'
+            ? 'strong enough that receivers lose their precise fix altogether. '
+            : `putting expected drift near ${worst.expectedErrorM >= 1 ? `${worst.expectedErrorM.toFixed(1)} metres` : `${Math.round(worst.expectedErrorM * 39.37)} inches`}, ` +
+              `about ${(worst.expectedErrorM / worst.quietErrorM).toFixed(0)} times your normal. `) +
           `${badBlocks.length} of ${slots.length} three-hour blocks that day were outside ${op} tolerance.`;
 
       const dayKey = at.toISOString().slice(0, 10);
@@ -160,6 +169,7 @@ export function register(server: McpServer, farmOf: () => string): void {
     'watch_jobs',
     {
       title: 'Waiting on a job to clear',
+      _meta: { ui: { resourceUri: CARD } },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       description:
         'Wait on a job that space weather is blocking. action start watches a job and says when the forecast clears ' +
@@ -186,7 +196,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         if (!farm.fields.length) return say(NO_FIELDS);
         if (!farm.equipment.length) return say(NO_EQUIP);
         const f = store.findField(farm, field ?? '');
-        if (!f) return say(`I don't have a field called "${field}".`);
+        if (!f) return say(`I don't have a field called "${clean(field)}".${namesOf(farm.fields)} Which one did you mean?`, { watching: false });
         const eq = store.findEquipment(farm, equipment);
         if (!eq) return say(NO_EQUIP);
         const snap = swpc.current();
@@ -195,7 +205,7 @@ export function register(server: McpServer, farmOf: () => string): void {
 
         const job = operation.replace(/_/g, ' ');
         const Job = job.charAt(0).toUpperCase() + job.slice(1);
-        const nowVerdict = assess(operation as Operation, kp.kp, eq, f);
+        const nowVerdict = assess(operation as Operation, kp.kp, eq, f, new Date());
         if (nowVerdict.go) {
           return say(`${Job} on ${f.name} is clear right now, so there's nothing to wait for. ${nowVerdict.reason}`, {
             watching: false,
@@ -220,16 +230,32 @@ export function register(server: McpServer, farmOf: () => string): void {
             notifiedAt: null,
           });
         });
-        const crew = farm.crew.filter((c) => c.confirmedAt && c.notifyOn.includes('window_clear')).map((c) => c.name);
+        const crew = farm.crew.filter((c) => reachable(c) && c.notifyOn.includes('window_clear')).map((c) => c.name);
         const when = win ? ` On the current forecast it clears ${localTime(win.start, f.timeZone)}.` : ' Nothing clears in the three day forecast yet.';
         const tell = crew.length
           ? ` I'll email ${crew.join(' and ')} when it does${emailConfigured() ? '' : ', once email is switched on for this server'}.`
           : " Ask me whether anything is clear yet, or add a crew member and I'll email them when it clears.";
-        return say(`Watching ${job} on ${f.name}.${when}${tell}`, { watching: true, window: win, crewToEmail: crew });
+        return say(`Watching ${job} on ${f.name}.${when}${tell}`, {
+          watching: true,
+          window: win,
+          crewToEmail: crew,
+          card: {
+            kind: 'card',
+            title: `Watching ${job} on ${f.name}`,
+            status: { label: 'waiting', tone: 'neutral' },
+            lines: [win ? `Clears ${localTime(win.start, f.timeZone)} on the current forecast.` : 'Nothing clears in the three day forecast yet.'],
+            foot: crew.length ? `${crew.join(' and ')} will be emailed when it clears.` : 'Ask whether anything is clear yet.',
+          },
+        });
       }
 
       if (action === 'stop') {
         const f = field ? store.findField(farm, field) : null;
+        // A field that was named and not recognised used to fall through to "no field given", which cancels
+        // every watch on the farm. Mis-hearing one name must not clear the list.
+        if (field && !f) {
+          return say(`I don't have a field called "${clean(field)}", so I have not stopped anything.${namesOf(farm.fields)}`, { removed: 0 });
+        }
         const keep = farm.waiting.filter((w) => (operation && w.operation !== operation) || (f && w.fieldId !== f.id));
         const removed = farm.waiting.length - (operation || f ? keep.length : 0);
         store.update(id, (x) => void (x.waiting = operation || f ? keep : []));
@@ -249,7 +275,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         const f = farm.fields.find((x) => x.id === w.fieldId);
         const eq = farm.equipment.find((x) => x.id === w.equipmentId);
         if (!f || !eq) continue;
-        const v = assess(w.operation as Operation, kp.kp, eq, f);
+        const v = assess(w.operation as Operation, kp.kp, eq, f, new Date());
         rows.push({
           watch: w,
           field: f.name,
@@ -274,6 +300,16 @@ export function register(server: McpServer, farmOf: () => string): void {
       return say(parts.join(' '), {
         clear: clear.map((r) => ({ operation: r.watch.operation, field: r.field })),
         waiting: still.map((r) => ({ operation: r.watch.operation, field: r.field, window: r.window })),
+        card: {
+          kind: 'list',
+          title: 'Waiting to clear',
+          status: clear.length ? { label: `${clear.length} clear`, tone: 'good' } : { label: 'none clear yet', tone: 'neutral' },
+          items: [
+            ...clear.map((r) => ({ title: sentence(job(r)), note: 'clear now', tone: 'good' })),
+            ...still.map((r) => ({ title: sentence(job(r)), note: r.window ? `clears ${localTime(r.window.start, r.timeZone)}` : 'not in the forecast', tone: 'neutral' })),
+          ],
+          foot: 'From the NOAA three day forecast.',
+        },
       });
     },
   );
@@ -334,7 +370,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         const named = spoken.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\b(the|field|place|acres?)\b/g, '').trim();
         if (!named) return say('Which field should I remove? Tell me its name.', { removed: false });
         const f = store.findField(farm, spoken);
-        if (!f) return say(`I don't have a field called "${spoken}".`, { removed: false });
+        if (!f) return say(`I don't have a field called "${spoken}".${namesOf(farm.fields)}`, { removed: false });
         store.update(id, (x) => {
           x.fields = x.fields.filter((y) => y.id !== f.id);
           x.waiting = x.waiting.filter((w) => w.fieldId !== f.id);
@@ -346,8 +382,8 @@ export function register(server: McpServer, farmOf: () => string): void {
       // Exact or contained names only: finding "the first machine" is fine for a question, not for deleting one.
       const eq =
         farm.equipment.find((e) => e.name.toLowerCase() === want) ??
-        farm.equipment.find((e) => e.name.toLowerCase().includes(want) || want.includes(e.name.toLowerCase()));
-      if (!eq || !want) return say(`I don't have a machine called "${spoken}".`, { removed: false });
+        farm.equipment.find((e) => e.name && (e.name.toLowerCase().includes(want) || want.includes(e.name.toLowerCase())));
+      if (!eq || !want) return say(`I don't have a machine called "${spoken}".${namesOf(farm.equipment)}`, { removed: false });
       store.update(id, (x) => {
         x.equipment = x.equipment.filter((y) => y.id !== eq.id);
         x.waiting = x.waiting.filter((w) => w.equipmentId !== eq.id);

@@ -28,6 +28,8 @@
  * https://services.swpc.noaa.gov/json/ovation_aurora_latest.json
  */
 
+import { backoff } from './backoff.js';
+
 const URL = 'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json';
 
 /** The forecast is for roughly half an hour out; past this it is not a nowcast. */
@@ -179,7 +181,6 @@ async function fetchOvation(): Promise<{ cells: Map<number, number>; observed: s
 
 
 /** After a run of failures, stop asking a server that is not answering. See backoff.ts. */
-import { backoff } from './backoff.js';
 
 const gate = backoff();
 

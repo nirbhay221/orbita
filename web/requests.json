@@ -179,7 +179,9 @@
     "register_field",
     "register_equipment",
     "remove",
-    "plan_season"
+    "plan_season",
+    "share_access",
+    "tell_me_more"
   ],
   "seed": {
     "field": {

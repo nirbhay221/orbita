@@ -35,6 +35,8 @@ import { sendEmail, emailConfigured } from '../notify.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 
 export const UI = 'ui://orbita/window.html';
+/** The view for tasks that are not a chart: a list being watched, a report, somebody being confirmed. */
+export const CARD = 'ui://orbita/card.html';
 
 /**
  * What every answer from this server contains, declared so a host can rely on it.
@@ -52,6 +54,22 @@ export const say = (text: string, structured?: Record<string, unknown>) => ({
   // structured data never has to fall back to parsing the text.
   structuredContent: { spoken: text, ...(structured ?? {}) },
 });
+
+/**
+ * The blocks still to come, which is what a panel titled "72-hour accuracy window" has to draw.
+ *
+ * NOAA's file starts a week in the past: about fifty observed blocks, then the forecast. Every tool used to
+ * send `slots.slice(0, 24)`, the OLDEST three days, so the chart showed last week and none of the forecast.
+ */
+export const upcomingSlots = <T extends { time: string }>(slots: T[], from = Date.now(), limit = 24): T[] =>
+  slots.filter((s) => new Date(s.time).getTime() + 3 * 3_600_000 > from).slice(0, limit);
+
+/** A job id said aloud: "machine control", never "machine_control". */
+export const spokenJob = (operation: string): string => operation.replace(/_/g, ' ');
+
+/** The names somebody could have meant, for a refusal that leaves them a next step. Five at most, as voice requires. */
+export const namesOf = (items: { name: string }[]): string =>
+  items.length ? ` You have ${items.slice(0, 5).map((x) => x.name).join(', ')}${items.length > 5 ? ', and more' : ''}.` : '';
 
 export const OPERATIONS = [
   'planting', 'strip_till', 'cultivating', 'spraying', 'harvest', 'tillage', 'scouting',
@@ -89,8 +107,9 @@ export const OPERATION_HINT =
   'machine_control for grade control, earthworks, cut and fill, or a dozer, grader or excavator on design grade.';
 export const CORRECTIONS = ['rtk', 'ppp', 'sbas', 'autonomous'] as const;
 
-export const NO_FIELDS = 'No fields registered yet. Add one first, I need its location to judge how badly a storm will hit it.';
-export const NO_EQUIP = 'No equipment registered yet. Tell me what correction you run, RTK, PPP, SBAS or none.';
+// Each says what to say next, in words a person has: the nearest town, and how the machine is corrected.
+export const NO_FIELDS = 'I need to know where the field is first. Tell me its name and the nearest town, and I will take it from there.';
+export const NO_EQUIP = 'I need to know what correction your machine runs. Tell me its name and whether it is on RTK, WAAS, PPP or no correction.';
 /**
  * Certification requires an actionable next step on every error, and a wrong
  * go-ahead here costs a season, so this never guesses. It says what is wrong,

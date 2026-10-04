@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from '
 import { dirname, resolve } from 'node:path';
 import type { Equipment, Field } from './domain.js';
 import * as vault from './vault.js';
+import { createHash, randomInt } from 'node:crypto';
 
 export type NotifyReason = 'window_clear' | 'storm';
 
@@ -15,6 +16,15 @@ export type CrewContact = {
   addedAt: string;
   /** Null until the customer says to go ahead. Nothing is ever sent to an unconfirmed contact. */
   confirmedAt: string | null;
+  /** When the person who owns the address agreed to be emailed. See consent.ts. */
+  acceptedAt?: string | null;
+  /** A hash of the invitation they were sent. Cleared once it is used. */
+  acceptHash?: string | null;
+  /** What the stop link in every email carries. */
+  stopId?: string | null;
+  invitedAt?: string | null;
+  /** The link to this person's working day on the heat safety server, once they have shared it. See crewday.ts. */
+  dayLink?: string | null;
 };
 
 export type Watch = {
@@ -62,6 +72,12 @@ export type Farm = {
   alertsSent: string[];
   /** When a fresh start was last asked for, so the second ask is the confirmation. */
   forgetAskedAt?: string | null;
+  /** Accounts invited to look at this farm. They can ask about it and change nothing. */
+  sharedWith?: string[];
+  /** A one-time code somebody can join with, kept as a hash, with the time it stops working. */
+  invite?: { hash: string; expires: string } | null;
+  /** The farm this account was invited to look at, if any. Checked against that farm's own list. */
+  viewing?: string | null;
   /**
    * When this record was last written, as an ISO string on the record itself.
    *
@@ -174,7 +190,9 @@ const isDemo = (id: string) => id.startsWith('demo:');
 function evictOldestDemo(all: Record<string, Farm>): boolean {
   const demo = Object.keys(all).filter(isDemo);
   if (!demo.length) return false;
-  const oldest = demo.reduce((a, b) => ((touched.get(a) ?? 0) <= (touched.get(b) ?? 0) ? a : b));
+  // After a restart nothing has been touched in memory yet, so fall back to the time of the last write.
+  const last = (id: string) => touched.get(id) ?? (Date.parse(String(all[id]?.touchedAt ?? '')) || 0);
+  const oldest = demo.reduce((a, b) => (last(a) <= last(b) ? a : b));
   delete all[oldest];
   touched.delete(oldest);
   return true;
@@ -259,7 +277,9 @@ export function get(farmId: string): Farm {
  */
 export function forget(farmId: string): void {
   const all = load();
-  all[farmId] = empty();
+  // Deleted, not blanked: an empty record with an id is still a record of somebody having been here.
+  delete all[farmId];
+  touched.delete(farmId);
   flush();
 }
 
@@ -331,12 +351,27 @@ export function allEntries(): [string, Farm][] {
 /** Resolve a spoken field name loosely, "the north field" should find "North 40". */
 export function findField(farm: Farm, spoken: string): Field | null {
   if (!farm.fields.length) return null;
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\b(the|field|place|acres?)\b/g, '').trim();
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\b(the|field|place|acres?)\b/g, '').replace(/\s+/g, ' ').trim();
   const want = norm(spoken);
   if (!want) return farm.fields[0];
+  // A name that normalises to nothing (one written in another script, or just "the field") used to match
+  // every question, because every string contains the empty string.
+  const named = farm.fields.filter((f) => norm(f.name));
   return (
-    farm.fields.find((f) => norm(f.name) === want) ??
-    farm.fields.find((f) => norm(f.name).includes(want) || want.includes(norm(f.name))) ??
+    farm.fields.find((f) => f.name.trim().toLowerCase() === spoken.trim().toLowerCase()) ??
+    named.find((f) => norm(f.name) === want) ??
+    named.find((f) => norm(f.name).includes(want) || want.includes(norm(f.name))) ??
+    null
+  );
+}
+
+/** The machine that was actually named, or null. findEquipment falls back to the first one; this does not. */
+export function equipmentNamed(farm: Farm, spoken: string): Equipment | null {
+  const want = spoken.trim().toLowerCase();
+  if (!want) return null;
+  return (
+    farm.equipment.find((e) => e.name.toLowerCase() === want) ??
+    farm.equipment.find((e) => e.name && (e.name.toLowerCase().includes(want) || want.includes(e.name.toLowerCase()))) ??
     null
   );
 }
@@ -344,10 +379,70 @@ export function findField(farm: Farm, spoken: string): Field | null {
 export function findEquipment(farm: Farm, spoken?: string): Equipment | null {
   if (!farm.equipment.length) return null;
   if (!spoken) return farm.equipment[0];
-  const want = spoken.toLowerCase();
-  return (
-    farm.equipment.find((e) => e.name.toLowerCase() === want) ??
-    farm.equipment.find((e) => e.name.toLowerCase().includes(want)) ??
-    farm.equipment[0]
-  );
+  return equipmentNamed(farm, spoken) ?? farm.equipment[0];
+}
+
+/* ------------------------------------------------------------------ *
+ * A second person.
+ *
+ * The crew used to be people who received an email and nothing more. The person the answer matters to most
+ * is often not the account holder: it is the operator in the cab, who wants to ask "is it clear yet" for
+ * himself. The owner asks for a code, reads it to them, and they join with it from their own account. From
+ * then on their questions are answered about the owner's fields. They can read and cannot change anything:
+ * every tool that writes still writes to their own record.
+ *
+ * A code is eight digits, works once, lasts a day and is stored as a hash. The link is held on both sides and
+ * checked on the owner's, so it ends the moment the owner removes them.
+ * ------------------------------------------------------------------ */
+const INVITE_MS = 24 * 60 * 60 * 1000;
+const MAX_SHARED = 20;
+const hashCode = (code: string) => createHash('sha256').update(`orbita-invite:${code}`).digest('hex');
+export const normaliseCode = (spoken: string): string => String(spoken ?? '').replace(/\D/g, '');
+
+export function createInvite(farmId: string, now = Date.now()): string {
+  const code = String(randomInt(0, 100_000_000)).padStart(8, '0');
+  update(farmId, (f) => void (f.invite = { hash: hashCode(code), expires: new Date(now + INVITE_MS).toISOString() }));
+  return code;
+}
+
+export type Joined = { ok: true; farmId: string } | { ok: false; why: 'unknown' | 'own' | 'full' };
+
+export function joinWithCode(memberId: string, spoken: string, now = Date.now()): Joined {
+  const code = normaliseCode(spoken);
+  if (code.length !== 8) return { ok: false, why: 'unknown' };
+  const hash = hashCode(code);
+  const all = load();
+  const farmId = Object.keys(all).find((id) => all[id].invite?.hash === hash && Date.parse(all[id].invite!.expires) > now);
+  if (!farmId) return { ok: false, why: 'unknown' };
+  if (farmId === memberId) return { ok: false, why: 'own' };
+  if ((all[farmId].sharedWith ?? []).length >= MAX_SHARED) return { ok: false, why: 'full' };
+  update(farmId, (f) => {
+    f.invite = null; // one use
+    f.sharedWith = [...new Set([...(f.sharedWith ?? []), memberId])];
+  });
+  update(memberId, (f) => void (f.viewing = farmId));
+  return { ok: true, farmId };
+}
+
+/** The farm this account may look at, or null. True only while the owner still lists them. */
+export function viewedBy(memberId: string): string | null {
+  const all = load();
+  const farmId = all[memberId]?.viewing;
+  if (!farmId || !all[farmId]) return null;
+  return (all[farmId].sharedWith ?? []).includes(memberId) ? farmId : null;
+}
+
+export function leave(memberId: string): boolean {
+  const farmId = load()[memberId]?.viewing;
+  if (!farmId) return false;
+  update(memberId, (f) => void (f.viewing = null));
+  if (load()[farmId]) update(farmId, (f) => void (f.sharedWith = (f.sharedWith ?? []).filter((m) => m !== memberId)));
+  return true;
+}
+
+/** End sharing from the owner's side. Returns how many people lost access. */
+export function stopSharing(farmId: string): number {
+  const n = (load()[farmId]?.sharedWith ?? []).length;
+  if (load()[farmId]) update(farmId, (f) => { f.sharedWith = []; f.invite = null; });
+  return n;
 }

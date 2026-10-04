@@ -1,0 +1,33 @@
+{
+  "_comment": "The lines on the Echo-style demo page. Each one is a real tool call with real arguments, kept here so a test can call every one of them. A line with an input takes what is typed and puts it in the named argument.",
+  "groups": [
+    {
+      "name": "First, the farm",
+      "lines": [
+        { "say": "My field is near Yuma, Arizona.", "tool": "register_field", "args": { "name": "Yuma Block", "place": "Yuma, Arizona" } },
+        { "say": "The planter runs RTK.", "tool": "register_equipment", "args": { "name": "planter", "correction": "rtk" } },
+        { "say": "The sprayer is on WAAS.", "tool": "register_equipment", "args": { "name": "sprayer", "correction": "sbas" } },
+        { "say": "Add Dana to the crew.", "tool": "crew_contact", "args": { "action": "add", "name": "Dana", "email": "dana@example.com", "role": "planter operator" } }
+      ]
+    },
+    {
+      "name": "Can the job run",
+      "lines": [
+        { "say": "Can I plant today?", "tool": "can_i_run", "args": { "operation": "planting", "equipment": "planter" } },
+        { "say": "Can I spray?", "tool": "can_i_run", "args": { "operation": "spraying", "equipment": "sprayer" } },
+        { "say": "What about a survey tomorrow afternoon?", "tool": "can_i_run", "args": { "operation": "surveying", "equipment": "planter", "when": "tomorrow afternoon" } },
+        { "say": "How is the whole farm looking?", "tool": "farm_status", "args": {} },
+        { "say": "What is the sun doing?", "tool": "storm_status", "args": {} },
+        { "say": "What happened on May 10, 2024?", "tool": "what_happened", "args": { "when": "May 10 2024" } },
+        { "say": "Tell me more.", "tool": "tell_me_more", "args": {} }
+      ]
+    },
+    {
+      "name": "The people on the crew",
+      "lines": [
+        { "say": "Dana is sharing her day. Her code is", "tool": "crew_contact", "args": { "action": "add", "name": "Dana" }, "input": "dayCode", "hint": "eight digits from her Sudor" },
+        { "say": "Can I plant today, with the crew in mind?", "tool": "can_i_run", "args": { "operation": "planting", "equipment": "planter" } }
+      ]
+    }
+  ]
+}

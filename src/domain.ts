@@ -97,23 +97,6 @@ const QUIET_ERROR_M: Record<Correction, number> = {
 };
 
 /**
- * Degradation multiplier by storm severity. RTK suffers most in relative terms
- * because it depends on the ionosphere being similar over the baseline, and that
- * assumption is exactly what a storm breaks.
- */
-function severityMultiplier(kp: number, correction: Correction): number {
-  const band = kp < 4 ? 0 : kp < 5 ? 1 : kp < 6 ? 2 : kp < 7 ? 3 : kp < 8 ? 4 : 5;
-  const table: Record<Correction, number[]> = {
-    //        quiet unsettled  G1    G2    G3   G4+
-    rtk: [1, 2.5, 8, 20, 34, 52],
-    ppp: [1, 1.8, 3.9, 6.8, 8.5, 10.5],
-    sbas: [1, 1.4, 2.2, 3.0, 3.6, 4.2],
-    autonomous: [1, 1.1, 1.3, 1.5, 1.7, 2.0],
-  };
-  return table[correction][band];
-}
-
-/**
  * Geomagnetic latitude, centred dipole approximation.
  *
  * Storms follow the magnetic field, not the map. The geomagnetic pole sits about
@@ -149,34 +132,6 @@ export function auroralBoundaryDeg(kp: number): number {
   return 66.5 - 2 * Math.max(0, Math.min(9, kp));
 }
 
-/**
- * How exposed this site is, which is two different things added together.
- *
- * The first is climatological: an auroral-zone field is a harder place to hold
- * centimetres than a Gulf Coast one, on any day. The second only appears during
- * a storm, when the oval arrives overhead. The November 2025 superstorm put
- * positioning errors over ten metres across most of the continental United
- * States, as far south as Florida, on ground that is entirely unremarkable at
- * Kp 4, because auroral precipitation had expanded that far down. A model with
- * fixed latitude bands cannot say that, and would have called that day mild in
- * Iowa.
- *
- * Yizengaw et al. 2026, Geophysical Research Letters, "Impacts of Mid-Latitude
- * Ionospheric Dynamics on RF Applications During the November 2025 Superstorm
- * Event", https://doi.org/10.1029/2026GL124645
- */
-function latitudeFactor(lat: number, lon: number, kp: number): number {
-  const a = Math.abs(geomagneticLatitude(lat, lon));
-  const climatological = a >= 55 ? 1.6 : a >= 45 ? 1.25 : a >= 35 ? 1.0 : 0.8;
-
-  // How far inside the oval this site sits today. Positive means the edge has
-  // already passed over it.
-  const margin = a - auroralBoundaryDeg(kp);
-  const reach = margin >= 0 ? 1.35 : margin >= -5 ? 1.15 : margin >= -12 ? 1.05 : 1;
-
-  return climatological * reach;
-}
-
 /** Long RTK baselines lose the ionospheric-similarity assumption first. */
 function baselineFactor(km: number | undefined, correction: Correction): number {
   if (correction !== 'rtk' || km == null) return 1;
@@ -186,13 +141,89 @@ function baselineFactor(km: number | undefined, correction: Correction): number 
   return 2.2;
 }
 
-export function expectedErrorM(kp: number, eq: Equipment, field: Field): number {
+/**
+ * How much worse RTK gets, from where the site is relative to the auroral oval.
+ *
+ * This replaced a table keyed on Kp alone. Replaying three real planting seasons of measured Kp
+ * (evals/backtest.mjs) showed that table calling RTK planting outside tolerance in a quarter of all
+ * three-hour blocks at Fargo in 2025, from Kp 4. Growers do not lose guidance a quarter of the time, and
+ * measurements agree: RTK does not degrade with Kp as such. It degrades when the disturbed ionosphere is
+ * overhead, which is a question of how far the oval has come.
+ *
+ * So the multiplier is set by depth: geomagnetic latitude minus the oval's equatorward edge at this Kp,
+ * positive when the edge has passed over the site. Three published observations anchor it:
+ *
+ *   - Inside the oval, metres. A Norwegian network at 60 to 67 degrees saw RTK errors peak near 3 m as Kp went
+ *     through 5 to 7 (Jacobsen and Schafer 2012, J. Space Weather Space Clim., doi:10.1051/swsc/2012013).
+ *     Depth of 6 degrees or more is 50 times the quiet 2 cm, which is 1 m.
+ *   - Far from the oval in a strong storm, centimetres. Network RTK through a Kp 7.3 storm at low latitude
+ *     held about 8 cm horizontal (Sensors 2026, doi:10.3390/s26072198). That is the floor of 4 times from Kp 7.
+ *   - In an extreme storm, nowhere in the middle latitudes is far from it. In May 2024 (Kp 9) positioning
+ *     errors of metres were measured across the central United States (Remote Sensing 2025,
+ *     doi:10.3390/rs17091492). That is the floor of 25 times from Kp 8 and 50 from Kp 9.
+ *
+ * Between those points the steps are this project's interpolation, not a measurement, and the numbers it
+ * produces are an estimate of scale: "inches" or "feet", never a promise of a figure.
+ */
+const OVERHEAD_OFFSET_DEG = 4;
+
+/**
+ * How much further poleward the oval sits at this hour, in degrees.
+ *
+ * The oval is not a ring centred on the pole. It is pushed away from the sun: its equatorward edge sits near
+ * 67 degrees at local midnight and near 75 at local noon on a quiet day (the Feldstein oval). Field work is
+ * done in daylight, and a model that treats noon like midnight calls a Canadian field inside the oval at
+ * lunchtime when the aurora is eight degrees north of it.
+ *
+ * Zero at local midnight, eight at local noon, by local solar time, which is close enough to magnetic local
+ * time away from the poles. With no time given it is zero: the night-time, more cautious, answer.
+ */
+export function dayShiftDeg(at: Date | undefined, lon: number): number {
+  if (!at || Number.isNaN(at.getTime())) return 0;
+  const hour = (((at.getUTCHours() + at.getUTCMinutes() / 60 + lon / 15) % 24) + 24) % 24;
+  return 4 * (1 + Math.cos((2 * Math.PI * (hour - 12)) / 24));
+}
+
+export function rtkMultiplier(kp: number, lat: number, lon: number, at?: Date): number {
+  // auroralBoundaryDeg is NOAA's viewline: how far south the aurora can be SEEN, low on the horizon. The
+  // disturbed ionosphere itself is overhead some four degrees poleward of that. Using the viewline as if it
+  // were overhead had Saskatoon inside the oval at Kp 4, and outside tolerance in 38 to 62 percent of blocks.
+  // The storm floors below do not move with the hour: the enhanced density that hurt the central United
+  // States in May 2024 was a daytime and dusk effect.
+  const depth = Math.abs(geomagneticLatitude(lat, lon)) - (auroralBoundaryDeg(kp) + OVERHEAD_OFFSET_DEG + dayShiftDeg(at, lon));
+  const byDepth = depth >= 6 ? 50 : depth >= 3 ? 25 : depth >= 0 ? 10 : depth >= -2 ? 2 : depth >= -8 ? 1.4 : 1;
+  // The storm's own floor. From Kp 8 it is graded by latitude, because the same extreme storm was worse in
+  // the central United States than in the south-west; at Kp 7 the measured 8 cm was at low latitude, so
+  // that floor applies everywhere.
+  const a = Math.abs(geomagneticLatitude(lat, lon));
+  const byStorm = kp >= 9 ? (a >= 35 ? 50 : 25) : kp >= 8 ? (a >= 45 ? 25 : a >= 35 ? 12 : 8) : kp >= 7 ? 4 : 1;
+  return Math.max(byDepth, byStorm);
+}
+
+/**
+ * How much of the disturbance each kind of correction feels.
+ *
+ * Every correction is judged from the same measure of how disturbed the sky is over the site (rtkMultiplier),
+ * raised to a power. RTK feels all of it, because it depends on the ionosphere being the same over the base
+ * and the rover. PPP models the ionosphere and loses that model in a storm. WAAS broadcasts a coarse
+ * correction that degrades more slowly. A receiver with no correction is already carrying metres of error,
+ * so a storm adds proportionally least.
+ *
+ * This replaced two tables: one keyed on Kp alone, and one that made every northern site 60 percent worse on
+ * a quiet day. Replaying 2025 for every job, not only planting, showed what that did: it said a sprayer on
+ * WAAS at Fargo could never hold spraying tolerance, on any day, and that walking a field with a phone was
+ * impossible in Saskatchewan. People spray on WAAS at Fargo every day.
+ *
+ * The powers are chosen so the worst case (a disturbance of 50) lands near the figures the old tables gave
+ * for an extreme storm, about 19 times for PPP, 5 for WAAS and 1.6 for none. They are this project's
+ * estimate, not a measurement, and only the RTK row is anchored to published observations.
+ */
+const SENSITIVITY: Record<Correction, number> = { rtk: 1, ppp: 0.75, sbas: 0.4, autonomous: 0.12 };
+
+export function expectedErrorM(kp: number, eq: Equipment, field: Field, at?: Date): number {
   const base = QUIET_ERROR_M[eq.correction];
-  const err =
-    base *
-    severityMultiplier(kp, eq.correction) *
-    latitudeFactor(field.lat, field.lon, kp) *
-    baselineFactor(field.baselineKm, eq.correction);
+  const disturbance = rtkMultiplier(kp, field.lat, field.lon, at);
+  const err = base * disturbance ** SENSITIVITY[eq.correction] * baselineFactor(field.baselineKm, eq.correction);
   return Number(err.toFixed(3));
 }
 
@@ -231,9 +262,13 @@ export function assess(
   kp: number,
   eq: Equipment,
   field: Field,
+  /** When the job would run. Left out, the answer is the night-time one, which is the more cautious. */
+  at?: Date,
 ): Verdict {
-  const err = expectedErrorM(kp, eq, field);
-  const quiet = expectedErrorM(2, eq, field);
+  const err = expectedErrorM(kp, eq, field, at);
+  // What this rig does on its best day: the better of a quiet sky and a dead calm one, so that a site the
+  // oval sits over on an ordinary night is not told its equipment is the problem.
+  const quiet = Math.min(expectedErrorM(2, eq, field, at), expectedErrorM(0, eq, field, at));
   const tol = TOLERANCE_M[operation];
   const go = err <= tol;
   const g = G_SCALE(kp);
@@ -254,9 +289,14 @@ export function assess(
   } else {
     limitedBy = 'space_weather';
     const factor = err / quiet;
-    reason =
-      `Hold off ${label}. Kp ${kp.toFixed(1)} (${g}) puts expected drift near ${distance(err)}, ` +
-      `about ${factor.toFixed(factor < 10 ? 1 : 0)} times your normal ${inches(quiet)}, and ${label} needs it inside ${inches(tol)}.`;
+    // In a severe storm a receiver does not wander by a neat number of inches. It loses its fix. Permanent
+    // stations at Saskatoon, Fargo, Grand Island and Lubbock all lost precise positioning for twelve hours or
+    // more on 10 and 11 May 2024 (evals/receivers.mjs), so at that level the answer says that and gives no figure.
+    const lost = eq.correction === 'rtk' && rtkMultiplier(kp, field.lat, field.lon, at) >= 25;
+    reason = lost
+      ? `Hold off ${label}. Kp ${kp.toFixed(1)} (${g}) is strong enough that receivers here lose their precise fix altogether, as they did in May 2024, and ${label} needs it inside ${inches(tol)}.`
+      : `Hold off ${label}. Kp ${kp.toFixed(1)} (${g}) puts expected drift near ${distance(err)}, ` +
+        `about ${factor.toFixed(factor < 10 ? 1 : 0)} times your normal ${inches(quiet)}, and ${label} needs it inside ${inches(tol)}.`;
   }
 
   return {
@@ -315,7 +355,10 @@ export function nextWindow(
   let start: string | null = null;
   let last: string | null = null;
   for (const s of future) {
-    const ok = expectedErrorM(s.kp, eq, field) <= tol;
+    // The block under way is judged at this moment, so it agrees with the verdict just given; later ones at their middle.
+    const begins = new Date(s.time).getTime();
+    const when = begins <= now.getTime() ? now : new Date(begins + 90 * 60_000);
+    const ok = expectedErrorM(s.kp, eq, field, when) <= tol;
     if (ok) {
       if (!start) start = s.time;
       last = s.time;

@@ -53,19 +53,15 @@ export function register(server: McpServer, farmOf: () => string): void {
       const farm = store.get(farmOf());
       const setup =
         !farm.fields.length || !farm.equipment.length
-          ? ' First tell me where you work and what correction you run, and I can answer for your own sites.'
+          ? ' To start, tell me a field and the nearest town.'
           : '';
+      // Three sentences. It used to be 168 words, which nobody asking "what can you do" is waiting for.
       return say(
-        'I tell you whether satellite guidance will hold the accuracy your job needs, using the NOAA space weather ' +
-          'forecast, where you are, and how tight that particular job has to be. Geomagnetic storms push GPS error ' +
-          'from centimetres to metres, and the same storm hits a site near the poles far harder than one near the ' +
-          'equator. Ask me can I plant the north forty today, or when does it clear for the survey crew, or what is ' +
-          'the sun doing, or why did that job go wrong on Tuesday. It works for planting, spraying, harvest and ' +
-          'tillage, and for cadastral survey, drone mapping and machine control on grade. And if you fly drones, run ' +
-          'satellites, operate the grid, dispatch flights, use HF radio or just want to see the aurora, ask me what you ' +
-          'should do about the space weather. I can also watch a blocked job and email your crew when it clears, and ' +
-          'keep a log of the jobs you run for a report later.' + setup,
+        'I tell you whether GPS guidance will hold the accuracy a field job needs, from the space weather forecast ' +
+          'and where your field is. Ask me can I plant the north forty today, or when does it clear. I can also ' +
+          'watch a blocked job and tell your crew when it clears.' + setup,
         {
+          fullAnswer: true,
           examplePhrases: [
             'Can I plant the north forty today?',
             'When does it clear for the survey crew?',

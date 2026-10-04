@@ -48,6 +48,8 @@
  * Source: NOAA SWPC GloTEC, https://services.swpc.noaa.gov/products/glotec/
  */
 
+import { backoff } from './backoff.js';
+
 const INDEX = 'https://services.swpc.noaa.gov/products/glotec/geojson_2d_urt.json';
 const HOST = 'https://services.swpc.noaa.gov';
 
@@ -69,6 +71,8 @@ const KM_PER_DEG_LAT = 111.132;
 
 /** The map is published every ten minutes; older than this is not "now". */
 const STALE_MS = 40 * 60 * 1000;
+/** How old the map itself may be. It is a ten minute product, so an hour and a half means it has stalled. */
+const MAP_STALE_MS = 90 * 60 * 1000;
 
 /**
  * Quality flags, from the product. 0 means the assimilation had observations in
@@ -199,6 +203,10 @@ export function watch(lat: number, lon: number): void {
 export function ionosphere(lat: number, lon: number): Ionosphere | null {
   if (!grid.size) return null;
   if (Date.now() - fetchedAt > STALE_MS) return null;
+  // What is fresh has to be the map, not the download. If NOAA's product stalls, the newest file in the
+  // listing is an old one, and fetching it again every twelve minutes does not make it a measurement of now.
+  const mapped = mapTime ? Date.parse(mapTime) : NaN;
+  if (Number.isFinite(mapped) && Date.now() - mapped > MAP_STALE_MS) return null;
 
   const point = sample(lat, lon);
   const grad = gradientAt(lat, lon);
@@ -355,7 +363,6 @@ async function fetchLatest(): Promise<{ cells: Map<string, Cell>; at: string } |
 
 
 /** After a run of failures, stop asking a server that is not answering. See backoff.ts. */
-import { backoff } from './backoff.js';
 
 const gate = backoff();
 

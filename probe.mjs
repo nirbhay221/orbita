@@ -1,3 +1,5 @@
+// Every tool, including the ones outside the default scope, so they stay tested. See src/brief.ts.
+process.env.ORBITA_SCOPE ??= 'all';
 // End-to-end against the running server and LIVE NOAA data.
 const URL = 'http://localhost:8788/mcp';
 let id = 0;

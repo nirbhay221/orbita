@@ -45,6 +45,8 @@
  * tool call ever reaches the network; a timer does.
  */
 
+import { backoff } from './backoff.js';
+
 const BASE = 'https://services.swpc.noaa.gov';
 
 const PATHS = {
@@ -357,7 +359,6 @@ function parseElectrons(raw: unknown): ElectronFluence | null {
 
 
 /** After a run of failures, stop asking a server that is not answering. See backoff.ts. */
-import { backoff } from './backoff.js';
 
 const gate = backoff();
 
@@ -487,8 +488,12 @@ function dayName(iso: string): string {
 }
 
 export function cmeSentence(): string {
-  const c = cme();
-  if (!c) return '';
+  const held = cme();
+  if (!held) return '';
+  // Counted now, not when the feed was read: the model output is kept for up to three hours, and "in about
+  // six hours" has to still be true when it is said.
+  const arrival = Date.parse(`${held.arrives.slice(0, 19)}Z`);
+  const c = { ...held, hours: Number.isFinite(arrival) ? Math.round((arrival - Date.now()) / 3.6e6) : held.hours };
   if (c.hours < 0) return '';
 
   const faster = c.peakSpeed - c.ambientSpeed;

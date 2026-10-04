@@ -134,7 +134,7 @@ export function assertRequirementMet(): void {
     throw new VaultError(
       'no_key',
       'ORBITA_REQUIRE_ENCRYPTION is on but ORBITA_DATA_KEY is not set. Refusing to start, because ' +
-        'this server would otherwise store medications and locations in the clear.',
+        'this server would otherwise store field locations and crew addresses in the clear.',
     );
   }
   // Parsing validates every configured key now rather than on the first write.

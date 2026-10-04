@@ -17,6 +17,9 @@ import * as swpc from '../swpc.js';
 import * as solarwind from '../solarwind.js';
 import * as geomag from '../geomag.js';
 import * as glotec from '../glotec.js';
+import * as crewheat from '../crewheat.js';
+import * as crewday from '../crewday.js';
+import { reachable, stopFooter } from '../consent.js';
 import * as swpcplus from '../swpcplus.js';
 import * as aurora from '../aurora.js';
 import { chooseOne, canAsk } from '../elicit.js';
@@ -24,7 +27,7 @@ import * as season from '../season.js';
 import * as store from '../store.js';
 import * as history from '../history.js';
 import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
-import { sendEmail, emailConfigured, canEmailFor, DEMO_NO_EMAIL } from '../notify.js';
+import { sendEmail, withinEmailLimits, emailConfigured, canEmailFor, DEMO_NO_EMAIL } from '../notify.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
   NOAA_DOWN,
@@ -32,16 +35,21 @@ import {
   NO_FIELDS,
   OPERATIONS,
   OPERATION_HINT,
+  CARD,
   REPEAT_WINDOW_MS,
   UI,
   asked,
   clean,
   justNow,
   kpRightNow,
+  localTime,
   newId,
+  namesOf,
   sameName,
   say,
+  spokenJob,
   statusOperations,
+  upcomingSlots,
 } from './shared.js';
 
 export function register(server: McpServer, farmOf: () => string): void {
@@ -91,7 +99,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       }
 
       const f = store.findField(farm, chosenName ?? '');
-      if (!f) return say(`I don't have a field called "${field}".`);
+      if (!f) return say(`I don't have a field called "${clean(field)}".${namesOf(farm.fields)} Which one did you mean?`, { logged: false });
 
       // Same for the machine: the correction it runs is most of the answer, so
       // guessing between an RTK planter and a WAAS sprayer changes the verdict.
@@ -115,8 +123,12 @@ export function register(server: McpServer, farmOf: () => string): void {
       // machine it is about, because the customer named neither and the old
       // behaviour was to pick silently.
       const assumed = !field && farm.fields.length > 1 && chosenName === undefined;
-      const at = when ? history.parseWhen(when) : new Date();
-      if (!at) return say(`I couldn't work out when "${when}" was. Try a day name or a date.`);
+      const at = when ? history.parseWhen(when, new Date(), { prefer: 'past', timeZone: f.timeZone }) : new Date();
+      if (!at) return say(`I couldn't work out when "${clean(when)}" was. Try a day name or a date.`, { logged: false });
+      // A log is of work that happened. A date ahead of now is a plan, and it would sit in the report as done.
+      if (at.getTime() > Date.now() + 5 * 60_000) {
+        return say('That is in the future, so there is nothing to log yet. Tell me once it has been done.', { logged: false });
+      }
 
       // Kp only counts if a published block actually covers that time.
       const slot = (swpc.current()?.slots ?? []).find((s) => {
@@ -190,6 +202,7 @@ export function register(server: McpServer, farmOf: () => string): void {
     'job_report',
     {
       title: 'Report on the jobs I ran',
+      _meta: { ui: { resourceUri: CARD } },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       description:
         'Summarise logged jobs over recent days, and which ran while space weather put them outside tolerance. Name a ' +
@@ -217,6 +230,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         const contact = farm.crew.find((c) => sameName(c.name, emailTo));
         if (!contact) return say(`${emailTo} isn't on your crew list. Add them first.`, { sent: false });
         if (!contact.confirmedAt) return say(`${contact.name} hasn't been confirmed yet, so I won't email them.`, { sent: false });
+        if (!reachable(contact)) return say(`${contact.name} hasn't agreed to be emailed yet, so I won't send it.`, { sent: false, reason: 'not_agreed' });
         if (!emailConfigured()) return say("I can't email the report yet, because email isn't set up on this server.", { sent: false });
         const lines = entries.map(
           (j) =>
@@ -225,11 +239,17 @@ export function register(server: McpServer, farmOf: () => string): void {
             `${j.go == null ? 'no record' : j.go ? 'inside tolerance' : j.limitedBy === 'space_weather' ? 'outside tolerance, space weather' : 'outside tolerance, equipment'}` +
             `${j.acres ? `  ${j.acres} acres` : ''}${j.note ? `  ${j.note}` : ''}`,
         );
+        // Asked for by voice, so it can be asked for again and again. Past the limit the honest answer is
+        // that it was not sent, rather than "emailing it now" about a message that was dropped.
+        if (!withinEmailLimits({ to: contact.email, reason: 'job_report', sender: farmOf() })) {
+          return say(`I have already sent ${contact.name} as many emails as I will send in a day. Ask me again tomorrow.`, { sent: false, reason: 'limit' });
+        }
         void sendEmail({
           to: contact.email,
+          sender: farmOf(),
           reason: 'job_report',
           subject: `Orbita job report, last ${span} days`,
-          text: `${lines.length} jobs logged.\n\n${lines.join('\n')}\n\nKp from NOAA SWPC. Tolerances are the ones Orbita uses for each job.`,
+          text: `${lines.length} jobs logged.\n\n${lines.join('\n')}\n\nKp from NOAA SWPC. Tolerances are the ones Orbita uses for each job.${stopFooter(contact)}`,
         });
         return say(`I'm emailing the report to ${contact.name} now.`, { sent: true, jobs: lines.length });
       }
@@ -247,7 +267,23 @@ export function register(server: McpServer, farmOf: () => string): void {
           : 'None of them ran while space weather put them outside tolerance.',
       );
       if (unknown.length) parts.push(`${unknown.length} had no space weather on record for that time.`);
-      return say(parts.join(' '), { days: span, entries, outside, unknown });
+      return say(parts.join(' '), {
+        days: span,
+        entries,
+        outside,
+        unknown,
+        card: {
+          kind: 'list',
+          title: `Jobs, last ${span} days`,
+          status: outside.length ? { label: `${outside.length} outside tolerance`, tone: 'bad' } : { label: 'all inside tolerance', tone: 'good' },
+          items: entries.slice(-8).reverse().map((j) => ({
+            title: `${spokenJob(j.operation)} on ${j.fieldName}`,
+            note: `${date(j.at)}, ${j.go == null ? 'no record' : j.go ? 'inside' : 'outside'}`,
+            tone: j.go === false ? 'bad' : j.go ? 'good' : 'neutral',
+          })),
+          foot: 'Kp from NOAA at the time each job ran.',
+        },
+      });
     },
   );
 
@@ -273,19 +309,68 @@ export function register(server: McpServer, farmOf: () => string): void {
       // A farm with ground but no machines on it yet. Without this the sweep
       // reads a correction off nothing at all, and a live probe heard the
       // exception itself read back: "Cannot read properties of undefined".
-      const eq = farm.equipment[0];
-      if (!eq) return say(NO_EQUIP);
-      const rows = farm.fields.flatMap((f) =>
-        (statusOperations(eq.correction) as Operation[]).map((op) => {
-          const v = assess(op, kp.kp, eq, f);
-          return { field: f.name, operation: op, go: v.go, errorM: v.expectedErrorM };
-        }),
+      if (!farm.equipment.length) return say(NO_EQUIP);
+      // Every machine, as the description promises. It used to judge the first machine only, so a farm with a
+      // planter on RTK and a sprayer on WAAS heard about one of them and was told that was the farm. Bounded,
+      // because the answer is spoken and the sweep is fields times machines times jobs.
+      const fields = farm.fields.slice(0, 40);
+      const machines = farm.equipment.slice(0, 8);
+      const rows = fields.flatMap((f) =>
+        machines.flatMap((eq) =>
+          (statusOperations(eq.correction) as Operation[]).map((op) => {
+            const v = assess(op, kp.kp, eq, f, new Date());
+            return {
+              field: f.name,
+              equipment: eq.name,
+              operation: op,
+              go: v.go,
+              errorM: v.expectedErrorM,
+              toleranceM: v.toleranceM,
+              limitedBy: v.limitedBy,
+            };
+          }),
+        ),
       );
-      const blocked = rows.filter((r) => !r.go);
-      const text = blocked.length
-        ? `Kp ${kp.kp.toFixed(1)}. ${blocked.length} of ${rows.length} jobs are outside tolerance right now, tightest first: ${blocked.slice(0, 3).map((b) => `${b.operation} on ${b.field}`).join(', ')}.`
-        : `Kp ${kp.kp.toFixed(1)}. Everything is inside tolerance.`;
-      return say(text, { kp: kp.kp, rows, slots: (snap?.slots ?? []).slice(0, 24) });
+      // What the storm is blocking, furthest outside tolerance first. A job the machine can never hold is a
+      // different fact, said separately, because waiting will not change it.
+      const stormed = rows.filter((r) => r.limitedBy === 'space_weather').sort((a, b) => b.errorM / b.toleranceM - a.errorM / a.toleranceM);
+      const never = rows.filter((r) => r.limitedBy === 'equipment');
+      const several = machines.length > 1;
+      const name = (r: (typeof rows)[number]) => `${spokenJob(r.operation)} on ${r.field}${several ? ` with ${r.equipment}` : ''}`;
+      const parts = [`Kp ${kp.kp.toFixed(1)}.`];
+      parts.push(
+        stormed.length
+          ? `${stormed.length} of ${rows.length} jobs are outside tolerance because of space weather, worst first: ${stormed.slice(0, 3).map(name).join(', ')}.`
+          : 'Space weather is not putting any job outside tolerance right now.',
+      );
+      if (never.length) {
+        parts.push(`${never.length} more cannot hold tolerance on the correction that machine runs, whatever the sky does.`);
+      }
+      if (farm.fields.length > fields.length || farm.equipment.length > machines.length) {
+        parts.push('That covers your first fields and machines; ask about a particular one for the rest.');
+      }
+      // The hottest field over the working day ahead, for whoever is deciding where to send people.
+      const heat = fields
+        .map((f) => ({ f, heat: crewheat.during(f.lat, f.lon, new Date(), 10) }))
+        .filter((x): x is { f: (typeof fields)[number]; heat: crewheat.CrewHeat } => x.heat !== null)
+        .sort((a, b) => b.heat.peakF - a.heat.peakF)[0];
+      const mustSay: string[] = [];
+      if (heat) {
+        const line = crewheat.sentence(heat.heat, (iso) => localTime(iso, heat.f.timeZone)).replace('For the crew,', `For the crew on ${heat.f.name},`);
+        parts.push(line);
+        if (heat.heat.level === 'high') mustSay.push(line);
+      }
+      for (const line of crewday.sentences(farm.crew.map((c) => ({ name: c.name, link: c.dayLink })))) {
+        parts.push(line);
+        mustSay.push(line);
+      }
+      return say(parts.join(' '), {
+        kp: kp.kp,
+        rows,
+        slots: upcomingSlots(snap?.slots ?? []),
+        ...(mustSay.length ? { mustSay } : {}),
+        crewHeat: heat ? { field: heat.f.name, ...heat.heat } : null,
+      });
     },
   );
 

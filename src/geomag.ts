@@ -42,6 +42,8 @@
  * INTERMAGNET adjusted 1-minute data, free and keyless.
  */
 
+import { backoff } from './backoff.js';
+
 /** An observatory that reports to the USGS web service. */
 export type Observatory = {
   id: string;
@@ -243,8 +245,13 @@ function summarise(samples: Sample[]): Omit<Reading, 'km' | 'observatory'> | nul
   const last = samples[samples.length - 1];
   const deltaH = last.h - baseline;
 
+  // Nanotesla per minute, so only between samples that really are a minute apart. Missing minutes are
+  // dropped before this point, and the step across a half hour gap used to be counted as one minute's change,
+  // which turns a data outage into a "strong" disturbance.
   let rate = 0;
   for (let i = 1; i < samples.length; i += 1) {
+    const apart = Date.parse(samples[i].at) - Date.parse(samples[i - 1].at);
+    if (!(apart > 0 && apart <= 90_000)) continue;
     const step = Math.abs(samples[i].h - samples[i - 1].h);
     if (step > rate) rate = step;
   }
@@ -384,7 +391,6 @@ export function corroboration(lat: number, lon: number, forecastKp: number): str
 /** Refresh every observatory some site actually needs. */
 
 /** After a run of failures, stop asking a server that is not answering. See backoff.ts. */
-import { backoff } from './backoff.js';
 
 const gate = backoff();
 

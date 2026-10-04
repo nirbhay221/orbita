@@ -78,6 +78,8 @@ export type SeasonPlan = {
 
 /** The minimum run worth calling a window. Below this nobody mobilises. */
 const MIN_RUN_DAYS = 2;
+const MAX_FIELDS = 25;
+const MAX_MACHINES = 6;
 
 /**
  * Consecutive days on which an operation holds, collapsed into runs.
@@ -140,7 +142,15 @@ export function plan(fields: Field[], equipment: Equipment[], operations: Operat
   const days = outlook.filter((d) => d.date >= today).map((d) => ({ date: d.date, kp: d.kp }));
   if (!days.length) return null;
 
+  // The sweep is fields times machines times jobs times days, on the request path. An account may hold
+  // five hundred fields and a hundred machines, which is over twenty million assessments and a process that
+  // answers nobody while it works. A season plan for the first of each is still a season plan.
+  const truncated = fields.length > MAX_FIELDS || equipment.length > MAX_MACHINES;
+  fields = fields.slice(0, MAX_FIELDS);
+  equipment = equipment.slice(0, MAX_MACHINES);
+
   const plans: FieldPlan[] = [];
+  const pairs: { field: Field; eq: Equipment; feasible: Operation[] }[] = [];
   for (const field of fields) {
     for (const eq of equipment) {
       const feasible: Operation[] = [];
@@ -168,13 +178,16 @@ export function plan(fields: Field[], equipment: Equipment[], operations: Operat
         windows,
         residualNow: field.baselineKm ? glotec.residual(field.lat, field.lon, field.baselineKm) : null,
       });
+      pairs.push({ field, eq, feasible });
     }
   }
 
   // A day nothing can run on is worth naming separately: it is the day to
   // schedule maintenance rather than discover a problem in the field.
+  // A day is a write-off when nothing that can ever run does run. Each job is judged on its own field and
+  // machine; this used to judge every plan's jobs against the first field and the first machine only.
   const writeOffDays = days
-    .filter((d) => !plans.some((p) => p.feasible.some((op) => assess(op, d.kp, equipment[0], fields[0]).go)))
+    .filter((d) => !pairs.some((p) => p.feasible.some((op) => assess(op, d.kp, p.eq, p.field).go)))
     .map((d) => d.date);
 
   const notes: string[] = [];
@@ -199,6 +212,10 @@ export function plan(fields: Field[], equipment: Equipment[], operations: Operat
     );
   }
 
+  if (truncated) {
+    notes.push(`This covers the first ${MAX_FIELDS} fields and ${MAX_MACHINES} machines. Ask about a particular field or machine for the rest.`);
+  }
+
   return { horizon: days.length, from: days[0].date, to: days[days.length - 1].date, plans, writeOffDays, notes };
 }
 
@@ -212,9 +229,14 @@ export function summarise(p: SeasonPlan): string {
   if (!best) {
     return `Nothing in the next ${p.horizon} days holds accuracy for these machines on these fields.`;
   }
-  const offs = p.writeOffDays.length ? ` ${p.writeOffDays.length} days in that span are write-offs for everything.` : '';
+  const offs = p.writeOffDays.length
+    ? ` ${p.writeOffDays.length === 1 ? '1 day in that span is a write-off' : `${p.writeOffDays.length} days in that span are write-offs`} for everything.`
+    : '';
+  // Nothing here points at a screen: the same sentence is spoken on a device that has none, and the
+  // certification rules say never to refer to one there. A date is said as a date, not as 2026-10-07.
+  const starting = new Date(`${best.run.from}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
   return (
     `Across the next ${p.horizon} days the longest clear run is ${best.run.days} days for ${best.op.replace(/_/g, ' ')} ` +
-    `on ${best.field}, starting ${best.run.from}.${offs} The full plan is on screen.`
+    `on ${best.field}, starting ${starting}.${offs} Ask about a field or a job and I will give you its windows.`
   );
 }

@@ -49,5 +49,16 @@ if [ "$(get /orbita/origin-enforce)" = "on" ]; then
   [ -n "$sec" ] && printf 'ORBITA_ORIGIN_SECRET=%s\n' "$sec" >>"$out"
 fi
 
+# Where the heat safety add-on is, so crew members who share their working day can be asked about. Not a
+# secret. Absent means that link is off and nothing is said about anybody by name.
+sudor="$(get /orbita/sudor-url)"
+[ -n "$sudor" ] && printf 'ORBITA_SUDOR_URL=%s\n' "$sudor" >>"$out"
+
+# The address email is sent from, once it has been verified in Amazon SES. Not a secret, but kept here so
+# switching email on is one parameter and a restart, with no edit to the unit file. Absent means no email
+# is sent, and every answer says so.
+from="$(get /orbita/email-from)"
+[ -n "$from" ] && printf 'ORBITA_EMAIL_FROM=%s\n' "$from" >>"$out"
+
 [ "$owner" = "none" ] || chown "$owner:$owner" "$out"
 chmod 0400 "$out"

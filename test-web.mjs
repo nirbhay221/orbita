@@ -1,3 +1,5 @@
+// Every tool, including the ones outside the default scope, so they stay tested. See src/brief.ts.
+process.env.ORBITA_SCOPE ??= 'all';
 /**
  * The demo page, tested against a real server.
  *
@@ -58,7 +60,7 @@ async function call(name, args = {}, sessionId = '42816a48288988c1b90e06066deea0
 }
 
 console.log('\nThe page and everything it asks for');
-for (const [path, type] of [['/', 'text/html'], ['/styles.css', 'text/css'], ['/app.js', 'javascript'], ['/requests.json', 'json'], ['/ui/window.html', 'text/html']]) {
+for (const [path, type] of [['/', 'text/html'], ['/styles.css', 'text/css'], ['/app.js', 'javascript'], ['/requests.json', 'json'], ['/ui/window.html', 'text/html'], ['/echo.html', 'text/html'], ['/echo.js', 'javascript'], ['/echo.css', 'text/css'], ['/echo-scenes.json', 'json']]) {
   const res = await fetch(BASE + path);
   check(`${path} is served`, res.ok && (res.headers.get('content-type') ?? '').includes(type),
     `${res.status} ${res.headers.get('content-type')}`);
@@ -94,7 +96,7 @@ check('the dropdown lists every tool the server has', listed.every((t) => catalo
   listed.filter((t) => !catalogue.tools.includes(t)).join(', '));
 
 console.log('\nThe farm the page sets up for a visitor');
-check('a fresh visitor has no fields', (await call('farm_status', {}, 'freshaaa0002')).text.startsWith('No fields registered yet'));
+check('a fresh visitor has no fields', (await call('farm_status', {}, 'freshaaa0002')).text.startsWith('I need to know where the field is first'));
 check('the seed field is accepted', !(await call('register_field', catalogue.seed.field)).error);
 for (const machine of catalogue.seed.equipment) {
   check(`the seed machine "${machine.name}" is accepted`, !(await call('register_equipment', machine)).error);
