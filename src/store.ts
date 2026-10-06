@@ -351,6 +351,9 @@ export function allEntries(): [string, Farm][] {
 /** Resolve a spoken field name loosely, "the north field" should find "North 40". */
 export function findField(farm: Farm, spoken: string): Field | null {
   if (!farm.fields.length) return null;
+  // The id from an earlier answer finds it exactly, whatever it has been renamed to since.
+  const byId = farm.fields.find((f) => f.id === spoken.trim());
+  if (byId) return byId;
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\b(the|field|place|acres?)\b/g, '').replace(/\s+/g, ' ').trim();
   const want = norm(spoken);
   if (!want) return farm.fields[0];
@@ -370,6 +373,7 @@ export function equipmentNamed(farm: Farm, spoken: string): Equipment | null {
   const want = spoken.trim().toLowerCase();
   if (!want) return null;
   return (
+    farm.equipment.find((e) => e.id === spoken.trim()) ??
     farm.equipment.find((e) => e.name.toLowerCase() === want) ??
     farm.equipment.find((e) => e.name && (e.name.toLowerCase().includes(want) || want.includes(e.name.toLowerCase()))) ??
     null

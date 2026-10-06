@@ -42,7 +42,7 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, spec 2025-11-25, Streamable HTTP, 15 tools by default | **Real and deployed** on AWS, behind account linking. 1,622 automated checks |
+| MCP server, spec 2025-11-25, Streamable HTTP, 15 tools by default | **Real and deployed** on AWS, behind account linking. 1,627 automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
 | Ground magnetometers | **Real** (USGS), **United States only** |
 | The past: "what happened on May 10 2024" | **Real**, from the archived Kp record |
@@ -66,7 +66,7 @@ these are the five things worth your time:
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
 Twelve free NOAA and USGS products, no API key. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 1,622 checks, none of which touch the network except
+external is called inside a turn. `npm test` runs 1,627 checks, none of which touch the network except
 the three live suites at the end.
 
 ## The problem
@@ -494,11 +494,11 @@ Or without installing Node at all:
 docker build -t orbita . && docker run -p 8788:8788 orbita
 ```
 
-`npm test` runs everything, 1,622 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 1,627 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 1,386 checks, no live data
+npm run test:unit           # 1,391 checks, no live data
 npm run test:live           # 236 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines
@@ -844,6 +844,8 @@ matters most: 79 percent of outdoor workers who died of heat were in their first
   nothing registered, and ends by offering to remember it. A field is added by its nearest town; coordinates are optional.
 * **One story by default.** The default tool set is the field job: can it run, when does it clear, watch it, tell the crew,
   log it, report it. The advice for satellite operators, grids and other roles is published only with `ORBITA_SCOPE=all`.
+* **Answers hand back a handle.** An answer about a job carries `fieldId` and `equipmentId`, every tool that takes a
+  field or a machine accepts them, and they still find the field after it is renamed.
 * **An answer ends on the next step.** A blocked job that will clear ends with "Want me to watch it and tell you when it
   clears?", and the structured result names the tool call that does it.
 * **A card that fits the task.** The chart (`ui/window.html`) is for a verdict. A watch list, a job report, a contact

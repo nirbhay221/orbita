@@ -68,8 +68,8 @@ export function register(server: McpServer, farmOf: () => string): void {
         + 'for the weather in general with no job in mind, use storm_status.',
       inputSchema: {
         operation: z.enum(OPERATIONS).describe(OPERATION_HINT),
-        field: z.string().optional().describe('Field name as spoken; defaults to the only/first field'),
-        equipment: z.string().optional().describe('Machine name; defaults to the first registered'),
+        field: z.string().optional().describe('Field name as spoken, or the fieldId from an earlier answer; defaults to the only or first field'),
+        equipment: z.string().optional().describe('Machine name as spoken, or the equipmentId from an earlier answer; defaults to the first registered'),
         place: z.string().optional().describe('Only for somebody with no field registered yet: the nearest town, as spoken, so they can be answered straight away'),
         correction: z.enum(CORRECTIONS).optional().describe('Only for somebody with no machine registered yet: the correction they say they run. rtk, ppp, sbas (also WAAS or EGNOS) or autonomous for none'),
         when: z.string().optional().describe('When, if not now: ISO, or as spoken, such as "tomorrow morning", "Thursday" or "this afternoon". The forecast reaches about three days ahead.'),
@@ -343,13 +343,15 @@ export function register(server: McpServer, farmOf: () => string): void {
         ...(trial ? { trial: true } : {}),
         nextAction:
           offer && !trial
-            ? { tool: 'watch_jobs', arguments: { action: 'start', operation, field: f.name, equipment: eq.name } }
+            ? { tool: 'watch_jobs', arguments: { action: 'start', operation, field: f.id, equipment: eq.id } }
             : null,
         pressure,
         stillRunnable: degraded?.stillRunnable?.slice(0, 5) ?? null,
         tierChangeWarning: degraded?.advice ?? null,
         field: f.name,
         equipment: eq.name,
+        // Stable handles for the next call, so a follow-up does not depend on a name being heard the same way twice.
+        ...(trial ? {} : { fieldId: f.id, equipmentId: eq.id }),
         correction: eq.correction,
         observed: kp.observed,
         window: win,

@@ -158,6 +158,26 @@ console.log('\nA town is answered in its own time');
   check('picking a town keeps the zone the lookup gave', geo.pick('Phoenix, Arizona', [{ name: 'Phoenix', admin1: 'Arizona', country: 'United States', latitude: 33.45, longitude: -112.07, timezone: 'America/Phoenix' }]).timeZone === 'America/Phoenix');
 }
 
+console.log('\nAnswers hand back a handle, and the next step takes it');
+{
+  geo.configureForTest(null);
+  const who = await connect('acct:chain');
+  await who('register_field', { name: 'North 40', lat: 40.92, lon: -98.34 });
+  await who('register_field', { name: 'River Bottom', lat: 41.6, lon: -99.4 });
+  await who('register_equipment', { name: 'planter', correction: 'rtk' });
+  await who('register_equipment', { name: 'sprayer', correction: 'sbas' });
+  const first = await who('can_i_run', { operation: 'spraying', field: 'River Bottom', equipment: 'sprayer' });
+  check('an answer about a job carries the ids of the field and the machine', /^field-/.test(first.data.fieldId) && /^equip|^machine|^eq/.test(first.data.equipmentId) && first.data.field === 'River Bottom', JSON.stringify({ f: first.data.fieldId, e: first.data.equipmentId }));
+  const again = await who('can_i_run', { operation: 'harvest', field: first.data.fieldId, equipment: first.data.equipmentId });
+  check('the next question can name them by id and gets the same field and machine', again.data.field === 'River Bottom' && again.data.equipment === 'sprayer', `${again.data.field} ${again.data.equipment}`);
+  store.update('acct:chain', (x) => { x.fields.find((f) => f.id === first.data.fieldId).name = 'The Bottoms'; });
+  const renamed = await who('can_i_run', { operation: 'harvest', field: first.data.fieldId, equipment: first.data.equipmentId });
+  check('an id still finds the field after it has been renamed', renamed.data.field === 'The Bottoms');
+  check('an id from another farm finds nothing here', store.findField(store.get('acct:farm'), first.data.fieldId)?.id !== first.data.fieldId);
+  const trial = await (await connect('acct:trialids'))('can_i_run', { operation: 'planting', place: 'Phoenix, Arizona', correction: 'rtk' });
+  check('a trial answer hands back no ids, because nothing was stored', trial.data.fieldId === undefined);
+}
+
 await new Promise((r) => listener.close(r));
 rmSync(DIR, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fail} failed`);

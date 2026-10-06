@@ -44,14 +44,12 @@ export function register(server: McpServer, farmOf: () => string): void {
       title: 'What should I do about the space weather',
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
       description:
-        'Protective steps for the person asking, by what they look after: flying drones, running satellites, the power ' +
-        'grid, flight operations, HF radio, GPS timing, pipeline surveys, directional drilling, railway signalling, ' +
-        'holding a vessel on position, automated mining, tracking a vehicle fleet, watching for aurora, or a ' +
-        'household. Timed to the NOAA forecast: a day ahead, hours ahead, during and after. ' +
-        'Call this when someone asks what they should do, how to protect something, whether to postpone, or asks for ' +
-        'the rest of the steps, and also when they say what they operate, for example "I fly HF" or "I run a grid ' +
-        'control room", and ask whether it will affect them. Read the answer aloud as given. It is not for whether a field job can run (use can_i_run) ' +
-        'or for the current Kp (use storm_status).',
+        'Protective steps for somebody who looks after something a solar storm can reach: drones, satellites, the ' +
+        'power grid, flights, HF radio, GPS timing, pipelines, directional drilling, railway signalling, a vessel ' +
+        'holding position, automated mining, a vehicle fleet, aurora watching, or a household. Timed to the NOAA ' +
+        'forecast. Call this when someone asks what they should do, whether to postpone, or says what they operate ' +
+        'and asks whether it will affect them. Read the answer aloud as given. It is not for whether a field job can ' +
+        'run (use can_i_run) or for the current Kp (use storm_status).',
       inputSchema: {
         role: z.enum(ROLES).optional().describe(ROLE_HINT),
         step: z

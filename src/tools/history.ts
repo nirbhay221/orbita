@@ -57,7 +57,8 @@ export function register(server: McpServer, farmOf: () => string): void {
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
       description:
         'Look back at a past day and say whether space weather explains a job that went badly. ' +
-        'Use when the farmer describes crooked rows, skips, overlap, or a machine that seemed to be misbehaving. ' +
+        'Call this when someone describes crooked rows, skips, overlap, a survey that would not close, or a machine ' +
+        'that seemed to be misbehaving, and names a day. ' +
         'If the conditions were quiet, say so plainly rather than inventing a cause. It looks backwards only; for whether a ' +
         'job can run now or later, use can_i_run.',
       inputSchema: {
@@ -333,7 +334,8 @@ export function register(server: McpServer, farmOf: () => string): void {
         'watches on it. what machine removes a machine, also called a tractor, planter, sprayer, combine or rig, and ' +
         'any watches that use it. what everything deletes the lot: fields, machines, watches, crew contacts and the ' +
         'job log. Use everything when the customer says forget everything, start over, start fresh, or delete my ' +
-        'data. Clearing everything is asked for twice before anything goes.',
+        'data. Clearing everything is asked for twice before anything goes. It is not for taking somebody off the ' +
+        'crew list (use crew_contact) or for ending a watch on a job (use watch_jobs).',
       inputSchema: {
         what: z.enum(['field', 'machine', 'everything']).describe(
           'field for one field or site, machine for one machine, everything for a fresh start',
