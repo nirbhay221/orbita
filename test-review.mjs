@@ -71,11 +71,16 @@ async function connect(id) {
 // except the whole of tomorrow, which is a G3.
 const now = Date.now();
 const blockStart = Math.floor(now / (3 * HOUR)) * 3 * HOUR;
-const tomorrow = new Date(now + 24 * HOUR).toISOString().slice(0, 10);
+// "Tomorrow" is tomorrow where the field is, because that is how a spoken "tomorrow" is understood. This used
+// to mark tomorrow by the UTC date, so the test failed for the five or six hours each night when it is already
+// tomorrow in UTC and still today in Chicago.
+const FIELD_ZONE = 'America/Chicago';
+const localDay = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: FIELD_ZONE });
+const tomorrow = localDay(now + 24 * HOUR);
 const slots = [];
 for (let i = -56; i < 24; i += 1) {
-  const time = new Date(blockStart + i * 3 * HOUR).toISOString();
-  slots.push({ time, kp: time.startsWith(tomorrow) ? 7 : 2, observed: i < 0 });
+  const at = blockStart + i * 3 * HOUR;
+  slots.push({ time: new Date(at).toISOString(), kp: localDay(at) === tomorrow ? 7 : 2, observed: i < 0 });
 }
 slots[0].kp = 8; // the oldest block in the file, a week ago: the one an invalid date used to be answered with
 swpc.seedForTest({ fetchedAt: new Date().toISOString(), slots, alerts: [], scales: { g: 0, s: 0, r: 0, yesterday: { g: 0, s: 0, r: 0 }, days: [] }, stale: false });
