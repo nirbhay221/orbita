@@ -70,6 +70,8 @@ export type Farm = {
   jobLog: JobEntry[];
   /** Alerts already sent, as "storm:2026-09-15", so a crew is never emailed twice for one storm day. */
   alertsSent: string[];
+  /** Pages handed out for typing an email address, as hashes, each good for fifteen minutes. See consent.ts. */
+  entries?: { hash: string; name: string; role: string | null; notifyOn: NotifyReason[]; at: string }[];
   /** When a fresh start was last asked for, so the second ask is the confirmation. */
   forgetAskedAt?: string | null;
   /** Accounts invited to look at this farm. They can ask about it and change nothing. */

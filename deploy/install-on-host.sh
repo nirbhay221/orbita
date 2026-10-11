@@ -17,7 +17,7 @@ ID="$("$AWS" ssm send-command --region "$REGION" --instance-ids "$INSTANCE" \
     \"set -e\",
     \"rm -rf /opt/orbita.bak && cp -a /opt/orbita /opt/orbita.bak\",
     \"cp -a /var/lib/orbita /var/lib/orbita.bak-\$(date +%s)\",
-    \"aws s3 cp s3://${BUCKET}/app.tar.gz /tmp/app.tar.gz --quiet\",
+    \"aws s3 cp s3://${BUCKET}/orbita/app.tar.gz /tmp/app.tar.gz --quiet\",
     \"tar -xzf /tmp/app.tar.gz -C /opt/orbita\",
     \"cd /opt/orbita && npm ci --omit=dev --no-audit --no-fund 2>&1 | tail -2\",
     \"chown -R orbita:orbita /opt/orbita\",

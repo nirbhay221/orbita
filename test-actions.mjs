@@ -85,6 +85,8 @@ check('confirming says what they will hear', /Done\. Sam will get an email when 
 await checkFieldAlerts();
 check('a storm putting a usual job outside tolerance emails the crew', mails.length === 1 && /^Storm ahead/.test(mails[0].subject), JSON.stringify(mails.map((m) => m.subject)));
 check('...naming the job', /planting on North 40/.test(mails[0].text));
+check('...and when the forecast has it clear again, or that it does not say', /back inside tolerance from |does not yet show when it clears/.test(mails[0].text), mails[0].text);
+check('...with nothing left of the old wording that promised an answer it did not give', !/Ask Orbita when it clears/.test(mails[0].text));
 await checkFieldAlerts();
 check('...once per storm day, not every refresh', mails.length === 1);
 check('nothing clears while the storm is still on', !mails.some((m) => /^Clear now/.test(m.subject)));

@@ -26,6 +26,7 @@ import * as history from '../history.js';
 import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
 import { sendEmail, emailConfigured } from '../notify.js';
 import { reachable } from '../consent.js';
+import { adviceAfter, notTheSun } from '../trade.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
   NOAA_DOWN,
@@ -56,13 +57,13 @@ export function register(server: McpServer, farmOf: () => string): void {
       title: 'Why did that job go wrong?',
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
       description:
-        'Look back at a past day and say whether space weather explains a job that went badly. ' +
+        'Look back at a past day, or a time on that day, and say whether space weather explains a job that went badly. ' +
         'Call this when someone describes crooked rows, skips, overlap, a survey that would not close, or a machine ' +
         'that seemed to be misbehaving, and names a day. ' +
         'If the conditions were quiet, say so plainly rather than inventing a cause. It looks backwards only; for whether a ' +
         'job can run now or later, use can_i_run.',
       inputSchema: {
-        when: z.string().describe('When it happened, spoken or ISO, e.g. "last Tuesday", "10 May 2024"'),
+        when: z.string().describe('When it happened, spoken or ISO, with the time of day if they said one, e.g. "last Tuesday", "yesterday at 3 pm", "10 May 2024"'),
         operation: z.enum(OPERATIONS).optional().describe(OPERATION_HINT),
         field: z.string().optional().describe('Field name as spoken, such as "North 40"; defaults to the only or first field'),
         equipment: z.string().optional().describe('Machine name as spoken, such as "the planter"; defaults to the first registered'),
@@ -78,14 +79,83 @@ export function register(server: McpServer, farmOf: () => string): void {
       const eq = store.findEquipment(farm, equipment);
       if (!eq) return say(NO_EQUIP);
 
-      const at = history.parseWhen(when, new Date(), { prefer: 'past', timeZone: f.timeZone });
+      let at = history.parseWhen(when, new Date(), { prefer: 'past', timeZone: f.timeZone });
       if (!at) return say(`I could not work out what date "${clean(when)}" means. Try a day name or a date.`);
       if (at.getTime() > Date.now()) return say('That is in the future. Ask me whether you can run instead.');
       if (at.getTime() < history.EARLIEST) return say('The Kp record only goes back to 1932, so I cannot check that day.');
 
+      const op0 = (operation ?? 'planting') as Operation;
+      const tz = f.timeZone ?? 'UTC';
+      const clock = (ms: number) => new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).replace(':00', '');
+
+      /*
+       * A time was named, not only a day.
+       *
+       * "My guidance was jumping at three yesterday afternoon" is a question about three o'clock, and the old
+       * answer was about the whole day: it could say "that was the sun" because of a storm that ended before
+       * breakfast. Kp is measured in three-hour blocks, so the block that holds the moment is looked at, with
+       * the one before and the one after, and the answer is about that stretch in the field's own time.
+       */
+      if (/\b\d{1,2}(:\d\d)?\s*(am|pm|a\.m\.|p\.m\.)|\b\d{1,2}:\d\d\b|\b(morning|afternoon|evening|tonight|night|noon|midday|midnight|dawn|dusk|lunch)/i.test(when)) {
+        const moment = at.getTime();
+        const BLOCK = 3 * 3_600_000;
+        const start = Math.floor(moment / BLOCK) * BLOCK;
+        const inMemory = (swpc.current()?.slots ?? []).filter((sl) => sl.observed);
+        let pool = inMemory;
+        if (!pool.some((sl) => new Date(sl.time).getTime() === start)) {
+          try {
+            const DAY = 86_400_000;
+            pool = await history.fetchRange(new Date(Math.floor((start - BLOCK) / DAY) * DAY), new Date(Math.floor((start + BLOCK) / DAY) * DAY + DAY - 1000));
+          } catch {
+            return say('I could not reach the Kp archive to check that time.');
+          }
+        }
+        const at3 = (t: number) => pool.find((sl) => new Date(sl.time).getTime() === t) ?? null;
+        const here = at3(start);
+        if (!here) return say(`I have no Kp record for that time on ${at.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: tz })}.`);
+        const around = [at3(start - BLOCK), here, at3(start + BLOCK)].filter((x): x is NonNullable<typeof here> => x !== null);
+        const judged = around.map((sl) => ({ sl, v: assess(op0, sl.kp, eq, f, new Date(new Date(sl.time).getTime() + BLOCK / 2)) }));
+        const mine = judged.find((j) => j.sl === here)!;
+        const bad = judged.filter((j) => !j.v.go && j.v.limitedBy === 'space_weather');
+        const dayLabelLocal = at.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: tz });
+        const span = `${clock(start)} to ${clock(start + BLOCK)}`;
+        let said: string;
+        if (mine.v.limitedBy === 'equipment') {
+          said = `That is not something the sky did. ${eq.name} on ${eq.correction.toUpperCase()} cannot hold ${op0.replace(/_/g, ' ')} tolerance on any day.`;
+        } else if (!mine.v.go) {
+          const from = clock(new Date(bad[0].sl.time).getTime());
+          const to = clock(new Date(bad[bad.length - 1].sl.time).getTime() + BLOCK);
+          said =
+            `That was the sun. On ${dayLabelLocal}, ${span}, Kp was ${here.kp.toFixed(1)} (${mine.v.gScale}), outside ${op0.replace(/_/g, ' ')} tolerance. ` +
+            adviceAfter(op0, true, from, to);
+        } else if (bad.length) {
+          const other = bad[0];
+          const when2 = `${clock(new Date(other.sl.time).getTime())} to ${clock(new Date(other.sl.time).getTime() + BLOCK)}`;
+          said = `At that time the sky was inside tolerance, Kp ${here.kp.toFixed(1)}. It was outside it ${when2}, Kp ${other.sl.kp.toFixed(1)}, so if the trouble ran into that stretch, that part was the sun. ` + adviceAfter(op0, true, clock(new Date(other.sl.time).getTime()), clock(new Date(other.sl.time).getTime() + BLOCK));
+        } else {
+          said = `It was not the sun. On ${dayLabelLocal}, ${span}, Kp was only ${here.kp.toFixed(1)}, well inside tolerance, and quiet for three hours either side. ${notTheSun(eq.correction)}`;
+        }
+        return say(said.trim(), {
+          historical: true,
+          byHour: true,
+          at: new Date(moment).toISOString(),
+          block: { start: new Date(start).toISOString(), kp: here.kp, go: mine.v.go },
+          around: judged.map((j) => ({ time: j.sl.time, kp: j.sl.kp, go: j.v.go })),
+          wasTheSun: !mine.v.go && mine.v.limitedBy === 'space_weather',
+          field: f.name,
+          equipment: eq.name,
+          correction: eq.correction,
+        });
+      }
+
       // The 15 minute NOAA poll already holds roughly the last seven days in memory.
       // Use it when the date falls inside that, and only reach for the archive for
       // older questions, so the common case ("last Tuesday") never leaves the process.
+      // The calendar day they named, where the field is, looked up as that same date in the Kp record. A
+      // spoken day is now read in the field's own time, so "May 10" lands on the evening of the 10th there,
+      // which is already the 11th in UTC: the answer came back about "Saturday, May 11".
+      const namedDay = at.toLocaleDateString('en-CA', { timeZone: f.timeZone ?? 'UTC' });
+      at = new Date(`${namedDay}T12:00:00Z`);
       const dayStart = new Date(at); dayStart.setUTCHours(0, 0, 0, 0);
       const dayEnd = dayStart.getTime() + 24 * 3600_000;
       const cached = (swpc.current()?.slots ?? []).filter((sl) => {
@@ -122,7 +192,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       const text = worst.go
         ? `Space weather was not the problem on ${dayLabel}. Kp peaked at only ${peak.kp.toFixed(1)}, ` +
           `and your drift would have stayed around ${worst.expectedErrorM < 0.076 ? (worst.expectedErrorM * 39.37).toFixed(1) : Math.round(worst.expectedErrorM * 39.37)} inches all day. ` +
-          `Something else caused that.`
+          `Something else caused that. ${notTheSun(eq.correction)}`
         : `That was the sun. On ${dayLabel} Kp peaked at ${peak.kp.toFixed(1)} (${worst.gScale}) around ` +
           `${peakTime}, ` +
           // A storm that strong does not move a fix by so many inches. Receivers lose it. See evals/receivers.mjs.
@@ -130,7 +200,8 @@ export function register(server: McpServer, farmOf: () => string): void {
             ? 'strong enough that receivers lose their precise fix altogether. '
             : `putting expected drift near ${worst.expectedErrorM >= 1 ? `${worst.expectedErrorM.toFixed(1)} metres` : `${Math.round(worst.expectedErrorM * 39.37)} inches`}, ` +
               `about ${(worst.expectedErrorM / worst.quietErrorM).toFixed(0)} times your normal. `) +
-          `${badBlocks.length} of ${slots.length} three-hour blocks that day were outside ${op} tolerance.`;
+          `${badBlocks.length} of ${slots.length} three-hour blocks that day were outside ${op.replace(/_/g, ' ')} tolerance.` +
+          (badBlocks.length && badBlocks.length < slots.length ? ` ${adviceAfter(op, true, `${clock(new Date(badBlocks[0].time).getTime())}`, `${clock(new Date(badBlocks[badBlocks.length - 1].time).getTime() + 3 * 3_600_000)}`)}` : '');
 
       const dayKey = at.toISOString().slice(0, 10);
       const logged = farm.jobLog.filter((j) => j.at.slice(0, 10) === dayKey);

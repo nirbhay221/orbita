@@ -60,5 +60,9 @@ sudor="$(get /orbita/sudor-url)"
 from="$(get /orbita/email-from)"
 [ -n "$from" ] && printf 'ORBITA_EMAIL_FROM=%s\n' "$from" >>"$out"
 
+# The key for the talking demo page. Absent means the page answers with its word rules instead, and says so.
+ak="$(get /orbita/anthropic-key)"
+[ -n "$ak" ] && printf 'ORBITA_ANTHROPIC_KEY=%s\n' "$ak" >>"$out"
+
 [ "$owner" = "none" ] || chown "$owner:$owner" "$out"
 chmod 0400 "$out"

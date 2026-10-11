@@ -18,9 +18,10 @@ import * as swpc from './swpc.js';
 import * as solarwind from './solarwind.js';
 import { assess, type Operation } from './domain.js';
 import { statusOperations } from './tools.js';
-import { sendEmail, canEmailFor, type Delivery } from './notify.js';
+import { sendEmail, canEmailFor, toDemoPhone, type Delivery, type Email } from './notify.js';
 import { spokenTime } from './timezone.js';
 import { reachable, stopFooter } from './consent.js';
+import { adviceNow } from './trade.js';
 
 const HOUR = 3_600_000;
 const label = (op: string) => op.replace(/_/g, ' ');
@@ -38,8 +39,13 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
   const attempted: Delivery[] = [];
 
   for (const [id, farm] of store.allEntries()) {
-    // A sandbox never causes an email. See canEmailFor in notify.ts for the reason.
-    if (!canEmailFor(id)) continue;
+    // A sandbox never causes an email. What its crew would have been sent goes to the phone on the demo
+    // page, word for word, where only that visitor can read it. See notify.ts.
+    const demo = !canEmailFor(id);
+    const out = async (c: store.CrewContact, email: Email): Promise<void> => {
+      if (demo) toDemoPhone(id, { to: c.name, reason: email.reason, subject: email.subject, text: email.text.split('\n\nTo stop these emails')[0], stop: c.stopId ?? undefined });
+      else attempted.push(await sendEmail(email));
+    };
     // ---- watched jobs that have cleared ----
     const clearTo = recipients(farm, 'window_clear');
     if (clearTo.length) {
@@ -55,8 +61,7 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
           if (hit) hit.notifiedAt = now.toISOString();
         });
         for (const c of clearTo) {
-          attempted.push(
-            await sendEmail({
+          await out(c, {
               to: c.email,
           sender: id,
               reason: 'window_clear',
@@ -65,8 +70,7 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
                 `Space weather has settled enough for ${label(w.operation)} on ${f.name} with ${eq.name}. ` +
                 `Kp is ${kpNow.kp.toFixed(1)}, so expected drift is about ${inches(v.expectedErrorM)} inches against a ` +
                 `${inches(v.toleranceM)} inch tolerance.\n\nYou are getting this because you were added as a crew contact and agreed to it.${stopFooter(c)}`,
-            }),
-          );
+            });
         }
       }
     }
@@ -79,42 +83,60 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
       const start = new Date(s.time).getTime();
       return start + 3 * HOUR > t && start - t <= 24 * HOUR;
     });
-    let first: { time: string; kp: number; jobs: string[] } | null = null;
+    let first: { time: string; kp: number; jobs: string[]; ops: Operation[] } | null = null;
     for (const s of upcoming) {
       const jobs: string[] = [];
+      const ops: Operation[] = [];
       for (const f of farm.fields) {
         for (const eq of farm.equipment) {
           for (const op of statusOperations(eq.correction) as Operation[]) {
             const v = assess(op, s.kp, eq, f, new Date(new Date(s.time).getTime() + 90 * 60_000));
-            if (!v.go && v.limitedBy === 'space_weather') jobs.push(`${label(op)} on ${f.name} with ${eq.name}`);
+            if (!v.go && v.limitedBy === 'space_weather') {
+              jobs.push(`${label(op)} on ${f.name} with ${eq.name}`);
+              if (!ops.includes(op)) ops.push(op);
+            }
           }
         }
       }
       if (jobs.length) {
-        first = { time: s.time, kp: s.kp, jobs };
+        first = { time: s.time, kp: s.kp, jobs, ops };
         break;
       }
     }
     if (!first) continue;
     // Said where the farm is, as the spoken answers are, or in UTC and labelled so.
     const when = spokenTime(first.time, farm.fields[0]?.timeZone);
+    // When it is over is the other half of the plan: the first block after it in which every one of those
+    // jobs is back inside tolerance, as far ahead as NOAA forecasts. Unknown is said as unknown.
+    const startMs = new Date(first.time).getTime();
+    const clears = snap.slots.find((s) => {
+      if (new Date(s.time).getTime() <= startMs) return false;
+      const mid = new Date(new Date(s.time).getTime() + 90 * 60_000);
+      return farm.fields.every((f) => farm.equipment.every((eq) => (statusOperations(eq.correction) as Operation[]).every((op) => {
+        const v = assess(op, s.kp, eq, f, mid);
+        return v.go || v.limitedBy !== 'space_weather';
+      })));
+    });
+    const until = clears
+      ? `The forecast has them back inside tolerance from ${spokenTime(clears.time, farm.fields[0]?.timeZone)}.`
+      : 'The forecast does not yet show when it clears.';
+    // What it means for the work this crew does: points to re-observe, a flight not to make, a blade to hold.
+    const forTrade = first.ops.map((op) => adviceNow(op, false, first!.kp, 'space_weather')).filter(Boolean).slice(0, 2).join(' ');
     const key = `storm:${first.time.slice(0, 10)}`;
     if (farm.alertsSent.includes(key)) continue;
     store.update(id, (x) => void (x.alertsSent = [...x.alertsSent.slice(-29), key]));
     for (const c of stormTo) {
-      attempted.push(
-        await sendEmail({
+      await out(c, {
           to: c.email,
           sender: id,
           reason: 'storm',
           subject: `Storm ahead: ${first.jobs.length} job${first.jobs.length === 1 ? '' : 's'} outside tolerance from ${when}`,
           text:
             `NOAA's forecast reaches Kp ${first.kp.toFixed(1)} around ${when}. At that level these jobs go outside ` +
-            `tolerance: ${first.jobs.slice(0, 6).join('; ')}.\n\nAsk Orbita when it clears, or what to do about it.\n\n` +
+            `tolerance: ${first.jobs.slice(0, 6).join('; ')}.\n\n${until}${forTrade ? `\n\n${forTrade}` : ''}\n\nAsk Orbita what to do about it.\n\n` +
             'You are getting this because you were added as a crew contact for storms and agreed to it.' +
             stopFooter(c),
-        }),
-      );
+        });
     }
   }
   return attempted;

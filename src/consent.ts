@@ -30,13 +30,21 @@ export const publicUrl = (): string => (process.env.ORBITA_PUBLIC_URL ?? '').tri
 export const consentRequired = (): boolean =>
   (process.env.ORBITA_RECIPIENT_CONSENT ?? 'on').toLowerCase() !== 'off' && publicUrl() !== '';
 
-type Consenting = { confirmedAt: string | null; acceptedAt?: string | null };
+/**
+ * A sandbox visitor is always asked to agree, whether or not there is a public address, because the phone on
+ * the demo page is where they agree and it is on the same page.
+ */
+export const alwaysAsk = (id: string): boolean => id.startsWith('demo:');
+
+type Consenting = { confirmedAt: string | null; acceptedAt?: string | null; invitedAt?: string | null };
 
 /** Whether this contact may be emailed an alert: the holder said yes, and so did they. */
-export const reachable = (c: Consenting): boolean => !!c.confirmedAt && (!consentRequired() || !!c.acceptedAt);
+// Anybody who was sent an invitation has to have said yes to it, wherever it was sent: an inbox, or the phone
+// on the demo page, which asks even where there is no public address.
+export const reachable = (c: Consenting): boolean => !!c.confirmedAt && (!!c.acceptedAt || (!consentRequired() && !c.invitedAt));
 
 /** Confirmed by the holder and still waiting on the recipient. */
-export const awaiting = (c: Consenting): boolean => !!c.confirmedAt && consentRequired() && !c.acceptedAt;
+export const awaiting = (c: Consenting): boolean => !!c.confirmedAt && !c.acceptedAt && (consentRequired() || !!c.invitedAt);
 
 const hashOf = (token: string): string => createHash('sha256').update(token).digest('hex');
 
@@ -108,6 +116,37 @@ function findByStop(stopId: string): { id: string; name: string } | null {
 const tries = perCaller(20, 20 / 60);
 const GONE = '<h1>This link is no longer valid</h1><p>It may have been used already, or the person who added you may have removed you. Nothing will be sent to you.</p>';
 
+/*
+ * An address that is typed, not said.
+ *
+ * An address is the thing a microphone gets wrong most: every letter matters and none of them is a word. So
+ * when somebody says "add Dana to the crew" and gives no address, they are handed a page to type it on. A
+ * host that supports it is sent the page directly (MCP's URL-mode elicitation, which exists so that a value
+ * like this never passes through the assistant); any other host gets the link in the answer's data for a
+ * screen to show. The page stages the crew member exactly as saying the address would have. Nothing is sent
+ * to anybody until the customer confirms, and then only an invitation.
+ */
+const ENTRY_MS = 15 * 60 * 1000;
+
+export function newEntry(farmId: string, name: string, role: string | null, notifyOn: store.NotifyReason[]): string {
+  const token = randomBytes(24).toString('hex');
+  store.update(farmId, (p) => {
+    const fresh = (p.entries ?? []).filter((e) => Date.now() - new Date(e.at).getTime() < ENTRY_MS);
+    p.entries = [...fresh, { hash: hashOf(token), name, role, notifyOn, at: new Date().toISOString() }].slice(-5);
+  });
+  return `${publicUrl()}/contact/enter?e=${token}`;
+}
+
+function findEntry(hash: string): { id: string; entry: NonNullable<store.Farm['entries']>[number] } | null {
+  for (const [id, p] of store.allEntries()) {
+    const entry = (p.entries ?? []).find((e) => e.hash === hash && Date.now() - new Date(e.at).getTime() < ENTRY_MS);
+    if (entry) return { id, entry };
+  }
+  return null;
+}
+
+const EMAIL = /^[^\s@<>"']{1,64}@[^\s@<>"']{1,190}\.[a-z]{2,24}$/i;
+
 export function mountConsent(app: Express): void {
   const form = express.urlencoded({ extended: false });
   const limited = (req: Request, res: Response): boolean => {
@@ -151,6 +190,43 @@ export function mountConsent(app: Express): void {
     }
     store.update(hit.id, (p) => void (p.crew = p.crew.filter((x) => x.acceptHash !== hash)));
     return send(res, 200, 'Declined', '<h1>Understood</h1><p>You have been removed. Nothing will be sent to you.</p>');
+  });
+
+  app.get('/contact/enter', (req, res) => {
+    if (limited(req, res)) return;
+    const e = String(req.query.e ?? '');
+    const hit = TOKEN.test(e) ? findEntry(hashOf(e)) : null;
+    if (!hit) return send(res, 404, 'Link not valid', '<h1>This page is no longer valid</h1><p>It lasts fifteen minutes and works once. Ask again and a new one will be made.</p>');
+    send(
+      res,
+      200,
+      'Type their email address',
+      '<h1>Their email address</h1><p>Type it here, where every letter can be checked. Nothing is sent to them until you say yes, and then only a note asking whether they agree.</p>' +
+        `<form method="post" action="/contact/enter"><input type="hidden" name="e" value="${e}">` +
+        '<label for="a">Email address</label><br><input id="a" name="email" type="email" required autocomplete="off" inputmode="email" style="font:inherit;padding:.6rem;width:100%;margin:.5rem 0;border-radius:.4rem;border:1px solid #888">' +
+        '<button>Save it</button></form>',
+    );
+  });
+
+  app.post('/contact/enter', form, (req, res) => {
+    if (limited(req, res)) return;
+    const e = String((req.body as { e?: unknown })?.e ?? '');
+    const email = String((req.body as { email?: unknown })?.email ?? '').trim().slice(0, 254);
+    const hit = TOKEN.test(e) ? findEntry(hashOf(e)) : null;
+    if (!hit) return send(res, 404, 'Link not valid', GONE);
+    if (!EMAIL.test(email)) return send(res, 400, 'Check the address', '<h1>That does not look like an email address</h1><p>Go back and check it.</p>');
+    const hash = hashOf(e);
+    const { name, role, notifyOn } = hit.entry;
+    let full = false;
+    store.update(hit.id, (p) => {
+      p.entries = (p.entries ?? []).filter((x) => x.hash !== hash);
+      const same = (c: { name: string; email: string }) => c.name.trim().toLowerCase() === name.trim().toLowerCase() || c.email.toLowerCase() === email.toLowerCase();
+      if (!p.crew.some(same) && p.crew.length >= store.limitsFor(hit.id).crew) { full = true; return; }
+      p.crew = p.crew.filter((c) => !same(c));
+      p.crew.push({ name, email, role, notifyOn, addedAt: new Date().toISOString(), confirmedAt: null });
+    });
+    if (full) return send(res, 409, 'List is full', '<h1>The crew list is full</h1><p>Take somebody off first, then ask again.</p>');
+    return send(res, 200, 'Saved', `<h1>Saved</h1><p>Go back and say yes to add them. Nothing has been sent yet.</p>`);
   });
 
   app.get('/contact/stop', (req, res) => {

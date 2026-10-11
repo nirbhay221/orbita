@@ -172,3 +172,32 @@ export const canEmailFor = (id: string): boolean => !id.startsWith('demo:');
 
 /** What is said to a sandbox visitor who tries. Spoken aloud, so plain words. */
 export const DEMO_NO_EMAIL = 'Email is turned off in the public demo, so I have not sent anything. A linked account can use it.';
+
+/*
+ * The phone on the demo page.
+ *
+ * A visitor to the public demo can never cause an email, for the reason above. But a demo in which the crew's
+ * half is a sentence saying "nothing was sent" shows nobody what the product does. So for a sandbox identity
+ * the message that would have been emailed is put, word for word, where only that visitor can read it: a list
+ * held in memory against their own sandbox id, which the demo page shows as a phone. Nothing leaves the
+ * server, nobody else can read it, and the link behind the button is the real one, so agreeing there is the
+ * same act as agreeing from an inbox.
+ */
+export type PhoneMessage = { at: string; to: string; subject: string; text: string; reason: string; accept?: string; stop?: string };
+const phones = new Map<string, PhoneMessage[]>();
+const MAX_PHONES = 2000;
+const MAX_ON_PHONE = 30;
+
+export function toDemoPhone(farmId: string, message: Omit<PhoneMessage, 'at'>): void {
+  if (canEmailFor(farmId)) return;
+  const list = phones.get(farmId) ?? [];
+  list.push({ at: new Date().toISOString(), ...message, text: message.text.slice(0, 4000) });
+  phones.delete(farmId);
+  phones.set(farmId, list.slice(-MAX_ON_PHONE));
+  if (phones.size > MAX_PHONES) phones.delete(phones.keys().next().value as string);
+}
+
+export const demoPhone = (farmId: string): PhoneMessage[] => [...(phones.get(farmId) ?? [])];
+
+/** Said in place of "I've emailed them" to a sandbox visitor. */
+export const DEMO_PHONE = 'In this demo that goes to the phone on this page, not to a real inbox.';

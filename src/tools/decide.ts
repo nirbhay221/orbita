@@ -17,8 +17,10 @@ import * as swpc from '../swpc.js';
 import * as solarwind from '../solarwind.js';
 import * as geomag from '../geomag.js';
 import * as glotec from '../glotec.js';
+import * as roti from '../roti.js';
 import * as crewheat from '../crewheat.js';
 import * as crewday from '../crewday.js';
+import { adviceNow } from '../trade.js';
 import * as ntrip from '../ntrip.js';
 import * as swpcplus from '../swpcplus.js';
 import * as aurora from '../aurora.js';
@@ -63,7 +65,8 @@ export function register(server: McpServer, farmOf: () => string): void {
         'Go or no go for a GPS-guided field operation right now or at a given time, based on the NOAA geomagnetic ' +
         'forecast, the field location, and the accuracy the job actually needs. Also answers how long it stays clear, ' +
         'and when the next clear stretch starts if it is blocked now, so it covers "can I run this", "when does it ' +
-        'clear" and "how long have I got". Always read the reason aloud, it names the binding constraint. Use it for '
+        'clear" and "how long have I got". Only the job is needed; the saved field and machine are used. ' +
+        'Read the reason aloud. Use it for '
         + 'a single question about one job. To be told later when a blocked job clears, or to be emailed, use watch_jobs; '
         + 'for the weather in general with no job in mind, use storm_status.',
       inputSchema: {
@@ -213,6 +216,32 @@ export function register(server: McpServer, farmOf: () => string): void {
         measuredBlock = true;
       }
 
+      /*
+       * The sky over the field, measured in the last few minutes, from about four thousand satellite links
+       * worldwide. See roti.ts. This one can go both ways, because it measures the small fast structure that
+       * actually breaks a fix rather than a planetary average:
+       *   disturbed overhead turns a forecast yes into a no;
+       *   calm overhead, with plenty of links, turns a forecast no into a yes for now, below Kp 8, saying
+       *   plainly that it is a measurement of the last few minutes and can change.
+       * Only for a question about now, and only for receivers that hold a carrier-phase fix (RTK, PPP).
+       */
+      let measuredClear = false;
+      const sky = asksAboutNow && (eq.correction === 'rtk' || eq.correction === 'ppp') ? roti.over(f.lat, f.lon) : null;
+      if (sky?.state === 'disturbed' && verdict.go && verdict.limitedBy !== 'equipment') {
+        verdict.go = false;
+        verdict.limitedBy = 'space_weather';
+        verdict.reason =
+          `Hold off ${spokenJob(operation)} for now. The forecast alone would call it clear at Kp ${kp.kp.toFixed(1)}, but ${roti.say(sky).charAt(0).toLowerCase()}${roti.say(sky).slice(1)}`;
+        measuredBlock = true;
+      } else if (sky?.state === 'quiet' && !verdict.go && verdict.limitedBy === 'space_weather' && kp.kp < 8) {
+        verdict.go = true;
+        verdict.reason =
+          `You can run ${spokenJob(operation)} now. The forecast at Kp ${kp.kp.toFixed(1)} says hold off, but ${roti.say(sky).charAt(0).toLowerCase()}${roti.say(sky).slice(1)} ` +
+          'That is a measurement of the last few minutes, so check your fix status as you go and stop if it drops.';
+        measuredBlock = true;
+        measuredClear = true;
+      }
+
       let text = verdict.reason;
       // When it clears is the second thing anybody wants to know, so it is said second. It used to come after
       // the ionosphere, the magnetometer and the aurora, by which time nobody was listening.
@@ -223,16 +252,21 @@ export function register(server: McpServer, farmOf: () => string): void {
       }
       // How long the yes lasts. Without this, "can I plant" and "how long have
       // I got" were two tools answering one question.
-      if (verdict.go && win) {
+      if (verdict.go && win && !measuredClear) {
         const openNow = new Date(win.start).getTime() <= at.getTime() + 60_000;
         text += openNow
           ? ` Clear until ${localTime(win.end, f.timeZone)}, ${forHours(win.hours)}.`
           : ` The next clear stretch starts ${localTime(win.start, f.timeZone)}.`;
       }
+      // The one sentence about this trade's own risk: points to re-observe, a flight that cannot be redone,
+      // grade somebody will build on. Said with the verdict when the answer is no. See trade.ts.
+      const trade = adviceNow(operation as Operation, verdict.go, kp.kp, verdict.limitedBy);
+      if (trade) text += ` ${trade}`;
       // A go that the solar wind is about to take away is worth saying out
       // loud, because the job that gets started is the one that gets ruined.
       const upstream = solarwind.incoming();
       const mustSay: string[] = [];
+      if (trade && !verdict.go) mustSay.push(trade);
       if (verdict.go && upstream?.level === 'likely') {
         const warning = `Watch this one though: ${upstream.say.charAt(0).toLowerCase()}${upstream.say.slice(1)}`;
         text += ` ${warning}`;
@@ -245,6 +279,8 @@ export function register(server: McpServer, farmOf: () => string): void {
       // speaks only when that residual alone passes the job's tolerance, which
       // is a thing the forecast genuinely cannot know.
       // Already the reason for the answer when the measurement is what blocked it.
+      const overhead = measuredBlock ? '' : roti.say(sky);
+      if (overhead) text += ` ${overhead}`;
       const measured = measuredBlock ? '' : glotec.explain(f.lat, f.lon, f.baselineKm, TOLERANCE_M[operation as Operation]);
       if (measured) text += ` ${measured}`;
       // Where the corrections come from, when nobody has said. This matters
@@ -344,7 +380,9 @@ export function register(server: McpServer, farmOf: () => string): void {
         nextAction:
           offer && !trial
             ? { tool: 'watch_jobs', arguments: { action: 'start', operation, field: f.id, equipment: eq.id } }
-            : null,
+            : trial && place
+              ? { tool: 'my_farm', arguments: { fieldName: f.name, place: clean(place, 80), ...(correction ? { machineName: 'my machine', correction } : {}) } }
+              : null,
         pressure,
         stillRunnable: degraded?.stillRunnable?.slice(0, 5) ?? null,
         tierChangeWarning: degraded?.advice ?? null,
@@ -363,7 +401,10 @@ export function register(server: McpServer, farmOf: () => string): void {
         crewHeat: crew ? { ...crew, rule: 'https://www.osha.gov/heat-exposure/rulemaking' } : null,
         crewHeatChecked: crewheat.known(f.lat, f.lon),
         crewDays: named.length,
+        ...(trade ? { tradeAdvice: trade } : {}),
         decidedBy: measuredBlock ? 'measured' : 'forecast',
+        ...(sky ? { skyOverField: { ...sky, source: roti.SOURCE } } : {}),
+        ...(measuredClear ? { measuredClear: true } : {}),
       });
     },
   );
@@ -376,8 +417,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       description:
         'Current geomagnetic conditions and any active NOAA alerts, in plain language: the Kp index, the storm scale, ' +
         'and whether anything is happening right now. Call this when someone asks what the sun or space weather is doing, ' +
-        'whether a storm is coming, or for the Kp. It does not say whether a job can run; use can_i_run for that, and ' +
-        'what_should_i_do when they say what they operate.',
+        'whether a storm is coming, or for the Kp. It does not say whether a job can run; use can_i_run for that.',
       inputSchema: {},
       _meta: { ui: { resourceUri: UI } },
     },
@@ -405,7 +445,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         // neighbour flying a polar route deserves to hear that they are running.
         snap.scales.r > 0 ? `Radio blackout at R${snap.scales.r}, so HF is degraded on the daylit side.` : null,
         snap.scales.s > 0 ? `Solar radiation storm at S${snap.scales.s}, mainly a polar and high-altitude concern.` : null,
-        snap.alerts.length ? `Latest NOAA alert: ${snap.alerts[0].summary}` : 'No recent NOAA alerts.',
+        snap.alerts.length ? `Latest NOAA alert: ${snap.alerts[0].summary}.` : 'No recent NOAA alerts.',
       ].filter(Boolean) as string[];
       return say(lines.join(' '), {
         kpNow: estimated?.kp ?? now?.kp ?? null,

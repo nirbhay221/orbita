@@ -53,10 +53,13 @@ function parseAlert(raw: { issue_datetime: string; message: string }) {
   const msg = raw.message.replace(/\s+/g, ' ').trim();
   const code = /Space Weather Message Code:\s*(\S+)/.exec(msg)?.[1] ?? 'UNKNOWN';
   const summary =
-    /(?:ALERT|WARNING|WATCH|SUMMARY):\s*([^]*?)(?:\s*(?:Valid|Threshold|Continuation|NOAA Space Weather Scale)|$)/
+    /(?:ALERT|WARNING|WATCH|SUMMARY):\s*([^]*?)(?:\s*(?:Valid|Threshold|Continuation|NOAA Space Weather Scale|Highest Storm Level|Predicted by Day|THIS SUPERSEDES|Potential Impacts|Issue Time|Comment|Observed|Begin Time|Station|Warning Condition|Extension to Serial|Original Issue|Active Warning|Synoptic Period|Estimated Velocity|Description|Deviation|IP Shock|Maximum Time|End Time|Duration|Peak Flux|Yesterday Maximum)\b|$)/
       .exec(msg)?.[1]
       ?.trim() ?? msg.slice(0, 160);
-  return { issued: raw.issue_datetime, code, summary: summary.slice(0, 200) };
+  // A title, not a bulletin: said aloud, so it ends at a word and is short.
+  const words = summary.split(' ');
+  const short = words.length > 14 ? `${words.slice(0, 14).join(' ')}` : summary;
+  return { issued: raw.issue_datetime, code, summary: short.replace(/[\s.]+$/, '') };
 }
 
 export async function refresh(): Promise<Snapshot> {
@@ -200,3 +203,6 @@ export function ageMinutes(): number | null {
 export function seedForTest(s: Snapshot): void {
   snapshot = s;
 }
+
+/** Test seam: the alert parser by itself. */
+export const parseAlertForTest = parseAlert;

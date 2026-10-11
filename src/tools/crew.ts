@@ -25,8 +25,9 @@ import { perCaller } from '../budget.js';
 import * as store from '../store.js';
 import * as history from '../history.js';
 import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
-import { sendEmail, emailConfigured, canEmailFor } from '../notify.js';
-import { consentRequired, newInvite, invitation } from '../consent.js';
+import { randomBytes } from 'node:crypto';
+import { sendEmail, emailConfigured, canEmailFor, toDemoPhone, DEMO_PHONE } from '../notify.js';
+import { consentRequired, newInvite, invitation, alwaysAsk, newEntry } from '../consent.js';
 import * as crewday from '../crewday.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
@@ -77,7 +78,7 @@ export function register(server: McpServer, farmOf: () => string): void {
           'add to stage someone new, confirm after the customer says yes to adding them, remove to stop emailing them',
         ),
         name: z.string().describe('Who, as spoken'),
-        email: z.string().email().optional().describe('Required when adding'),
+        email: z.string().email().optional().describe('Their address when adding, if it was said. Leave it out when it was not: a page is put up to type it on'),
         role: z.string().optional().describe('e.g. "planter operator", "crew lead", "survey party chief"'),
         when: z.enum(['window_clear', 'storm', 'both']).optional().describe('both by default, only used when adding'),
         dayCode: z.string().optional().describe('The eight digit code this person read out from their Sudor heat safety add-on, when they are sharing their working day with the crew'),
@@ -111,12 +112,21 @@ export function register(server: McpServer, farmOf: () => string): void {
       }
 
       if (action === 'add') {
-        if (!email) {
-          return say(`I need an email address for ${name} before I can add them.`, { staged: false, needs: 'email' });
-        }
         role = role ? clean(role, 60) : undefined;
         const notifyOn: store.NotifyReason[] =
           when === 'window_clear' ? ['window_clear'] : when === 'storm' ? ['storm'] : ['window_clear', 'storm'];
+        if (!email) {
+          // An address is the thing a microphone gets wrong most, so it is typed. See the typed entry in consent.ts.
+          const url = newEntry(id, name, role ?? null, notifyOn);
+          const inner = (server as unknown as { server?: { getClientCapabilities?: () => { elicitation?: { url?: unknown } } | undefined; elicitInput?: (p: unknown) => Promise<unknown> } }).server;
+          const canSendPage = /^https:/.test(url) && inner?.getClientCapabilities?.()?.elicitation?.url != null && typeof inner.elicitInput === 'function';
+          if (canSendPage) {
+            // Not awaited: the answer does not wait on somebody typing.
+            void inner!.elicitInput!({ mode: 'url', message: `Type the email address for ${name}.`, url, elicitationId: `entry-${randomBytes(6).toString('hex')}` }).catch(() => {});
+            return say(`I've put up a page to type the email address for ${name}. Tell me when it's done.`, { staged: false, needs: 'email', enterAt: url, sentPage: true, nextAction: { tool: 'crew_contact', arguments: { action: 'confirm', name } } });
+          }
+          return say(`I need an email address for ${name}. Say it, or type it on a screen if you have one.`, { staged: false, needs: 'email', enterAt: url });
+        }
         // Replacing somebody already on the list is not an addition.
         const held = store.get(id);
         const replacing = held.crew.some((c) => sameName(c.name, name) || c.email.toLowerCase() === email.toLowerCase());
@@ -158,9 +168,22 @@ export function register(server: McpServer, farmOf: () => string): void {
         });
         // The customer has said yes. Now the person who owns the address is asked, once, and nothing else
         // goes to them until they agree. See consent.ts.
-        if (consentRequired() && !contact.acceptedAt) {
+        if ((consentRequired() || alwaysAsk(id)) && !contact.acceptedAt) {
           if (!canEmailFor(id)) {
-            return say(`Email is turned off in the public demo, so ${contact.name} has not been asked and will not be emailed.`, { confirmed: true, accepted: false, demo: true });
+            // The public demo sends no email. The invitation goes to the phone on the demo page, with the real
+            // link behind its buttons, so agreeing there is the same act as agreeing from an inbox.
+            const invite = newInvite();
+            store.update(id, (x) => {
+              const c = x.crew.find((y) => sameName(y.name, name));
+              if (c) {
+                c.acceptHash = invite.hash;
+                c.stopId = invite.stopId;
+                c.invitedAt = new Date().toISOString();
+              }
+            });
+            const text = invitation(contact.name, describeCrew(contact.notifyOn), invite.token).text.split('\n\n')[0];
+            toDemoPhone(id, { to: contact.name, reason: 'invite', subject: 'Do you agree to get field alerts?', text, accept: invite.token });
+            return say(`I've asked ${contact.name} to agree. ${DEMO_PHONE} Nothing more is sent until they say yes.`, { confirmed: true, accepted: false, demo: true });
           }
           if (!emailConfigured()) {
             return say(`Noted. Email isn't switched on for this server yet, so I can't ask ${contact.name} to agree, and nothing will be sent until it is.`, { confirmed: true, accepted: false, emailConfigured: false });

@@ -64,3 +64,17 @@ button { font: inherit; cursor: pointer; }
 .chip-form label { grid-column: 1 / -1; }
 .typed { font: inherit; padding: .4rem .55rem; border-radius: .45rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-width: 0; }
 .chip.go { width: auto; margin: 0; }
+.inbox { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
+.inbox li { border: 1px solid var(--line); border-radius: .8rem; padding: .7rem .8rem; background: var(--bg); }
+.inbox h3 { margin: 0 0 .25rem; font-size: .95rem; }
+.inbox p { margin: 0 0 .5rem; font-size: .86rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inbox .done { color: var(--good); font-size: .85rem; margin: 0; }
+.empty { color: var(--soft); font-size: .9rem; margin: .5rem 0 0; }
+.act { padding: .4rem .7rem; border-radius: .5rem; border: 1px solid var(--ink); background: var(--ink); color: var(--bg); margin: 0 .35rem .35rem 0; font-size: .86rem; }
+.act.second { background: transparent; color: var(--ink); }
+.handset h3.label { margin: 1rem 0 .4rem; }
+.free-wrap { max-width: 76rem; margin: 0 auto; padding: 0 1.25rem 1rem; }
+.free { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.free label { font-weight: 600; width: 100%; }
+.free input { flex: 1 1 16rem; min-width: 0; font: inherit; padding: .55rem .7rem; border-radius: .5rem; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.free-wrap .note { margin-top: .4rem; }

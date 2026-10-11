@@ -5,6 +5,8 @@
  * so every request is served from memory and stays well inside the 500 ms budget.
  */
 
+import { chooseByWords } from './rules.js';
+import * as roti from './roti.js';
 import { speakErrorsPlainly } from './plainly.js';
 import express from 'express';
 import { readFileSync } from 'node:fs';
@@ -21,6 +23,7 @@ import * as glotec from './glotec.js';
 import * as crewheat from './crewheat.js';
 import * as crewday from './crewday.js';
 import { mountConsent } from './consent.js';
+import { demoPhone } from './notify.js';
 import * as swpcplus from './swpcplus.js';
 import * as aurora from './aurora.js';
 import { checkFieldAlerts } from './alerts.js';
@@ -91,6 +94,28 @@ function farmFrom(req: express.Request): string {
   return 'local-dev';
 }
 
+/* What this farm has already saved, as counts and never names, so a host calls the tool instead of asking. */
+function instructionsFor(farmId: string): string {
+  const base =
+        'This add-on turns the NOAA space weather forecast into decisions. It tells field crews, surveyors, drone ' +
+        'mappers and grade crews whether GPS guidance will hold accuracy, and tells satellite, grid, airline, HF radio, ' +
+        'timing, pipeline, drilling, rail, vessel positioning, mining and fleet operators, aurora watchers and ' +
+        'households what to do about a storm and when. ' +
+        'Always read the returned reason aloud, it names the binding constraint and what to do next. ' +
+        'If NOAA is unreachable, say so plainly rather than guessing; a wrong go-ahead costs a season. ' +
+        'It remembers the fields, machines and corrections the customer saved, so call the tool without asking for them; ' +
+        'with one field and one machine saved those are used, and with several the answer itself says which it used.';
+  const f = store.get(farmId);
+  const known = [
+    f.fields.length ? `${f.fields.length} field${f.fields.length === 1 ? '' : 's'}` : '',
+    f.equipment.length ? `${f.equipment.length} machine${f.equipment.length === 1 ? '' : 's'}` : '',
+    f.crew.length ? 'a crew list' : '',
+  ].filter(Boolean);
+  return known.length
+    ? `${base} This farm has already saved ${known.join(' and ')}. Use them: do not ask which field, where it is, or what correction it runs.`
+    : `${base} This farm has not saved anything yet; a tool will say what it needs.`;
+}
+
 function build(farmId: string): McpServer {
   const server = new McpServer(
     {
@@ -118,13 +143,7 @@ function build(farmId: string): McpServer {
       // would be pretending the work was expensive.
       taskStore: TASK_STORE,
       taskMessageQueue: TASK_QUEUE,
-      instructions:
-        'This add-on turns the NOAA space weather forecast into decisions. It tells field crews, surveyors, drone ' +
-        'mappers and grade crews whether GPS guidance will hold accuracy, and tells satellite, grid, airline, HF radio, ' +
-        'timing, pipeline, drilling, rail, vessel positioning, mining and fleet operators, aurora watchers and ' +
-        'households what to do about a storm and when. ' +
-        'Always read the returned reason aloud, it names the binding constraint and what to do next. ' +
-        'If NOAA is unreachable, say so plainly rather than guessing; a wrong go-ahead costs a season.',
+      instructions: instructionsFor(farmId),
     },
   );
 
@@ -185,6 +204,15 @@ mountAuth(app);
 // Where somebody who was added to the crew list agrees to it, or stops it. See consent.ts.
 mountConsent(app);
 
+// The phone on the demo page: the messages a sandbox visitor's crew would have been emailed, readable only
+// with that visitor's own sandbox id. See notify.ts.
+app.get('/demo/phone', (req, res) => {
+  const id = demoIdOf(req);
+  res.setHeader('Cache-Control', 'no-store');
+  if (!id) return void res.status(401).json({ error: 'no_sandbox' });
+  res.json({ messages: demoPhone(`demo:${id}`) });
+});
+
 app.get('/health', (_req, res) => {
   const snap = swpc.current();
   res.json({
@@ -195,6 +223,7 @@ app.get('/health', (_req, res) => {
     noaa: snap ? { slots: snap.slots.length, alerts: snap.alerts.length, ageMinutes: swpc.ageMinutes(), stale: snap.stale } : null,
     ground: { observatories: geomag.watched(), ageMinutes: geomag.ageMinutes() },
     ionosphere: glotec.status(),
+    skyLinks: roti.status(),
     crewHeat: crewheat.status(),
     crewDays: crewday.status(),
     swpc: swpcplus.status(),
@@ -344,7 +373,7 @@ const rateLimit: express.RequestHandler = (req, res, next) => {
  * because that is what Polly bills, and a cache hit is free, so the same six canned
  * answers replayed all day cost six syntheses.
  */
-const agentDaily = dailyCap(Number(process.env.ORBITA_AGENT_DAILY_MAX ?? 300));
+const agentDaily = dailyCap(Number(process.env.ORBITA_AGENT_DAILY_MAX ?? 25));
 const speakDaily = dailyCap(Number(process.env.ORBITA_SPEAK_DAILY_CHARS ?? 100_000));
 // Burst and sustained rate per caller. A person typing into the stand-in does not
 // send six requests a minute; the defaults are for people and the knobs are for tests
@@ -374,28 +403,14 @@ app.post('/agent', requireAuth, async (req, res) => {
     res.status(429).set('Retry-After', '10').json({ error: 'slow_down', detail: 'Too many stand-in requests. Try again in a few seconds.' });
     return;
   }
-  if (!agent.configured()) {
-    res.status(503).json({
-      error: 'not_configured',
-      // Said plainly, because a judge hitting a 503 deserves to know this is a
-      // missing key and not a broken server.
-      detail: 'Set ORBITA_ANTHROPIC_KEY to enable the Alexa+ stand-in. Every other part of the demo works without it.',
-    });
-    return;
-  }
   const utterance = typeof req.body?.say === 'string' ? req.body.say.slice(0, 500).trim() : '';
   if (!utterance) {
     res.status(400).json({ error: 'say_required' });
     return;
   }
   // Last, so a malformed request never spends a unit of the budget.
-  if (!agentDaily.take(1)) {
-    res.status(429).json({
-      error: 'daily_budget',
-      detail: 'The stand-in has reached its limit for today. Everything else on this page still works, and it resets at midnight UTC.',
-    });
-    return;
-  }
+  // No model configured, or today's model budget spent: the word rules choose instead, and say so. See rules.ts.
+  const useModel = agent.configured() && agentDaily.take(1);
 
   const server = build(farmFrom(req));
   const client = new Client({ name: 'alexa-plus-stand-in', version: '0.1.0' }, { capabilities: {} });
@@ -404,7 +419,7 @@ app.post('/agent', requireAuth, async (req, res) => {
     await Promise.all([server.connect(a), client.connect(b)]);
     const listed = await client.listTools();
 
-    const chosen = await agent.choose(utterance, listed.tools as agent.ToolDef[]);
+    const chosen = useModel ? await agent.choose(utterance, listed.tools as agent.ToolDef[], client.getInstructions() ?? '') : chooseByWords(utterance, listed.tools as agent.ToolDef[]);
 
     // A decline is a real outcome and is reported as one. A host that calls
     // nothing when nothing fits is behaving correctly, and flattening that into
@@ -562,7 +577,7 @@ await geomag.start();
 // thing every answer depends on.
 // Where the RTK base stations actually are, so baselineKm can be measured rather
 // than remembered. Six hourly: the directory changes as volunteers come and go.
-await Promise.allSettled([glotec.start(), swpcplus.start(), aurora.start(), ntrip.start()]);
+await Promise.allSettled([glotec.start(), swpcplus.start(), aurora.start(), ntrip.start(), roti.start()]);
 // The crew's half of the same decision: the heat over each field for the hours a job would run. Not awaited,
 // because nothing about whether the receiver holds its line should wait on a weather forecast.
 void crewheat.start();

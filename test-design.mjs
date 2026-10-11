@@ -26,7 +26,7 @@ const swpc = await import('./dist/swpc.js');
 const solarwind = await import('./dist/solarwind.js');
 const brief = await import('./dist/brief.js');
 const geo = await import('./dist/geocode.js');
-const { registerTools, SECONDARY_TOOLS } = await import('./dist/tools.js');
+const { registerTools, SECONDARY_TOOLS, MERGED_AWAY } = await import('./dist/tools.js');
 const { speakErrorsPlainly } = await import('./dist/plainly.js');
 const { configureForTest: fakeZones } = await import('./dist/timezone.js');
 fakeZones(async () => 'America/Chicago');
@@ -72,12 +72,12 @@ const owner = await connect('acct:owner');
 {
   const names = (await owner.tools()).map((t) => t.name);
   check('the roles for satellites, grids and airlines are not published by default', SECONDARY_TOOLS.every((n) => !names.includes(n)), names.join(','));
-  check('the farm story is all there', ['can_i_run', 'watch_jobs', 'log_job', 'job_report', 'farm_status', 'crew_contact', 'register_field', 'register_equipment'].every((n) => names.includes(n)));
+  check('the farm story is all there', ['can_i_run', 'watch_jobs', 'log_job', 'job_report', 'farm_status', 'crew_contact', 'my_farm'].every((n) => names.includes(n)));
   check('a hidden tool cannot be called', (await owner.call('what_should_i_do', { role: 'grid_operator' })).isError === true);
   process.env.ORBITA_SCOPE = 'all';
   const all = await connect('acct:all');
   const allNames = (await all.tools()).map((t) => t.name);
-  check('with the scope set to all, they are published', SECONDARY_TOOLS.every((n) => allNames.includes(n)) && allNames.length === names.length + SECONDARY_TOOLS.length, allNames.join(','));
+  check('with the scope set to all, they are published', SECONDARY_TOOLS.every((n) => allNames.includes(n)) && MERGED_AWAY.every((n) => allNames.includes(n) && !names.includes(n)) && !allNames.includes('my_farm') && names.length === 13, `${names.length} ${names.join(',')}`);
   await all.close();
   delete process.env.ORBITA_SCOPE;
 }
@@ -116,7 +116,7 @@ console.log('\nAnswers are short, and the rest is kept for when it is asked for'
   check('the spoken answer is under sixty words (it was 151)', words(r.said) <= 60, `${words(r.said)}: ${r.said}`);
   check('it leads with the verdict', /^Hold off planting\./.test(r.said), r.said.slice(0, 40));
   check('when it clears is said second, not buried', /Next clear window opens/.test(brief.sentences(r.said).slice(0, 3).join(' ')), r.said);
-  check('the whole answer is still returned for a screen or a host', typeof r.data.full === 'string' && words(r.data.full) > words(r.said) && Array.isArray(r.data.more) && r.data.more.length > 0);
+  check('the whole answer is still returned for a screen or a host', r.data.full === undefined && Array.isArray(r.data.more) && r.data.more.length > 0);
   check('the spoken field matches what is said', r.data.spoken === r.said);
   check('it ends on one question, the next step, not a menu', /Want me to watch it and tell you when it clears\?$/.test(r.said) && !/Ask for more/.test(r.said), r.said.slice(-80));
   check('...with that step named for the host', r.data.nextAction?.tool === 'watch_jobs' && r.data.nextAction.arguments.action === 'start');
@@ -131,7 +131,7 @@ console.log('\nAnswers are short, and the rest is kept for when it is asked for'
 
   forecast(2, 2);
   const short = await owner.call('farm_status');
-  check('a short answer is left alone', !short.data.full && !/Ask for more/.test(short.said), short.said);
+  check('a short answer is left alone', !short.data.more && !/Ask for more/.test(short.said), short.said);
   check('asking for more after a short answer does not replay an old one', /nothing more on that/.test((await owner.call('tell_me_more')).said));
 
   check('an answer that mentions 911 is never cut', (() => {
