@@ -192,7 +192,7 @@ console.log('\nA town is answered in its own time');
   const visitor = await connect('acct:new');
   const trial = await visitor('can_i_run', { operation: 'planting', place: 'Phoenix, Arizona', correction: 'rtk' });
   check('the clear-until time is in the town\'s zone', /Clear until \w{3} \d{1,2}(:\d\d)? [AP]M MST/.test(trial.said) && !/UTC/.test(trial.said), trial.said);
-  geo.configureForTest(async () => ({ name: 'Nowhere', region: null, country: null, lat: 10, lon: 10 }));
+  geo.configureForTest(async () => ({ name: 'Nowhere', region: null, country: null, lat: 40, lon: 10 }));
   const other = await connect('acct:new2');
   const noZone = await other('can_i_run', { operation: 'planting', place: 'Nowhere', correction: 'rtk' });
   check('a lookup with no zone still answers, in UTC', /UTC/.test(noZone.said) && noZone.data.go === true, noZone.said);
@@ -340,7 +340,7 @@ console.log('\nThe sky over the field, measured a minute ago');
   check('forty calm links over Fargo read as quiet', roti.over(46.88, -96.79)?.state === 'quiet');
   check('...and nothing is said about a place 2,000 km away', roti.over(33.4, -112.1) === null);
   set([...Array(20).fill(0.6), ...Array(20).fill(0.05)]);
-  check('half the links disturbed reads as disturbed, with the published effect said', roti.over(46.88, -96.79)?.state === 'disturbed' && /roughly half/.test(roti.say(roti.over(46.88, -96.79))));
+  check('half the links disturbed reads as disturbed, with the published effect said', roti.over(46.88, -96.79)?.state === 'disturbed' && /halves how long RTK holds a fix/.test(roti.say(roti.over(46.88, -96.79))));
   set(Array(12).fill(0.9));
   check('a few disturbed links are not enough to call it disturbed', roti.over(46.88, -96.79)?.state === 'between');
   set(Array(12).fill(0.05));
@@ -380,6 +380,39 @@ console.log('\nThe stand-in with no model behind it');
   check('"my field is near Yuma, Arizona and the planter runs RTK" sets up the farm', (() => { const r = pick('My field is near Yuma, Arizona and the planter runs RTK'); return r.tool === 'my_farm' && r.args.place === 'Yuma, Arizona' && r.args.correction === 'rtk' && r.args.machineName === 'planter'; })(), JSON.stringify(pick('My field is near Yuma, Arizona and the planter runs RTK').args));
   check('"what is the sun doing" is the storm status', pick('What is the sun doing?').tool === 'storm_status');
   check('nothing it knows is a decline, said as the word rules', pick('purple elephants').tool === null && pick('purple elephants').model === 'word rules');
+}
+
+console.log('\nNear the magnetic equator, after dark');
+{
+  const d = await import('./dist/domain.js');
+  const pune = { name: 'Pune', lat: 18.52, lon: 73.86 };
+  const fargo = { name: 'Fargo', lat: 46.88, lon: -96.79 };
+  const rtk = { name: 'drone', correction: 'rtk' };
+  const at = (iso) => new Date(iso);
+  // 21:30 local solar time in Pune is about 16:35 UTC.
+  const evening = d.assess('drone_survey', 2, rtk, pune, at('2026-03-20T16:35:00Z'));
+  check('an RTK job in Pune on a March evening is a hold, at Kp 2, and says why', !evening.go && evening.equatorial === true && /plasma bubbles/.test(evening.reason), evening.reason);
+  check('...the same job that morning is clear', d.assess('drone_survey', 2, rtk, pune, at('2026-03-20T03:30:00Z')).go);
+  check('...and in June, outside the equinox seasons, nothing is said', d.assess('drone_survey', 2, rtk, pune, at('2026-06-20T16:35:00Z')).go);
+  check('...a spraying job that does not need centimetres is not held', d.assess('spraying', 2, { name: 's', correction: 'sbas' }, pune, at('2026-03-20T16:35:00Z')).go);
+  const slots = Array.from({ length: 16 }, (_, i) => ({ time: new Date(Date.parse('2026-03-20T00:00:00Z') + i * 3 * 3_600_000).toISOString(), kp: 2, observed: false }));
+  const win = d.nextWindow(slots, 'drone_survey', rtk, pune, at('2026-03-20T04:30:00Z'));
+  check('a clear window in Pune ends before the evening, not the next morning', win && Date.parse(win.end) <= Date.parse('2026-03-20T15:00:00Z'), JSON.stringify(win));
+  const trade = await import('./dist/trade.js');
+  check('the drone line for the evening hold does not blame a storm or the compass', !/compass|storm/.test(trade.adviceNow('drone_survey', false, 2, 'space_weather', true)));
+  check('...and Fargo, far from the magnetic equator, is untouched at the same hour', d.assess('drone_survey', 2, rtk, fargo, at('2026-03-21T03:30:00Z')).equatorial === undefined);
+}
+
+console.log('\nRain over the field');
+{
+  const ch = await import('./dist/crewheat.js');
+  const t0 = Date.now();
+  ch.seedForTest(18.52, 73.86, Array.from({ length: 12 }, (_, i) => ({ time: t0 + i * 3_600_000, tempF: 84, humidityPct: 80, rainMm: i === 2 ? 6 : 0 })));
+  const rain = ch.rainAhead(18.52, 73.86, new Date(t0), 4);
+  check('rain in the next hours over a field is found', rain?.mm === 6);
+  check('...and said for spraying, with GPS left out of it', /Most sprays need one to four dry hours/.test(ch.rainSentence('spraying', rain, () => '3 PM')) && /GPS accuracy is not affected/.test(ch.rainSentence('spraying', rain, () => '3 PM')));
+  check('...and for a drone', /most drones are not built to fly in it/.test(ch.rainSentence('drone_survey', rain, () => '3 PM')));
+  check('a dry spell finds nothing', ch.rainAhead(18.52, 73.86, new Date(t0 + 4 * 3_600_000), 4) === null);
 }
 
 await new Promise((r) => listener.close(r));

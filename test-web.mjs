@@ -194,7 +194,7 @@ console.log('\nThe add-on tells a host what this person has saved, never what it
   await rpc('tools/call', { name: 'register_field', arguments: { name: 'North', place: 'Fargo, North Dakota', lat: 46.88, lon: -96.79 } });
   const after = (await rpc('initialize', hello)).result?.instructions ?? '';
   check('after, the host is told what kind of thing is saved, and not to ask again', after.includes('1 field') && /do not ask/.test(after), after.slice(-160));
-  check('...without the name of any medicine, field or town', !/furosemide|Fargo|North/.test(after.slice(after.indexOf('already saved'))), after.slice(-160));
+  check('...without the name of any medicine, field or town', !/furosemide|Fargo|North\b/.test(after.slice(after.indexOf('already saved'))), after.slice(-160));
 }
 
 stop();

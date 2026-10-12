@@ -100,7 +100,7 @@ export function say(sky: Sky | null): string {
   if (!sky) return '';
   const pct = Math.round(sky.activeShare * 100);
   if (sky.state === 'disturbed') {
-    return `Measured in the last few minutes, ${pct} percent of the satellite signals crossing the sky over the field are disturbed, which in published tests cuts the time RTK holds a fix to roughly half.`;
+    return `Right now ${pct} percent of the satellite signals over the field are disturbed, which in published tests halves how long RTK holds a fix.`;
   }
   if (sky.state === 'quiet') return `Measured in the last few minutes, the sky over the field is calm: ${sky.links} satellite signals, almost none disturbed.`;
   return '';

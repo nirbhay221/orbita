@@ -246,6 +246,8 @@ export type Verdict = {
    */
   limitedBy: 'clear' | 'space_weather' | 'equipment';
   reason: string;
+  /** Held only by the evening plasma bubbles near the magnetic equator, not by a storm. */
+  equatorial?: boolean;
 };
 
 /** Inches, but keep a decimal under 3" so a 1.5" difference doesn't round away. */
@@ -256,6 +258,37 @@ function inches(m: number): string {
 }
 
 const distance = (m: number) => (m >= 1 ? `${m.toFixed(1)} metres` : inches(m));
+
+/**
+ * Near the magnetic equator, after dark: plasma bubbles.
+ *
+ * Everything else in this file is about the auroral zone, where storms push disturbance down from the pole.
+ * A third of the world farms and surveys somewhere else: India, Southeast Asia, Brazil, most of Africa sit
+ * within about 20 degrees of the magnetic equator, and there the damage comes from below. After sunset the
+ * equatorial ionosphere becomes unstable and breaks into plasma bubbles, which scintillate GNSS signals hard
+ * enough to break carrier-phase tracking. It is a nightly pattern, not a storm: it happens on quiet days, it is
+ * strongest around the equinoxes and near solar maximum, and it dies away after midnight. Published
+ * measurements put positioning errors above 40 metres between 21:00 and midnight local time, and RTK and PPP
+ * lose their fix first.
+ *
+ * So for a field within 20 degrees of the geomagnetic equator, between 19:00 and 01:00 local solar time, in the
+ * equinox seasons (February to April, August to October), a carrier-phase job is a hold. Outside those hours
+ * and months it is not ruled out, only much less common, and nothing is said. This is a climatology, not a
+ * measurement: where the measured sky in roti.ts has enough links overhead, that decides instead.
+ *
+ * Sources:
+ *   https://link.springer.com/article/10.1007/s12145-023-01070-z (scintillation over India)
+ *   https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2024SW004217 (scintillation and precise positioning)
+ */
+export function equatorialEvening(field: Field, at: Date | undefined): boolean {
+  if (!at || Number.isNaN(at.getTime())) return false;
+  if (Math.abs(geomagneticLatitude(field.lat, field.lon)) > 20) return false;
+  const solarHour = (((at.getUTCHours() + at.getUTCMinutes() / 60 + field.lon / 15) % 24) + 24) % 24;
+  const evening = solarHour >= 19 || solarHour < 1;
+  const month = at.getUTCMonth() + 1;
+  const equinox = (month >= 2 && month <= 4) || (month >= 8 && month <= 10);
+  return evening && equinox;
+}
 
 export function assess(
   operation: Operation,
@@ -270,16 +303,25 @@ export function assess(
   // oval sits over on an ordinary night is not told its equipment is the problem.
   const quiet = Math.min(expectedErrorM(2, eq, field, at), expectedErrorM(0, eq, field, at));
   const tol = TOLERANCE_M[operation];
-  const go = err <= tol;
+  // Carrier-phase work near the magnetic equator after dark, whatever Kp says. See equatorialEvening.
+  const bubbles = (eq.correction === 'rtk' || eq.correction === 'ppp') && tol < 0.3 && equatorialEvening(field, at);
+  const go = err <= tol && !bubbles;
   const g = G_SCALE(kp);
   const label = OPERATION_LABEL[operation];
 
   let limitedBy: Verdict['limitedBy'];
   let reason: string;
 
-  if (go) {
+  if (bubbles && err <= tol) {
+    limitedBy = 'space_weather';
+    reason =
+      `Hold off ${label} until after midnight or the morning. Near the magnetic equator the hours after sunset bring plasma bubbles ` +
+      `that break up satellite signals, most of all around the equinoxes, and ${eq.correction.toUpperCase()} loses its fix first. ` +
+      `That happens on quiet days too, so Kp ${kp.toFixed(1)} does not rule it out.`;
+  } else if (go) {
     limitedBy = 'clear';
-    reason = `Clear for ${label}. Kp ${kp.toFixed(1)}${g === 'none' ? '' : ` (${g})`}, expected drift about ${inches(err)} against a ${inches(tol)} tolerance.`;
+    // The verdict, then the one number that backs it, in the job's own terms; Kp last, for whoever tracks it.
+    reason = `Clear for ${label}. Expected drift is about ${inches(err)}, inside the ${inches(tol)} it needs, at Kp ${kp.toFixed(1)}${g === 'none' ? '' : ` (${g})`}.`;
   } else if (quiet > tol) {
     // Not the sun. This rig cannot hit that tolerance on its best day.
     limitedBy = 'equipment';
@@ -309,6 +351,7 @@ export function assess(
     toleranceM: tol,
     limitedBy,
     reason,
+    ...(bubbles && err <= tol ? { equatorial: true } : {}),
   };
 }
 
@@ -358,7 +401,11 @@ export function nextWindow(
     // The block under way is judged at this moment, so it agrees with the verdict just given; later ones at their middle.
     const begins = new Date(s.time).getTime();
     const when = begins <= now.getTime() ? now : new Date(begins + 90 * 60_000);
-    const ok = expectedErrorM(s.kp, eq, field, when) <= tol;
+    // The evening plasma bubbles near the magnetic equator close a window as surely as a storm. Checked at both
+    // ends of the block, because a three-hour block can straddle sunset.
+    const carrier = (eq.correction === 'rtk' || eq.correction === 'ppp') && tol < 0.3;
+    const bubbles = carrier && [begins + 30 * 60_000, begins + 150 * 60_000].some((t) => equatorialEvening(field, new Date(Math.max(t, now.getTime()))));
+    const ok = expectedErrorM(s.kp, eq, field, when) <= tol && !bubbles;
     if (ok) {
       if (!start) start = s.time;
       last = s.time;

@@ -19,8 +19,10 @@ const GRADE: Operation[] = ['machine_control'];
 const ROWS: Operation[] = ['planting', 'strip_till', 'cultivating'];
 
 /** For a question about running a job now or soon. */
-export function adviceNow(operation: Operation, go: boolean, kp: number, limitedBy: string): string {
+export function adviceNow(operation: Operation, go: boolean, kp: number, limitedBy: string, equatorial = false): string {
   if (limitedBy === 'equipment') return '';
+  // The evening plasma bubbles are not a storm, so the compass is not part of it.
+  if (equatorial && FLIGHT.includes(operation)) return 'Do not fly a mapping mission tonight: a lost fix mid-flight cannot be repaired afterwards.';
   if (SURVEY.includes(operation)) {
     if (!go) return 'Anything you shoot now should be re-observed once it clears, and check in to a known control point before you trust the session.';
     if (kp >= 4) return 'It is unsettled, so check in to a control point at the start and the end of the session.';

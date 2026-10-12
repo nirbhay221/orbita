@@ -260,7 +260,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       }
       // The one sentence about this trade's own risk: points to re-observe, a flight that cannot be redone,
       // grade somebody will build on. Said with the verdict when the answer is no. See trade.ts.
-      const trade = adviceNow(operation as Operation, verdict.go, kp.kp, verdict.limitedBy);
+      const trade = adviceNow(operation as Operation, verdict.go, kp.kp, verdict.limitedBy, verdict.equatorial === true);
       if (trade) text += ` ${trade}`;
       // A go that the solar wind is about to take away is worth saying out
       // loud, because the job that gets started is the one that gets ruined.
@@ -340,6 +340,15 @@ export function register(server: McpServer, farmOf: () => string): void {
         text += ` ${line}`;
         // Past 90 is a decision about people, so it is heard with the verdict. Past 80 waits to be asked for.
         if (crew.level === 'high') mustSay.push(line);
+      }
+      // Rain over the field, for the two jobs it ruins; GPS is not one of them. See crewheat.ts.
+      if (workFrom && (operation === 'spraying' || operation === 'drone_survey')) {
+        const rain = crewheat.rainAhead(f.lat, f.lon, workFrom, Math.max(3, Math.min(workHours, 6)));
+        if (rain) {
+          const line = crewheat.rainSentence(operation, rain, (iso) => localTime(iso, f.timeZone));
+          text += ` ${line}`;
+          mustSay.push(sentences(line)[0]);
+        }
       }
       // And the people by name, for a job that would run today: whoever is still getting used to the heat,
       // and whoever it turns risky for earlier. Asked of the heat safety server in the background. See crewday.ts.

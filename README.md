@@ -1,40 +1,41 @@
 # Orbita
 
-**"Alexa, can I run the planter today?"**
-**"Alexa, there's a storm coming. What should I do?"**
+**Will GPS-guided work hold its accuracy today? Space weather, turned into a go or a hold.**
 
-**Live:** [on a screen, with a crew member's day beside it](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html) ·
-[try it in a browser](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/) ·
-MCP endpoint `https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/mcp` (account linking required) ·
+> **You:** Alexa, can I run the planter this morning?<br>
+> **Alexa:** Hold off planting. Kp 7.0 (G3 strong) puts expected drift near 3 inches against the 2 inches
+> planting needs, and measured in the last few minutes, 46 percent of the satellite signals over the field are
+> disturbed. Next clear window opens Thursday at 10 AM. Want me to watch it and tell you when it clears?
+
+**Try it:** [talk to it on a screen, with a crew member's inbox beside it](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html)
+(press **Speak**, or type) ·
+MCP endpoint `https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/mcp` (account linking) ·
 [health](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/health)
 
-An Alexa+ add-on that turns NOAA's space weather forecast into decisions. It does two jobs from
-the same live data.
+Storms on the sun disturb the sky, and the satellite positioning that steers tractors, survey rovers, mapping
+drones and dozers drifts or drops its fix. The May 2024 storm alone is estimated to have cost Midwest farmers
+$500 million or more in the middle of planting. Orbita is an Alexa+ add-on that remembers a farm's or a crew's
+fields, machines and correction type, and answers for that job:
 
-For anyone whose work stands on satellite positioning, it says whether guidance will hold the
-accuracy the job needs, by joining the forecast to where they are standing and what they are
-about to do. A planter, a survey crew, a drone pilot and a dozer on grade all get a different
-answer from the same storm, and all four are correct.
+| Ask | What happens |
+|---|---|
+| "Can I plant today?" | Go or hold off for this field, this machine and this job's tolerance, and when it clears |
+| "Is it safe to fly the mapping drone?" | The same, with the trade's own risk: a flight cannot be redone, and the compass is upset too |
+| "My rows were crooked yesterday at 3, was it the sun?" | That hour, in the field's own time; and if it was not the sun, what to check instead |
+| "What is the sun doing?" | Kp now and ahead, NOAA's alerts, in plain words |
+| "Tell Dana when it clears" | The crew is emailed when a watched job clears, and the evening before a storm |
+| "Can we run, with the crew in mind?" | A crew member's heat day from the sister add-on Sudor, never their health |
+| "Can I fly the drone tonight in Pune?" | Near the magnetic equator, the evening plasma bubbles that break GPS on quiet days are a hold too |
+| "Can I spray this afternoon?" | Rain forecast over the field is said for spraying and drone jobs, and that GPS itself is unaffected |
 
-For everyone else a storm reaches, it says what to do and when: a satellite team, a grid control
-room, an airline dispatcher, an HF radio operator, a network that takes its time from GPS, a
-pipeline crew, a directional driller, railway signalling, someone hoping to see the aurora, and a
-household wondering whether any of this is their problem. Every step is timed to how far off the
-storm is and names where it comes from.
+It works anywhere: exposure is computed from geomagnetic latitude, so a field in Punjab, Bavaria or Patagonia is
+judged where it actually sits. Satellite teams, grid rooms, airlines, HF radio, timing, pipelines, drilling, rail,
+vessel positioning, mining, fleets, aurora watchers and households get advice for their work from the same data.
 
-The forecast works anywhere. Kp is a planetary index, and exposure is computed from geomagnetic latitude
-rather than the number on the map, so a site in Punjab, Manitoba or Patagonia is judged on the
-field it is actually sitting in. The check against a magnetometer on the ground is United States only, and is
-silent everywhere else.
-
-The Latin `orbita` meant a track or rut cut into the ground by a wheel. The astronomical sense,
-the path of a heavenly body, came later from the same root, and `exorbitant` comes from
-`exorbitare`, to go off track. One word for the line a tractor cuts across a field, the orbit of
-the thing that ruins it, and what happens when the two meet.
-
-Built for the [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com),
-Alexa+ track, plus the Open Source and AWS Builder mini challenges. Self-hosted MCP server,
-spec 2025-11-25, Streamable HTTP, with an MCP Apps panel for the Echo Show.
+The Latin `orbita` meant a track cut into the ground by a wheel. Built for the
+[Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com), Alexa+ track, plus the Open
+Source and AWS Builder mini challenges. Self-hosted MCP server, spec 2025-11-25, Streamable HTTP, 13 tools by
+default, with an MCP Apps panel for the Echo Show.
 
 ## What is real, and what is not
 
@@ -42,32 +43,32 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, spec 2025-11-25, Streamable HTTP, 15 tools by default | **Real and deployed** on AWS, behind account linking. 1,627 automated checks |
+| MCP server, 13 tools by default | **Real and deployed** on AWS, behind account linking. 1,710 automated checks, run on every push |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
+| The sky over the field, measured | **Real, live**: the German Aerospace Center's one-minute disturbance readings (ROTI) from about 4,000 satellite links worldwide, read within 400 km of the field. Free for scientific use; commercial use needs DLR's written permission |
 | Ground magnetometers | **Real** (USGS), **United States only** |
-| The past: "what happened on May 10 2024" | **Real**, from the archived Kp record |
+| The past: "what happened at 3 pm on May 10 2024" | **Real**, from the archived Kp record, by the hour |
 | Crew heat | **Real**: Open-Meteo's hourly forecast over each field |
-| Kp to expected drift | **A model**, anchored to three published measurements and scored against real receivers at four sites for the 2024 season ([BACKTEST.md](BACKTEST.md)). In a severe storm it says the fix is lost and gives no figure, because that is what the receivers did |
-| Emails to the crew | **Real code, switched off on the deployed server**: no sending address is configured, so nothing is sent and every answer says so |
-| Alexa+ itself | **Not available to us.** The demo page's assistant is Claude Opus reading the real tool list. Routing measured with it is routing for that model, not for Alexa+ |
+| Kp to expected drift | **A model**, anchored to three published measurements and scored against real receivers at four sites for the 2024 season ([BACKTEST.md](BACKTEST.md)) |
+| Emails to the crew | **Real**, through Amazon SES, only after the crew member agrees. The account is in the SES sandbox (production access requested), so today it reaches verified addresses only. The public demo shows the email in an inbox panel instead |
+| The talking demo | **Real model**: Claude Haiku 4.5 reads the real tool list and picks a tool, as Alexa+ would. With no model available, word rules pick instead, and the screen says which |
+| Alexa+ itself | **Not available to us.** MCP add-on access is in preview |
 | Echo Show panel | **Real MCP App**, tested against a simulated host. Not seen on a real device |
 
 ## Start here
 
-This file is long because the reasoning is the work. If you are reading it to evaluate the project,
-these are the five things worth your time:
+This file is long because the reasoning is the work. If you are evaluating the project:
 
 | If you want | Read |
 |---|---|
+| To try it in two minutes | [The demo page](#the-demo-page) |
 | What it does, in one exchange | [What it does](#what-it-does) |
 | Why it is not a wrapper around a feed | [Why it is not a wrapper around a feed](#why-it-is-not-a-wrapper-around-a-feed) |
 | The part that is measured rather than forecast | [Measured, not only forecast](#measured-not-only-forecast) |
-| What the protocol is doing that is unusual | [Asking, instead of guessing](#asking-instead-of-guessing), [The answer that does not fit in a turn](#the-answer-that-does-not-fit-in-a-turn), [Another server can ask us too](#another-server-can-ask-us-too) |
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
-Twelve free NOAA and USGS products, no API key. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 1,627 checks, none of which touch the network except
-the three live suites at the end.
+Free NOAA, USGS and DLR products, no API keys for the data. Every tool call is answered from memory; nothing
+external is called inside a turn. `npm test` runs 1,710 checks.
 
 ## The problem
 
@@ -365,6 +366,25 @@ better substorm detector because a substorm is fast rather than deep. Paired wit
 separate three cases Kp cannot: a real storm that has not reached this longitude yet, a substorm
 overhead that is not a planetary storm at all, and a storm that has not bottomed out.
 
+### The sky over the field, a minute ago
+
+GloTEC's map is too coarse to see the small, fast structure that actually breaks a fix. That structure is
+measured: the rate of TEC index, ROTI, is how fast the electron count along one receiver-to-satellite path is
+changing. The German Aerospace Center's Ionosphere Monitoring and Prediction Center publishes it every minute from
+about four thousand links worldwide, around fifteen hundred of them over the United States, each placed where its
+path crosses the ionosphere (`src/roti.ts`). Orbita reads the links within 400 km of the field. What a value means
+comes from one published result rather than tuning: a 2025 study of network RTK found that when 40 to 60 percent
+of satellites had ROTI above 0.2 TECU per minute, the RTK fix rate fell to about 50 to 70 percent.
+
+* **Disturbed overhead** (40 percent or more of at least 30 links above 0.2) turns a forecast go into a hold.
+* **Calm overhead** (under 10 percent of at least 30 links) turns a forecast hold into a go for now, below Kp 8,
+  said as a measurement of the last few minutes with "check your fix status as you go".
+* **Too few links** says nothing either way. Only questions about now, and only RTK and PPP receivers.
+
+Checked live during the G3 storm of 10 October 2026: the sky over Munich read disturbed, Yuma in between, and a
+three-link reading over São Paulo was ignored. Free for scientific use; commercial use needs DLR's written
+permission.
+
 The honest limit here is coverage. Thirteen of the observatories in the USGS directory are partners it
 names but does not serve; every Canadian one answers the data endpoint with 422, which was found by
 checking all of them rather than trusting the list. So ground truth is the United States plus single
@@ -373,18 +393,41 @@ this file, gets the forecast and no corroboration, and the distance gate turns t
 rather than a wrong answer: inside 600 km the reading speaks fully, out to 2,000 km only about the
 slow regional part, and beyond that not at all.
 
+## Near the magnetic equator, and in the monsoon
+
+A third of the world farms and surveys within about 20 degrees of the magnetic equator: India, Southeast Asia,
+Brazil, most of Africa. There the damage does not come down from the pole in a storm. It comes up after sunset,
+every evening, when the equatorial ionosphere breaks into plasma bubbles that scintillate GNSS signals hard enough
+to break carrier-phase tracking, strongest around the equinoxes and near solar maximum, gone after midnight.
+Published measurements put positioning errors above 40 metres between 21:00 and midnight local time. So for a
+field in that band, a centimetre job on RTK or PPP between 19:00 and 01:00 local solar time in the equinox seasons
+is a hold, whatever Kp says, and a clear window closes before that evening rather than running through it
+(`equatorialEvening` in `src/domain.ts`). It is a nightly pattern, not a storm, so the crew is never emailed
+about it as one, and the measured sky in `src/roti.ts` decides instead wherever enough links are overhead. GAGAN,
+India's SBAS, counts as SBAS; NavIC alone counts as no correction.
+
+Rain does not move a fix: the signals pass through it, and RTK holds its centimetres in a downpour. What rain does
+is wash a spray off before it has dried (most products need one to four dry hours) and ground a drone. So for
+spraying and drone jobs, rain forecast over the field in the hours the job would run is said with when, and with
+"GPS accuracy is not affected by the rain" (`rainAhead` in `src/crewheat.ts`).
+
 ## Tools
 
-Fifteen tools by default, and two more with `ORBITA_SCOPE=all`.
+Thirteen tools by default. Setting up a farm is one tool, `my_farm`, because tool choice gets worse as the list
+grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are listed instead.
 
 **Answers**
 * `can_i_run` gives a go or no go for a job on a field, now or at a time said aloud ("tomorrow afternoon"), with a
   deadline, and says how long it stays clear or when the next clear stretch starts. Somebody with nothing
   registered can name a town and a correction and be answered straight away. When the heat index over the field
-  passes 90 for the hours the job would run, the crew's side is said in the same answer
+  passes 90 for the hours the job would run, the crew's side is said in the same answer. A survey crew, a drone
+  pilot and a grading crew each hear the one sentence about their own risk: points to re-observe, a flight not to
+  make, a blade to hold (`src/trade.ts`)
 * `storm_status` says what the sun is doing, in plain language
 * `farm_status` shows every field and machine at a glance, and names the hottest field for the day ahead
-* `what_happened` looks back at a past day and says whether space weather explains a job that went badly
+* `what_happened` looks back at a past day, or a time on it ("yesterday at 3 pm"), and says whether space weather
+  explains a job that went badly, in the field's own time. When it was not the sun, it says what to check instead:
+  the base station and correction link, convergence, the correction satellite, trees and buildings
 * `plan_season` a longer look across the weeks ahead, as a task that reports back
 * `what_can_you_do` answers the customer who asks what this is
 * `tell_me_more` the rest of the last answer
@@ -394,8 +437,9 @@ Fifteen tools by default, and two more with `ORBITA_SCOPE=all`.
   watching. It refuses to watch a job that is already clear or that the rig could never do anyway
 
 **The crew**
-* `crew_contact` adds, confirms or removes someone to email when a watched job clears or a storm is coming. The
-  customer's yes sends one invitation; nothing else is sent until that person agrees
+* `crew_contact` adds, confirms or removes someone to email when a watched job clears or a storm is coming. With
+  no address said, it hands back a page to type it on. The customer's yes sends one invitation; nothing else is
+  sent until that person agrees. The storm email says when the forecast has the jobs back inside tolerance
 * `share_access` gives a one-time code so a second person can ask about the farm's fields and change nothing
 
 **The record**
@@ -405,10 +449,8 @@ Fifteen tools by default, and two more with `ORBITA_SCOPE=all`.
   to a crew contact who has agreed
 
 **Setup**
-* `register_field` by the nearest town, and `register_equipment` by the correction it runs. Registering the same
-  name twice updates what is there
-* `remove` takes a field or a machine back off the list. `what everything` is the fresh start, done only when
-  asked a second time
+* `my_farm` a field by the nearest town, anywhere in the world, and a machine by the correction it runs, both in
+  one sentence; or takes one off, or everything, only when asked a second time
 
 **Published only with `ORBITA_SCOPE=all`:** `what_should_i_do` (advice for satellite, grid, airline, HF, timing,
 pipeline, drilling, rail, drone, aurora and household listeners) and `what_else_is_affected`.
@@ -456,8 +498,10 @@ every blocked block is additionally hatched and worded.
 ## On a screen
 
 `/echo.html` is a stand-in for an Echo Show. Down the page are the lines somebody might say; each is a real tool
-call with real arguments (`web/echo-scenes.json`), and a test calls every one. No assistant model runs on that
-page, so the lines are fixed and the answers are whatever the server says today. One line takes something typed:
+call with real arguments (`web/echo-scenes.json`), and a test calls every one. Under them, **Or say anything**
+takes typed or spoken words and sends them to the stand-in, which picks the tool and says whether a model or the
+word rules chose it. Beside the screen is a crew member's inbox: the public demo never sends email, so what the
+crew would be sent is shown there, and its buttons are the real agreement links. One line takes something typed:
 the eight digits a crew member reads out from their own Sudor. After that this server asks that one directly, and
 the answer about the job names that person and their hours.
 
@@ -494,12 +538,12 @@ Or without installing Node at all:
 docker build -t orbita . && docker run -p 8788:8788 orbita
 ```
 
-`npm test` runs everything, 1,627 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 1,710 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 1,391 checks, no live data
-npm run test:live           # 236 checks, against a running server and the real feed
+npm run test:unit           # 1,471 checks, no live data
+npm run test:live           # 239 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines
 node test-playbook.mjs      # roles, phases, triggers, odds, voice limits, sources, the grid base rate
@@ -726,8 +770,11 @@ wrong choice is more informative than a plausible answer, and a decline is repor
 than an error: a host that calls nothing when nothing fits is behaving correctly.
 
 It is not Alexa. It does not share Alexa's prompt, its turn budget or its judgment about when to call
-something, and that disclaimer travels in the response payload rather than living here. Off unless
-`ORBITA_ANTHROPIC_KEY` is set, and the rest of the page works without it.
+something, and that disclaimer travels in the response payload rather than living here. The model is Claude
+Haiku 4.5, with a daily cap of 25 calls, and it is given the server's own instructions, which say what this farm
+has saved as counts and never names. With no key, or once the cap is reached, plain word rules choose the tool
+(`src/rules.ts`) and the screen says so. The demo page takes typed or spoken words; hearing and speaking are the
+browser's own.
 
 ## Hearing it
 
@@ -840,6 +887,10 @@ matters most: 79 percent of outdoor workers who died of heat were in their first
   clears. The rest is returned as `more` in the structured result and spoken when the customer says "tell me more"
   (`tell_me_more`). Measured on live data, "can I plant right now" went from 151 words to 32. An answer that mentions
   911, a write, and a tool that pages its own steps are never shortened. See `src/brief.ts`.
+* **The verdict, then the number in the job's terms.** "Clear for planting. Expected drift is about 0.8 inches, inside
+  the 2.0 inches it needs, at Kp 0.7." Kp comes last, for whoever tracks it. A measured disturbed sky is one sentence:
+  "right now 44 percent of the satellite signals over the field are disturbed, which in published tests halves how
+  long RTK holds a fix."
 * **No setup to get a first answer.** "Can I plant near Fargo on RTK" is answered for that town and that correction with
   nothing registered, and ends by offering to remember it. A field is added by its nearest town; coordinates are optional.
 * **One story by default.** The default tool set is the field job: can it run, when does it clear, watch it, tell the crew,

@@ -91,7 +91,8 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
         for (const eq of farm.equipment) {
           for (const op of statusOperations(eq.correction) as Operation[]) {
             const v = assess(op, s.kp, eq, f, new Date(new Date(s.time).getTime() + 90 * 60_000));
-            if (!v.go && v.limitedBy === 'space_weather') {
+            // The nightly plasma bubbles near the magnetic equator are not a storm, and are not emailed as one.
+            if (!v.go && v.limitedBy === 'space_weather' && !v.equatorial) {
               jobs.push(`${label(op)} on ${f.name} with ${eq.name}`);
               if (!ops.includes(op)) ops.push(op);
             }

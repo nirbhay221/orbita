@@ -168,7 +168,7 @@ export function parseWhen(
   if (/\blast week\b/.test(s)) return daysFromToday(-7);
   if (/\bnext week\b/.test(s)) return daysFromToday(7);
 
-  if (/\b(today|tonight|now|right now)\b/.test(s) || /this (morning|afternoon|evening)/.test(s)) return hour != null ? daysFromToday(0) : now;
+  if (/\b(today|tonight|now|right now)\b/.test(s) || /\bthis (morning|afternoon|evening)\b/.test(s)) return hour != null ? daysFromToday(0) : now;
 
 
   const weekday = WEEKDAYS.findIndex((d) => new RegExp(`\\b${d}\\b`).test(s));

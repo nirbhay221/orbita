@@ -20,7 +20,7 @@
 
 import { backoff } from './backoff.js';
 
-export type HeatHour = { time: number; tempF: number; humidityPct: number };
+export type HeatHour = { time: number; tempF: number; humidityPct: number; /** Rain in that hour, mm. */ rainMm?: number };
 
 export const INITIAL_F = 80;
 export const HIGH_F = 90;
@@ -60,7 +60,7 @@ type Loader = (lat: number, lon: number) => Promise<HeatHour[] | null>;
 async function fetchForecast(lat: number, lon: number): Promise<HeatHour[] | null> {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(2)}&longitude=${lon.toFixed(2)}` +
-    '&hourly=temperature_2m,relative_humidity_2m&temperature_unit=fahrenheit&forecast_days=4&timeformat=unixtime';
+    '&hourly=temperature_2m,relative_humidity_2m,precipitation&temperature_unit=fahrenheit&forecast_days=4&timeformat=unixtime';
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
@@ -76,7 +76,7 @@ async function fetchForecast(lat: number, lon: number): Promise<HeatHour[] | nul
 
 /** Rows with a missing or impossible value are left out, never read as zero. */
 export function parse(body: unknown): HeatHour[] | null {
-  const h = (body as { hourly?: { time?: unknown[]; temperature_2m?: unknown[]; relative_humidity_2m?: unknown[] } } | null)?.hourly;
+  const h = (body as { hourly?: { time?: unknown[]; temperature_2m?: unknown[]; relative_humidity_2m?: unknown[]; precipitation?: unknown[] } } | null)?.hourly;
   if (!h || !Array.isArray(h.time) || !Array.isArray(h.temperature_2m) || !Array.isArray(h.relative_humidity_2m)) return null;
   const out: HeatHour[] = [];
   for (let i = 0; i < h.time.length; i += 1) {
@@ -85,7 +85,8 @@ export function parse(body: unknown): HeatHour[] | null {
     const humidityPct = h.relative_humidity_2m[i];
     if (typeof time !== 'number' || typeof tempF !== 'number' || typeof humidityPct !== 'number') continue;
     if (!Number.isFinite(tempF) || tempF < -130 || tempF > 140 || humidityPct < 0 || humidityPct > 100) continue;
-    out.push({ time: time * 1000, tempF, humidityPct });
+    const rain = h.precipitation?.[i];
+    out.push({ time: time * 1000, tempF, humidityPct, ...(typeof rain === 'number' && Number.isFinite(rain) && rain >= 0 ? { rainMm: rain } : {}) });
   }
   return out.length ? out : null;
 }
@@ -208,4 +209,34 @@ export function resetForTest(): void {
   gate.reset();
   load = fetchForecast;
   refreshing = false;
+}
+
+/*
+ * Rain over the field, for the two jobs it ruins.
+ *
+ * Rain does not move a GPS fix: the signals pass through it, and RTK holds its centimetres in a downpour. What
+ * rain does is wash a spray off the leaf before it has dried on (most products need one to four dry hours, and
+ * a fungicide caught by heavy rain within two hours has largely gone), and ground a drone, because even a
+ * weather-rated spraying or mapping drone is not built to fly in steady rain. That is what the monsoon means
+ * for this product, so it is said for those two jobs only, and said as the forecast.
+ *
+ * Sources:
+ *   https://vegcropshotline.org/article/fungicide-applications-during-rainy-weather/
+ *   https://www.mississippi-crops.com/2014/06/02/influence-of-rainfall-on-insecticide-efficacy/
+ *   https://terra-droneagri.com/weather-considerations-for-agricultural-drones-can-drones-fly-in-the-rain/
+ */
+export function rainAhead(lat: number, lon: number, from: Date, hours: number, now = Date.now()): { at: number; mm: number } | null {
+  const entry = held.get(key(lat, lon));
+  if (!entry || now - entry.fetchedAt > STALE_MS) return null;
+  const start = from.getTime();
+  const end = start + hours * 3_600_000;
+  const wet = entry.hours.find((h) => h.time + 3_600_000 > start && h.time < end && (h.rainMm ?? 0) >= 1);
+  return wet ? { at: wet.time, mm: wet.rainMm as number } : null;
+}
+
+export function rainSentence(job: 'spraying' | 'drone_survey', rain: { at: number; mm: number }, say: (iso: string) => string): string {
+  const when = say(new Date(rain.at).toISOString());
+  return job === 'spraying'
+    ? `Rain is forecast from ${when}. Most sprays need one to four dry hours to stick, so finish well before then or wait until after. GPS accuracy is not affected by the rain.`
+    : `Rain is forecast from ${when}, and most drones are not built to fly in it, so plan the flight to land before then. GPS accuracy is not affected by the rain.`;
 }

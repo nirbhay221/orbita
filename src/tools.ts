@@ -128,7 +128,7 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
           acres: z.number().positive().optional().describe('Size of the field in acres, if said'),
           baselineKm: z.number().positive().optional().describe('Distance to the RTK base station in kilometres, if they know it'),
           machineName: z.string().optional().describe('Name of the machine, e.g. "planter", "sprayer", "rover"'),
-          correction: z.enum(['rtk', 'ppp', 'sbas', 'autonomous']).optional().describe('The correction that machine runs: rtk, ppp, sbas (also WAAS or EGNOS) or autonomous for none'),
+          correction: z.enum(['rtk', 'ppp', 'sbas', 'autonomous']).optional().describe('The correction that machine runs: rtk, ppp, sbas (also WAAS, EGNOS or GAGAN in India) or autonomous for none (NavIC or plain GPS alone)'),
           removeWhat: z.enum(['field', 'machine', 'everything']).optional().describe('Only to take something off: a field, a machine, or everything when they say start over or delete my data'),
           removeName: z.string().optional().describe('The name of the field or machine to remove'),
         },
