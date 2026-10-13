@@ -11,7 +11,7 @@
  * left waiting.
  */
 
-export type Place = { name: string; region: string | null; country: string | null; lat: number; lon: number; timeZone?: string | null };
+export type Place = { name: string; region: string | null; country: string | null; countryCode?: string | null; lat: number; lon: number; timeZone?: string | null };
 
 type Row = { name: string; admin1?: string; country?: string; country_code?: string; latitude: number; longitude: number; timezone?: string };
 type Lookup = (query: string) => Promise<Place | null>;
@@ -34,7 +34,7 @@ export function pick(query: string, rows: Row[]): Place | null {
     : rows[0];
   // A region that was named and matches nothing is not answered with a town of the same name somewhere else.
   if (!hit) return null;
-  return { name: hit.name, region: hit.admin1 ?? null, country: hit.country ?? null, lat: hit.latitude, lon: hit.longitude, timeZone: hit.timezone ?? null };
+  return { name: hit.name, region: hit.admin1 ?? null, country: hit.country ?? null, countryCode: hit.country_code ?? null, lat: hit.latitude, lon: hit.longitude, timeZone: hit.timezone ?? null };
 }
 
 async function fetchPlace(query: string, timeoutMs = 2500): Promise<Place | null> {

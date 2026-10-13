@@ -71,13 +71,13 @@ console.log('\nOne story: the tools a customer gets by default');
 const owner = await connect('acct:owner');
 {
   const names = (await owner.tools()).map((t) => t.name);
-  check('the roles for satellites, grids and airlines are not published by default', SECONDARY_TOOLS.every((n) => !names.includes(n)), names.join(','));
+  check('the list of everything else a storm touches is not published by default', SECONDARY_TOOLS.every((n) => !names.includes(n)), names.join(','));
   check('the farm story is all there', ['can_i_run', 'watch_jobs', 'log_job', 'job_report', 'farm_status', 'crew_contact', 'my_farm'].every((n) => names.includes(n)));
-  check('a hidden tool cannot be called', (await owner.call('what_should_i_do', { role: 'grid_operator' })).isError === true);
+  check('a hidden tool cannot be called', (await owner.call('what_else_is_affected', {})).isError === true);
   process.env.ORBITA_SCOPE = 'all';
   const all = await connect('acct:all');
   const allNames = (await all.tools()).map((t) => t.name);
-  check('with the scope set to all, they are published', SECONDARY_TOOLS.every((n) => allNames.includes(n)) && MERGED_AWAY.every((n) => allNames.includes(n) && !names.includes(n)) && !allNames.includes('my_farm') && names.length === 13, `${names.length} ${names.join(',')}`);
+  check('with the scope set to all, they are published', SECONDARY_TOOLS.every((n) => allNames.includes(n)) && MERGED_AWAY.every((n) => allNames.includes(n) && !names.includes(n)) && !allNames.includes('my_farm') && names.length === 15, `${names.length} ${names.join(',')}`);
   await all.close();
   delete process.env.ORBITA_SCOPE;
 }

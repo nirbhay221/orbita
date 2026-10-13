@@ -37,6 +37,7 @@ const RULES: Rule[] = [
   { when: /\b(add|email|tell) .*\b(crew|operator|manager|party chief)\b/i, tool: 'crew_contact', args: (s) => ({ action: 'add', name: /\b([A-Z][a-z]+) to the crew\b/.exec(s)?.[1] ?? 'them' }) },
   { when: /\b(i (just )?(planted|sprayed|surveyed|flew|graded)|log (a |the )?job)\b/i, tool: 'log_job', args: (s) => ({ operation: jobIn(s) ?? 'planting' }) },
   { when: /\b(report|this week|how did (the|my) jobs)\b/i, tool: 'job_report' },
+  { when: /\b(trust (my|its|the|this) (gps|gnss|position|location)|(gps|position) (reliable|trustworthy))\b/i, tool: 'position_trust' },
   { when: /\b(season|next few weeks|next month)\b/i, tool: 'plan_season' },
   { when: /\b(whole farm|all my fields|everything look)\b/i, tool: 'farm_status' },
   { when: /\b(sun doing|space weather|storm coming|geomagnetic|aurora|solar)\b/i, tool: 'storm_status' },

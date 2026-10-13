@@ -18,6 +18,7 @@ import * as solarwind from '../solarwind.js';
 import * as geomag from '../geomag.js';
 import * as glotec from '../glotec.js';
 import * as roti from '../roti.js';
+import * as interference from '../interference.js';
 import * as crewheat from '../crewheat.js';
 import * as crewday from '../crewday.js';
 import { adviceNow } from '../trade.js';
@@ -99,7 +100,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         if (!found) return say(`I couldn't find ${clean(place, 80)}. Try the nearest town with its state or country.`, { unavailable: true });
         // The lookup that found the town also says what time zone it keeps. Without it a first answer gave
         // "clear until Wed 3 AM UTC" to somebody in Arizona.
-        farm = { ...farm, fields: [{ id: 'trial-field', name: spokenPlace(found), lat: found.lat, lon: found.lon, ...(found.timeZone ? { timeZone: found.timeZone } : {}) }] };
+        farm = { ...farm, fields: [{ id: 'trial-field', name: spokenPlace(found), lat: found.lat, lon: found.lon, ...(found.timeZone ? { timeZone: found.timeZone } : {}), ...(found.countryCode ? { countryCode: found.countryCode } : {}) }] };
         trial = true;
       }
       if (!held.equipment.length && correction) {
@@ -273,6 +274,14 @@ export function register(server: McpServer, farmOf: () => string): void {
         // A storm about to arrive on a job just called clear is not detail. It is said even when the rest waits.
         mustSay.push(sentences(warning)[0]);
       }
+      // What is not the sun: a military GPS test scheduled over the field, or aircraft reporting interference.
+      // Said with a yes and with a no, because a crew told "the sky is quiet" will otherwise blame the forecast.
+      const other = interference.near(f.lat, f.lon, at);
+      const otherSaid = interference.sayAhead(other);
+      if (otherSaid) {
+        text += ` ${otherSaid}`;
+        mustSay.push(sentences(otherSaid)[0]);
+      }
       // The measured half. Everything above reasons from Kp through a table;
       // this is the electron content actually over the field, and the part of it
       // the base station cannot difference away across this rig's baseline. It
@@ -386,6 +395,17 @@ export function register(server: McpServer, farmOf: () => string): void {
         ...(offer ? { offer } : {}),
         ...(mustSay.length ? { mustSay } : {}),
         ...(trial ? { trial: true } : {}),
+        // What is not the sun, with where each fact came from. See interference.ts.
+        ...(otherSaid
+          ? {
+              otherCauses: {
+                gpsTests: other.tests.map((t) => ({ name: t.name, id: t.id, place: t.place, milesAway: Math.round(t.milesAway ?? 0), until: t.end })),
+                aircraftReports: other.reported,
+                satellitesOut: other.satellites.map((x) => x.prn),
+                sources: interference.SOURCES,
+              },
+            }
+          : {}),
         nextAction:
           offer && !trial
             ? { tool: 'watch_jobs', arguments: { action: 'start', operation, field: f.id, equipment: eq.id } }

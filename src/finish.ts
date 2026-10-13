@@ -30,8 +30,40 @@ export function nextFor(name: string, args: Record<string, unknown>, sc: Record<
       return sc.staged === true && typeof sc.name === 'string' ? { tool: 'crew_contact', arguments: { action: 'confirm', name: sc.name } } : null;
     case 'log_job':
       return sc.logged && sc.logged !== false ? { tool: 'job_report', arguments: {} } : null;
-    case 'watch_jobs':
-      return sc.watching === true ? { tool: 'watch_jobs', arguments: { action: 'check' } } : null;
+    case 'watch_jobs': {
+      // A watch just started with nobody to tell: adding somebody is the step that makes it worth having.
+      if (sc.watching === true) {
+        const crew = (sc.crewToEmail as unknown[] | undefined) ?? [];
+        return crew.length ? { tool: 'watch_jobs', arguments: { action: 'check' } } : { tool: 'crew_contact', arguments: { action: 'add' } };
+      }
+      // Something cleared: the question now is that job, asked properly.
+      const clear = (sc.clear as { operation?: string; field?: string }[] | undefined) ?? [];
+      return clear[0]?.operation ? { tool: 'can_i_run', arguments: { operation: clear[0].operation, field: clear[0].field } } : null;
+    }
+    case 'can_i_run':
+      // A job the sky allows, on a registered field and machine: when it is done, it is logged. Said nowhere
+      // aloud, because "shall I log it" before the planter has moved is noise.
+      return sc.go === true && typeof sc.fieldId === 'string' && typeof sc.operation === 'string'
+        ? { tool: 'log_job', arguments: { operation: sc.operation, field: sc.fieldId, equipment: sc.equipmentId } }
+        : null;
+    case 'what_happened': {
+      // Something caused it, the sun or a GPS test: that belongs in the record of the job, with the cause.
+      const other = sc.otherCauses as { gpsTests?: unknown[]; aircraftReports?: unknown } | undefined;
+      const cause = sc.wasTheSun === true ? 'space weather' : other?.gpsTests?.length ? 'a military GPS interference test' : other?.aircraftReports ? 'GPS interference reported by aircraft' : null;
+      return cause && typeof args.operation === 'string' && typeof sc.at === 'string'
+        ? { tool: 'log_job', arguments: { operation: args.operation, ...(typeof sc.field === 'string' ? { field: sc.field } : {}), when: sc.at, note: `Accuracy lost to ${cause}` } }
+        : null;
+    }
+    case 'storm_status': {
+      // A storm running or on its way: which of this farm's jobs it is hurting is the next question.
+      const g = (sc.scales as { g?: number } | undefined)?.g ?? 0;
+      return g >= 1 || sc.incoming ? { tool: 'farm_status', arguments: {} } : null;
+    }
+    case 'position_trust':
+      // Anything short of trust is asked again, with the same position, when the answer says to.
+      return sc.verdict && sc.verdict !== 'trust' && !sc.unavailable ? { tool: 'position_trust', arguments: { ...args } } : null;
+    case 'what_should_i_do':
+      return typeof sc.nextStep === 'number' ? { tool: 'what_should_i_do', arguments: { ...(typeof sc.role === 'string' ? { role: sc.role } : {}), step: sc.nextStep } } : null;
     case 'farm_status': {
       // The job the storm is hurting most is the one worth asking about by itself.
       const rows = (sc.rows as { go?: boolean; limitedBy?: string; operation?: string; field?: string; equipment?: string }[] | undefined) ?? [];
@@ -49,7 +81,7 @@ export function finish(name: string, args: unknown, result: Result): Result {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(sc)) if (!INTERNAL.includes(k)) out[k] = v;
   // A tool that already named its next step knows better than this table does.
-  if (out.nextAction === undefined) {
+  if (out.nextAction == null) {
     const next = nextFor(name, (args ?? {}) as Record<string, unknown>, out);
     if (next) out.nextAction = next;
   }

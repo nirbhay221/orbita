@@ -69,7 +69,7 @@ console.log('\nWatching a blocked job');
 seedKp(stormThenClear);
 const watching = text(await tools.watch_jobs({ action: 'start', operation: 'planting', field: 'north' }));
 check('a blocked job is watched, with the forecast time it clears', /Watching planting on North 40\. On the current forecast it clears/.test(watching), watching);
-check('...and without a crew it says how to hear about it', /add a crew member/.test(watching), watching);
+check('...and without a crew it says how to hear about it', /Want somebody on the crew emailed when it clears\? Tell me who\./.test(watching), watching);
 check('the watch is stored once', store.get('crew-test').waiting.length === 1);
 await tools.watch_jobs({ action: 'start', operation: 'planting', field: 'north' });
 check('watching the same job again does not duplicate it', store.get('crew-test').waiting.length === 1);

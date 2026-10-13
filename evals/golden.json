@@ -215,6 +215,14 @@
       "tool": "plan_season"
     },
     {
+      "say": "I am a delivery robot at 46.88, -96.79. Can I trust my GPS position right now?",
+      "tool": "position_trust"
+    },
+    {
+      "say": "before my drone agent acts, is GPS reliable at latitude 34.0 longitude -81.03",
+      "tool": "position_trust"
+    },
+    {
       "_comment": "Out of scope. A host that invents a tool here is worse than one that says it cannot help, because a wrong tool answers confidently.",
       "say": "order me a new seed drill",
       "tool": null

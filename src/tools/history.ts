@@ -27,6 +27,7 @@ import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
 import { sendEmail, emailConfigured } from '../notify.js';
 import { reachable } from '../consent.js';
 import { adviceAfter, notTheSun } from '../trade.js';
+import * as interference from '../interference.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
   NOAA_DOWN,
@@ -45,6 +46,9 @@ import {
   namesOf,
   say,
 } from './shared.js';
+
+/** What was checked and ruled out is said before what to look at; what could not be checked, after it. */
+const lookAt = (ruled: string, advice: string): string => (/^I could not check/.test(ruled) ? `${advice} ${ruled}` : `${ruled} ${advice}`).trim();
 
 export function register(server: McpServer, farmOf: () => string): void {
   /* ---------------------------------------------------------------- *
@@ -133,15 +137,24 @@ export function register(server: McpServer, farmOf: () => string): void {
           const when2 = `${clock(new Date(other.sl.time).getTime())} to ${clock(new Date(other.sl.time).getTime() + BLOCK)}`;
           said = `At that time the sky was inside tolerance, Kp ${here.kp.toFixed(1)}. It was outside it ${when2}, Kp ${other.sl.kp.toFixed(1)}, so if the trouble ran into that stretch, that part was the sun. ` + adviceAfter(op0, true, clock(new Date(other.sl.time).getTime()), clock(new Date(other.sl.time).getTime() + BLOCK));
         } else {
-          said = `It was not the sun. On ${dayLabelLocal}, ${span}, Kp was only ${here.kp.toFixed(1)}, well inside tolerance, and quiet for three hours either side. ${notTheSun(eq.correction)}`;
+          said = `It was not the sun. On ${dayLabelLocal}, ${span}, Kp was only ${here.kp.toFixed(1)}, well inside tolerance, and quiet for three hours either side.`;
         }
+        // The other published causes: a military GPS test, a satellite out, aircraft reporting interference.
+        const other = await interference.nearThen(f.lat, f.lon, new Date(moment));
+        const sunToo = !mine.v.go && mine.v.limitedBy === 'space_weather';
+        const otherSaid = interference.sayThen(other, sunToo);
+        if (otherSaid) said += ` ${otherSaid}`;
+        else if (mine.v.go && !bad.length) said += ` ${lookAt(interference.ruledOut(other), notTheSun(eq.correction))}`;
+        const mustSay = mine.v.go && !bad.length && !otherSaid ? [notTheSun(eq.correction).split('. ')[0] + '.'] : otherSaid ? [otherSaid.split('. ')[0].replace(/\.?$/, '.')] : [];
         return say(said.trim(), {
+          mustSay,
           historical: true,
           byHour: true,
           at: new Date(moment).toISOString(),
           block: { start: new Date(start).toISOString(), kp: here.kp, go: mine.v.go },
           around: judged.map((j) => ({ time: j.sl.time, kp: j.sl.kp, go: j.v.go })),
           wasTheSun: !mine.v.go && mine.v.limitedBy === 'space_weather',
+          otherCauses: { gpsTests: other.tests.map((t) => ({ name: t.name, place: t.place, milesAway: Math.round(t.milesAway ?? 0) })), satellitesOut: other.satellites.map((x) => x.prn), aircraftReports: other.reported, unchecked: other.unchecked, sources: interference.SOURCES },
           field: f.name,
           equipment: eq.name,
           correction: eq.correction,
@@ -189,10 +202,12 @@ export function register(server: McpServer, farmOf: () => string): void {
         hour: 'numeric', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short',
       });
 
+      const otherFound = await interference.nearThen(f.lat, f.lon, at);
+      const otherDay = interference.sayThen(otherFound, !worst.go);
       const text = worst.go
         ? `Space weather was not the problem on ${dayLabel}. Kp peaked at only ${peak.kp.toFixed(1)}, ` +
           `and your drift would have stayed around ${worst.expectedErrorM < 0.076 ? (worst.expectedErrorM * 39.37).toFixed(1) : Math.round(worst.expectedErrorM * 39.37)} inches all day. ` +
-          `Something else caused that. ${notTheSun(eq.correction)}`
+          (otherDay ? `${otherDay} ${notTheSun(eq.correction)}` : `Something else caused that. ${lookAt(interference.ruledOut(otherFound), notTheSun(eq.correction))}`)
         : `That was the sun. On ${dayLabel} Kp peaked at ${peak.kp.toFixed(1)} (${worst.gScale}) around ` +
           `${peakTime}, ` +
           // A storm that strong does not move a fix by so many inches. Receivers lose it. See evals/receivers.mjs.
@@ -213,6 +228,10 @@ export function register(server: McpServer, farmOf: () => string): void {
         : '';
       return say(text + jobsLine, {
         ...worst,
+        // The same shape the hour-by-hour answer gives, so what follows it is worked out the same way.
+        wasTheSun: !worst.go && worst.limitedBy === 'space_weather',
+        at: at.toISOString(),
+        otherCauses: { gpsTests: otherFound.tests.map((t) => ({ name: t.name, place: t.place, milesAway: Math.round(t.milesAway ?? 0) })), satellitesOut: otherFound.satellites.map((x) => x.prn), aircraftReports: otherFound.reported, unchecked: otherFound.unchecked, sources: interference.SOURCES },
         loggedJobs: logged,
         date: dayKey,
         field: f.name,
@@ -306,7 +325,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         const when = win ? ` On the current forecast it clears ${localTime(win.start, f.timeZone)}.` : ' Nothing clears in the three day forecast yet.';
         const tell = crew.length
           ? ` I'll email ${crew.join(' and ')} when it does${emailConfigured() ? '' : ', once email is switched on for this server'}.`
-          : " Ask me whether anything is clear yet, or add a crew member and I'll email them when it clears.";
+          : " Ask me whether anything is clear yet. Want somebody on the crew emailed when it clears? Tell me who.";
         return say(`Watching ${job} on ${f.name}.${when}${tell}`, {
           watching: true,
           window: win,

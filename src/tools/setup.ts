@@ -76,6 +76,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       // while answering a question about the field.
       let where: { lat: number; lon: number } | null = given.lat != null && given.lon != null ? { lat: given.lat, lon: given.lon } : null;
       let zone: string | undefined;
+      let country: string | undefined;
       let near = '';
       if (!where) {
         const place = clean(given.place ?? '', 80);
@@ -91,10 +92,11 @@ export function register(server: McpServer, farmOf: () => string): void {
         // The lookup that found the town also says what time zone it keeps. Without this the first answers
         // about a new field gave times in UTC until the separate zone lookup came back.
         zone = found.timeZone ?? undefined;
+        country = found.countryCode ?? undefined;
       }
       const { place: _place, ...rest } = given;
       const args = { ...rest, lat: where.lat, lon: where.lon };
-      const field = { ...args, id: newId('field'), name: clean(args.name), crop: args.crop ? clean(args.crop, 40) : undefined, ...(zone ? { timeZone: zone } : {}) };
+      const field = { ...args, id: newId('field'), name: clean(args.name), crop: args.crop ? clean(args.crop, 40) : undefined, ...(zone ? { timeZone: zone } : {}), ...(country ? { countryCode: country } : {}) };
       // A name that cleans to nothing cannot be asked for by voice again, and it used to match every question.
       if (!/[a-z0-9]/i.test(field.name)) {
         return say('I need a name for the field that I can say back to you, like North 40 or Lot 12. What is it called?', { added: false, reason: 'name' });

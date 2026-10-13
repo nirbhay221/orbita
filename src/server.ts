@@ -7,6 +7,8 @@
 
 import { chooseByWords } from './rules.js';
 import * as roti from './roti.js';
+import * as interference from './interference.js';
+import * as particles from './particles.js';
 import { speakErrorsPlainly } from './plainly.js';
 import express from 'express';
 import { readFileSync } from 'node:fs';
@@ -95,6 +97,13 @@ function farmFrom(req: express.Request): string {
 }
 
 /* What this farm has already saved, as counts and never names, so a host calls the tool instead of asking. */
+/*
+ * Alexa+ is in early access in Brazil, Mexico, Germany, France, Italy, Spain and India, and the host is itself a
+ * language model that answers in the customer's language. The answers here are written in English, so the host is
+ * told which language the farm most likely speaks, and to keep every number and time exactly as given.
+ */
+const LANGUAGE: Record<string, string> = { DE: 'German', AT: 'German', FR: 'French', ES: 'Spanish', MX: 'Spanish', AR: 'Spanish', CO: 'Spanish', IT: 'Italian', BR: 'Portuguese', PT: 'Portuguese', IN: 'Hindi or English' };
+
 function instructionsFor(farmId: string): string {
   const base =
         'This add-on turns the NOAA space weather forecast into decisions. It tells field crews, surveyors, drone ' +
@@ -111,9 +120,14 @@ function instructionsFor(farmId: string): string {
     f.equipment.length ? `${f.equipment.length} machine${f.equipment.length === 1 ? '' : 's'}` : '',
     f.crew.length ? 'a crew list' : '',
   ].filter(Boolean);
+  const codes = [...new Set(f.fields.map((x) => (x.countryCode ?? '').toUpperCase()).filter(Boolean))];
+  const lang = codes.length === 1 ? LANGUAGE[codes[0]] : undefined;
+  const say = lang
+    ? ` This farm's fields are where ${lang} is spoken: unless the customer speaks to you in English, give the answer in ${lang}, translating it faithfully, and keep every number, time and correction name (RTK, PPP, SBAS) exactly as given.`
+    : '';
   return known.length
-    ? `${base} This farm has already saved ${known.join(' and ')}. Use them: do not ask which field, where it is, or what correction it runs.`
-    : `${base} This farm has not saved anything yet; a tool will say what it needs.`;
+    ? `${base}${say} This farm has already saved ${known.join(' and ')}. Use them: do not ask which field, where it is, or what correction it runs.`
+    : `${base}${say} This farm has not saved anything yet; a tool will say what it needs.`;
 }
 
 function build(farmId: string): McpServer {
@@ -578,6 +592,9 @@ await geomag.start();
 // Where the RTK base stations actually are, so baselineKm can be measured rather
 // than remembered. Six hourly: the directory changes as volunteers come and go.
 await Promise.allSettled([glotec.start(), swpcplus.start(), aurora.start(), ntrip.start(), roti.start()]);
+// Not awaited: a slow PDF at the Coast Guard must not hold the server from answering.
+void interference.start();
+void particles.start();
 // The crew's half of the same decision: the heat over each field for the hours a job would run. Not awaited,
 // because nothing about whether the receiver holds its line should wait on a weather forecast.
 void crewheat.start();

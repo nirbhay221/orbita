@@ -23,7 +23,8 @@ import { chooseOne, canAsk } from '../elicit.js';
 import * as season from '../season.js';
 import * as store from '../store.js';
 import * as history from '../history.js';
-import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
+import { advise, ROLES, ROLE_HINT, ORBITS, type Role } from '../playbook.js';
+import * as particles from '../particles.js';
 import { sendEmail, emailConfigured } from '../notify.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
@@ -52,6 +53,10 @@ export function register(server: McpServer, farmOf: () => string): void {
         'run (use can_i_run) or for the current Kp (use storm_status).',
       inputSchema: {
         role: z.enum(ROLES).optional().describe(ROLE_HINT),
+        orbit: z
+          .enum(ORBITS)
+          .optional()
+          .describe('For satellites and crews, where they are, when said: low for low Earth orbit or a space station, medium for navigation satellites such as GPS or Galileo, high for geostationary, beyond for the Moon or deep space'),
         step: z
           .number()
           .int()
@@ -60,7 +65,7 @@ export function register(server: McpServer, farmOf: () => string): void {
           .describe('Where to continue from when the customer asks for the rest; use nextStep from the last answer'),
       },
     },
-    async ({ role, step }) => {
+    async ({ role, step, orbit }) => {
       const id = farmOf();
       const farm = store.get(id);
       const chosen = (role ?? farm.role) as Role | undefined;
@@ -90,8 +95,28 @@ export function register(server: McpServer, farmOf: () => string): void {
         },
         gmLat,
         step ?? 0,
+        orbit,
       );
-      return say(advice.spoken, { ...advice, geomagneticLatitude: gmLat, dataAgeMinutes: swpc.ageMinutes() });
+      // What the GOES satellites measure this minute, for the two roles in orbit. Said on the first page only,
+      // after the advice, and never when the reading is missing or old. See particles.ts.
+      const live = particles.now();
+      const measured =
+        (step ?? 0) > 0 || !live
+          ? ''
+          : chosen === 'crewed_spaceflight'
+            ? particles.sayCrew(live)
+            : chosen === 'satellite_operator'
+              ? [orbit === 'low' ? '' : orbit === 'medium' ? particles.sayHighOrbit(live).replace('Measured now at geostationary orbit,', 'Measured now at geostationary orbit, the nearest reading there is for medium orbit,') : particles.sayHighOrbit(live), particles.sayLaunch(live)].filter(Boolean).join(' ')
+              : '';
+      const spoken = measured ? `${advice.spoken} ${measured}` : advice.spoken;
+      return say(spoken, {
+        ...advice,
+        spoken,
+        ...(orbit ? { orbit } : {}),
+        ...(measured && live ? { measuredNow: live, mustSay: [measured.split('. ')[0] + '.'] } : {}),
+        geomagneticLatitude: gmLat,
+        dataAgeMinutes: swpc.ageMinutes(),
+      });
     },
   );
 

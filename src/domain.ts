@@ -40,6 +40,8 @@ export type Field = {
   baselineKm?: number;
   /** IANA timezone, looked up once when the field is added, so times are said where the field is. */
   timeZone?: string;
+  /** ISO country code from the same lookup, "BR". Used only to tell the host which language the farm speaks. */
+  countryCode?: string;
 };
 
 export type Equipment = {
@@ -271,23 +273,39 @@ const distance = (m: number) => (m >= 1 ? `${m.toFixed(1)} metres` : inches(m));
  * measurements put positioning errors above 40 metres between 21:00 and midnight local time, and RTK and PPP
  * lose their fix first.
  *
- * So for a field within 20 degrees of the geomagnetic equator, between 19:00 and 01:00 local solar time, in the
- * equinox seasons (February to April, August to October), a carrier-phase job is a hold. Outside those hours
- * and months it is not ruled out, only much less common, and nothing is said. This is a climatology, not a
- * measurement: where the measured sky in roti.ts has enough links overhead, that decides instead.
+ * The season depends on longitude. Bubbles grow most when the sunset line lies along the magnetic field lines
+ * (Tsunoda's alignment), and the field's tilt differs around the world. Over South America (90W to 30W), where
+ * the declination tilts west, they peak around the December solstice and are rare in June: October to March.
+ * Over Africa, India and Southeast Asia they peak at the equinoxes: February to April and August to October.
+ * Over the Pacific the June solstice is active as well. Satellite climatologies (DMSP over a full solar cycle,
+ * COSMIC radio occultation, ICON) all show this pattern.
+ *
+ * So for a field within 20 degrees of the geomagnetic equator, between 19:00 and 01:00 local solar time, in that
+ * longitude's season, a carrier-phase job is a hold. Outside those hours and months it is not ruled out, only
+ * much less common, and nothing is said. This is a climatology, not a measurement: where the measured sky in
+ * roti.ts has enough links overhead, that decides instead.
  *
  * Sources:
  *   https://link.springer.com/article/10.1007/s12145-023-01070-z (scintillation over India)
  *   https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2024SW004217 (scintillation and precise positioning)
+ *   https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2002JA009452 (DMSP bubbles over a solar cycle)
+ *   https://angeo.copernicus.org/articles/38/611/2020/ (COSMIC bubble climatology by season and longitude)
  */
+type BubbleSeason = { months: number[]; words: string };
+export function bubbleSeason(lon: number): BubbleSeason {
+  const x = ((lon + 540) % 360) - 180;
+  if (x >= -90 && x < -30) return { months: [10, 11, 12, 1, 2, 3], words: 'most of all from October to March over South America' };
+  if (x >= -30 && x < 150) return { months: [2, 3, 4, 8, 9, 10], words: 'most of all around the equinoxes' };
+  return { months: [2, 3, 4, 5, 6, 7, 8, 9, 10], words: 'most of all from the March equinox through the September one over the Pacific' };
+}
+
 export function equatorialEvening(field: Field, at: Date | undefined): boolean {
   if (!at || Number.isNaN(at.getTime())) return false;
   if (Math.abs(geomagneticLatitude(field.lat, field.lon)) > 20) return false;
   const solarHour = (((at.getUTCHours() + at.getUTCMinutes() / 60 + field.lon / 15) % 24) + 24) % 24;
   const evening = solarHour >= 19 || solarHour < 1;
   const month = at.getUTCMonth() + 1;
-  const equinox = (month >= 2 && month <= 4) || (month >= 8 && month <= 10);
-  return evening && equinox;
+  return evening && bubbleSeason(field.lon).months.includes(month);
 }
 
 export function assess(
@@ -316,7 +334,7 @@ export function assess(
     limitedBy = 'space_weather';
     reason =
       `Hold off ${label} until after midnight or the morning. Near the magnetic equator the hours after sunset bring plasma bubbles ` +
-      `that break up satellite signals, most of all around the equinoxes, and ${eq.correction.toUpperCase()} loses its fix first. ` +
+      `that break up satellite signals, ${bubbleSeason(field.lon).words}, and ${eq.correction.toUpperCase()} loses its fix first. ` +
       `That happens on quiet days too, so Kp ${kp.toFixed(1)} does not rule it out.`;
   } else if (go) {
     limitedBy = 'clear';

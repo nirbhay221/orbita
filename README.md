@@ -34,7 +34,7 @@ vessel positioning, mining, fleets, aurora watchers and households get advice fo
 
 The Latin `orbita` meant a track cut into the ground by a wheel. Built for the
 [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com), Alexa+ track, plus the Open
-Source and AWS Builder mini challenges. Self-hosted MCP server, spec 2025-11-25, Streamable HTTP, 13 tools by
+Source and AWS Builder mini challenges. Self-hosted MCP server, spec 2025-11-25, Streamable HTTP, 15 tools by
 default, with an MCP Apps panel for the Echo Show.
 
 ## What is real, and what is not
@@ -43,10 +43,11 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, 13 tools by default | **Real and deployed** on AWS, behind account linking. 1,710 automated checks, run on every push |
+| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 1,829 automated checks, run on every push |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
 | The sky over the field, measured | **Real, live**: the German Aerospace Center's one-minute disturbance readings (ROTI) from about 4,000 satellite links worldwide, read within 400 km of the field. Free for scientific use; commercial use needs DLR's written permission |
 | Ground magnetometers | **Real** (USGS), **United States only** |
+| What is not the sun: GPS tests, satellite outages, aircraft-reported interference | **Real, live**: the Coast Guard's GPS testing schedule and satellite outage file, and GPSJAM's daily aircraft reports. The testing schedule covers the United States only |
 | The past: "what happened at 3 pm on May 10 2024" | **Real**, from the archived Kp record, by the hour |
 | Crew heat | **Real**: Open-Meteo's hourly forecast over each field |
 | Kp to expected drift | **A model**, anchored to three published measurements and scored against real receivers at four sites for the 2024 season ([BACKTEST.md](BACKTEST.md)) |
@@ -68,7 +69,7 @@ This file is long because the reasoning is the work. If you are evaluating the p
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
 Free NOAA, USGS and DLR products, no API keys for the data. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 1,710 checks.
+external is called inside a turn. `npm test` runs 1,829 checks.
 
 ## The problem
 
@@ -400,20 +401,146 @@ Brazil, most of Africa. There the damage does not come down from the pole in a s
 every evening, when the equatorial ionosphere breaks into plasma bubbles that scintillate GNSS signals hard enough
 to break carrier-phase tracking, strongest around the equinoxes and near solar maximum, gone after midnight.
 Published measurements put positioning errors above 40 metres between 21:00 and midnight local time. So for a
-field in that band, a centimetre job on RTK or PPP between 19:00 and 01:00 local solar time in the equinox seasons
-is a hold, whatever Kp says, and a clear window closes before that evening rather than running through it
+field in that band, a centimetre job on RTK or PPP between 19:00 and 01:00 local solar time in that longitude's
+season is a hold, whatever Kp says, and a clear window closes before that evening rather than running through it
 (`equatorialEvening` in `src/domain.ts`). It is a nightly pattern, not a storm, so the crew is never emailed
 about it as one, and the measured sky in `src/roti.ts` decides instead wherever enough links are overhead. GAGAN,
 India's SBAS, counts as SBAS; NavIC alone counts as no correction.
+
+The season depends on longitude, because bubbles grow most when the sunset line lies along the magnetic field
+lines. Over South America, where the field tilts west, they peak around the December solstice: October to March,
+which is planting season in Mato Grosso. Over Africa, India and Southeast Asia they peak at the equinoxes. An
+equinox-only rule said nothing to a Brazilian farm in November, its worst month (`bubbleSeason` in
+`src/domain.ts`, from the DMSP and COSMIC satellite climatologies). A farm whose fields are in Brazil, Mexico,
+Germany, France, Italy, Spain or India also has the host told which language it most likely speaks.
 
 Rain does not move a fix: the signals pass through it, and RTK holds its centimetres in a downpour. What rain does
 is wash a spray off before it has dried (most products need one to four dry hours) and ground a drone. So for
 spraying and drone jobs, rain forecast over the field in the hours the job would run is said with when, and with
 "GPS accuracy is not affected by the rain" (`rainAhead` in `src/crewheat.ts`).
 
+## When it is not the sun
+
+A receiver loses its fix for reasons that have nothing to do with space weather, and a crew told "the sky is
+quiet" then blames the forecast or the dealer. Three of those reasons are published, and are checked
+(`src/interference.ts`):
+
+| Cause | Source | How it is used |
+|---|---|---|
+| **Planned military GPS interference tests** | US Coast Guard Navigation Center, GPS testing schedule (public domain) | Each test's centre, dates and reach at 50 feet above the ground. A field inside that reach while a test runs is told, with a yes or a no: in March 2026, exercises on the North Carolina coast took auto-steer down on farms that had no warning |
+| **GPS satellites out of service** | The GPS control segment's Satellite Outage File, via NAVCEN (public domain) | Past, current and scheduled outages. Said when somebody asks what went wrong, as something a multi-constellation receiver would not notice |
+| **Interference aircraft reported** | GPSJAM by John Wiseman, from airplanes.live and ADS-B Exchange | The share of aircraft over the area that reported low navigation accuracy, by day. Above ten percent is said as a sign of jamming or interference nearby. It is a day behind, measured at altitude, and does not say the cause, and the answer says it that way |
+
+```
+"Alexa, can I plant the Congaree field?"
+
+"Clear for planting. Expected drift is about 0.8 inches, inside the 2.0 inches it needs, at Kp 1.3.
+ One thing that is not the sun: a military GPS interference test near Columbia, SC is scheduled through
+ October 17 and can reach receivers on the ground out to about 36 miles; this field is about 33 miles
+ from its centre, so expect dropouts while it runs."
+```
+
+Asked what went wrong on a quiet day, the answer says what was ruled out ("no military GPS test was scheduled
+over the field, no GPS satellite was out and aircraft reported nothing unusual") before what nobody publishes: the
+correction link, the base station, a cable, trees. A source that could not be read is "I could not check", never
+"nothing there".
+
+GPSJAM publishes no licence. Its daily file is read live, never stored in this repository, and credited in every
+answer's data; `ORBITA_GPSJAM=off` turns it off. Anyone running this commercially should ask its author first.
+
+## For an agent that acts on a position
+
+Every other tool here answers a person about a job. More and more of what depends on a GNSS position is not a
+person: a drone's flight controller, a tractor's autosteer, a delivery robot, an agent dispatching a fleet. Those
+act on the number they are given. The dangerous case is not a lost fix, which a machine notices. It is a fix that
+still reports itself good while it is wrong: scintillation in a storm, a plasma bubble after sunset near the
+magnetic equator, a jamming exercise. DHS's resilient positioning guidance for critical infrastructure says the
+same in its own words: do not assume the position, verify it against something independent.
+
+`position_trust` takes a latitude and longitude (or a saved field), the accuracy the action needs, and how the
+receiver is corrected, and returns one word with its reasons (`src/tools/agents.ts`):
+
+| Verdict | Meaning | What the agent is told to do |
+|---|---|---|
+| `trust` | The expected error is inside what was asked for, and nothing published says otherwise | Go on, ask again in 30 minutes |
+| `verify` | Probably fine, and something says to check first: a military GPS test over the point, aircraft reporting interference, a disturbed sky, a storm an hour upstream, or a source that could not be read | Check against inertial sensors, a camera, a landmark or a second constellation, and stop if they disagree |
+| `do_not_trust` | The expected error is outside what was asked for, or receivers there lose their fix | Hold the action, or fall back to something that does not depend on GPS |
+
+It is every check Orbita has in one call: the Kp forecast and nowcast, the measured sky overhead, the equatorial
+evening season, planned military GPS tests, aircraft-reported interference and the age of the feeds themselves.
+A source that could not be read moves the answer to `verify`, never to `trust`. The structured result carries
+each check, so an agent can log why it stopped.
+
+```
+position_trust { lat: 46.88, lon: -96.79 }
+
+"Trust it. The expected error is about 2.5 metres, inside the 5.0 metres needed, at Kp 1.0, and nothing
+ published says otherwise."
+```
+
+## Data centres and AI infrastructure
+
+One of seventeen roles `what_should_i_do` answers: somebody who runs a data centre, a cloud region or a GPU cluster.
+A storm does not reach servers on the ground, and nothing here claims it does: nobody has documented a
+geomagnetic storm damaging computing hardware at ground level. It reaches what the building depends on, and each
+line of advice names which and where it comes from (`data_centre` in `src/playbook.ts`):
+
+* **The grid.** Currents driven into long transmission lines can trip or damage transformers. Check fuel and the
+  transfer to backup power; at G5, consider running on backup to isolate the site (Uptime Institute).
+* **GPS time.** Clocks that follow GPS should be ready to hold over on their own oscillator (NOAA's scales, DHS).
+* **Satellite links.** Starlink reported degraded service in the May 2024 storm.
+* **Long-haul routes.** Two published studies disagree about undersea cables, one finding voltage margin and the
+  other finding the repeaters exposed, so the advice is not to depend on one route.
+
+Chips in orbit are a different matter, where particle strikes flip bits; that is the satellite operator's role.
+
+## In orbit: satellites by where they fly, launches, and crews
+
+The satellite advice was written for low orbit, where a storm means drag. It now
+depends on where the spacecraft is, and a role was added for the people in one (`src/playbook.ts`,
+`src/particles.ts`).
+
+* **Low, medium or high orbit.** Said with an orbit, a low orbit operator hears drag, conjunction warnings and
+  fuel. A navigation satellite operator in medium orbit hears the outer radiation belt, whose electrons a storm can
+  raise ten thousand times, and that NOAA's reading is from geostationary orbit, the nearest there is. A
+  geostationary operator hears charging, because there is no drag up there. Energetic electrons build
+  charge inside insulation until it discharges, which is why NOAA alerts when electrons above 2 MeV pass 1,000 at
+  its GOES satellites. That number is read live and said against the line: "Measured now at geostationary orbit,
+  electrons above 2 MeV are at 153, under the 1,000 where NOAA alerts for charging building up inside spacecraft."
+* **A launch.** The published example of a rule is the Webb telescope's: no go from twelve hours to ten minutes
+  before lift-off with a warning out for protons above 100 MeV, or with the flux above 50 MeV past 5. The measured
+  flux is said against it, with what such a rule cannot do, which is predict a storm.
+* **Crews** (`crewed_spaceflight`). NOAA's scale recommends astronauts outside the vehicle avoid the radiation
+  from S3 and calls the hazard unavoidable at S4, so in an S3 storm the first thing said is to bring anyone
+  outside back in. Protons above about 10 MeV get through a suit and about 100 MeV get inside a spacecraft
+  (NASA's radiation group), and both are read live. A station crew is told when the magnetic field does not
+  shield them, the high latitude passes and the South Atlantic Anomaly; a crew near the Moon is told there is no
+  field in the way and to shelter on the first threshold. The Artemis II shelter, built inside Orion from stowed
+  equipment in about half an hour, is the published example.
+
+**A spacecraft asking for itself.** `position_trust` takes an altitude, and then answers for a spacecraft in the
+same three words (`src/spacecraft.ts`). In orbit there are two positions to doubt. The orbit that was predicted:
+in low orbit a storm raises drag, NOAA names it from G2, errors reach several kilometres within a day, and after
+May 2024 the UK's space operations centre took about two days to trust predictions again, so G2 is verify and G4
+is do not trust. And the fix from the satellite's own GPS receiver: ESA's Swarm satellites lost their signal
+almost only over the magnetic equator in the hours after sunset and near the poles during auroral activity, so
+those passes are verify on a quiet day too. Above low orbit there is no drag, and the answer turns on charging and
+on protons, with S4 the level at which NOAA expects star trackers to fail.
+
+```
+position_trust { altitudeKm: 420, lat: 46.9, lon: -96.8 }      in a G4 storm
+
+"Do not trust it. A G4 storm is running: an orbit predicted before it is stale, with errors of several
+ kilometres within a day, and after May 2024 it took about two days before predictions could be trusted
+ again. Do not act on an orbit predicted before the storm: get fresh tracking first."
+```
+
+Flight rules are not public, and none is stated here. Each line says what a published source says and that the
+call is the flight director's and the flight surgeon's.
+
 ## Tools
 
-Thirteen tools by default. Setting up a farm is one tool, `my_farm`, because tool choice gets worse as the list
+Fifteen tools by default. Setting up a farm is one tool, `my_farm`, because tool choice gets worse as the list
 grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are listed instead.
 
 **Answers**
@@ -429,6 +556,8 @@ grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are liste
   explains a job that went badly, in the field's own time. When it was not the sun, it says what to check instead:
   the base station and correction link, convergence, the correction satellite, trees and buildings
 * `plan_season` a longer look across the weeks ahead, as a task that reports back
+* `position_trust` is for a machine, not a person: whether a GPS position can be trusted at a place right now, as
+  one of three verdicts an agent can branch on. See "For an agent that acts on a position" below
 * `what_can_you_do` answers the customer who asks what this is
 * `tell_me_more` the rest of the last answer
 
@@ -452,8 +581,13 @@ grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are liste
 * `my_farm` a field by the nearest town, anywhere in the world, and a machine by the correction it runs, both in
   one sentence; or takes one off, or everything, only when asked a second time
 
-**Published only with `ORBITA_SCOPE=all`:** `what_should_i_do` (advice for satellite, grid, airline, HF, timing,
-pipeline, drilling, rail, drone, aurora and household listeners) and `what_else_is_affected`.
+**Everyone else a storm reaches**
+* `what_should_i_do` is one tool for seventeen kinds of operator: satellites (by orbit), crewed spaceflight, the
+  power grid, data centres and AI infrastructure, flights, HF radio, GPS timing, pipelines, drilling, rail, a
+  vessel holding position, mining, fleets, drones, aurora watchers and households. It was published only with
+  `ORBITA_SCOPE=all` until it was noticed that this left every one of them unanswerable on the deployed server
+
+**Published only with `ORBITA_SCOPE=all`:** `what_else_is_affected`.
 
 Every tool declares what it does to the world, in the annotations the specification carries. A test fails the build
 if a new tool arrives without them, or if a writing tool is not idempotent without that being a decision someone
@@ -538,7 +672,7 @@ Or without installing Node at all:
 docker build -t orbita . && docker run -p 8788:8788 orbita
 ```
 
-`npm test` runs everything, 1,710 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 1,829 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
@@ -894,11 +1028,25 @@ matters most: 79 percent of outdoor workers who died of heat were in their first
 * **No setup to get a first answer.** "Can I plant near Fargo on RTK" is answered for that town and that correction with
   nothing registered, and ends by offering to remember it. A field is added by its nearest town; coordinates are optional.
 * **One story by default.** The default tool set is the field job: can it run, when does it clear, watch it, tell the crew,
-  log it, report it. The advice for satellite operators, grids and other roles is published only with `ORBITA_SCOPE=all`.
+  log it, report it, plus one tool for everyone else a storm reaches and one for a machine asking about its position.
+  The list of everything else a storm touches is published only with `ORBITA_SCOPE=all`.
 * **Answers hand back a handle.** An answer about a job carries `fieldId` and `equipmentId`, every tool that takes a
   field or a machine accepts them, and they still find the field after it is renamed.
 * **An answer ends on the next step.** A blocked job that will clear ends with "Want me to watch it and tell you when it
   clears?", and the structured result names the tool call that does it.
+* **One request, several steps.** A job is not one question. Every answer carries the chain it is on (`flow` in the
+  structured result, `src/flow.ts`): what has just been done, the step that follows, and the ones after. A host can
+  run them from one request or offer them one at a time.
+
+  | It starts with | and runs on to |
+  |---|---|
+  | "Can I plant?" when the sky says no | when it clears, watching it, "Want somebody on the crew emailed when it clears?", then the job itself once it has |
+  | "Can I plant?" when the sky says yes | logging the job on that field and machine, then the week's report. Nothing is asked aloud before the planter has moved |
+  | "What happened yesterday?" with a cause found | logging the job with the cause written in: space weather, a military GPS test, or interference aircraft reported |
+  | "What is the sun doing?" in a storm | which of the farm's jobs it is hurting, then that job |
+  | a machine told to verify its position | the same call again, when the answer says to |
+
+  A day with no cause found points at nothing and invents no record.
 * **A card that fits the task.** The chart (`ui/window.html`) is for a verdict. A watch list, a job report, a contact
   being confirmed and a sharing code use `ui/card.html`, a card or a list.
 * **A second person.** The owner asks for a one-time code (`share_access`); an operator joins with it from their own

@@ -47,8 +47,8 @@ export type Sky = {
 };
 
 export const ROLES = [
-  'field_crew', 'drone_pilot', 'satellite_operator', 'grid_operator', 'airline',
-  'hf_radio', 'timing', 'pipeline', 'drilling', 'rail', 'maritime_dp', 'mining',
+  'field_crew', 'drone_pilot', 'satellite_operator', 'crewed_spaceflight', 'grid_operator', 'airline',
+  'hf_radio', 'timing', 'data_centre', 'pipeline', 'drilling', 'rail', 'maritime_dp', 'mining',
   'fleet', 'aurora', 'household',
 ] as const;
 export type Role = (typeof ROLES)[number];
@@ -57,11 +57,13 @@ export type Role = (typeof ROLES)[number];
 export const ROLE_HINT =
   'Who is asking, by what they look after. field_crew for farming, surveying, drone mapping or grade control. ' +
   'drone_pilot for flying a drone, UAV or UAS, hobby or commercial. ' +
-  'satellite_operator for running satellites, a constellation, cubesats or spacecraft. ' +
+  'satellite_operator for running satellites, a constellation, cubesats or uncrewed spacecraft, or planning a launch. ' +
+  'crewed_spaceflight for astronauts, a crewed spacecraft or capsule, a space station, a spacewalk, or a mission to the Moon. ' +
   'grid_operator for a power grid, transmission, a utility control room or substations. ' +
   'airline for flight dispatch, pilots, flight crew or flight planning. ' +
   'hf_radio for shortwave, ham or amateur radio, maritime or emergency HF. ' +
-  'timing for GPS time in cell networks, telecom, data centres, trading systems or control systems. ' +
+  'timing for GPS time in cell networks, telecom, trading systems or control systems. ' +
+  'data_centre for running a data centre, a cloud region, servers, a GPU or AI training cluster, or AI infrastructure. ' +
   'pipeline for pipeline integrity, corrosion or cathodic protection surveys. ' +
   'drilling for directional drilling, MWD or wellbore surveys. ' +
   'rail for railway signalling or track circuits. ' +
@@ -139,6 +141,58 @@ const SRC = {
     name: 'IMU and LiDAR collaborative positioning for unmanned mine trucks under weak GNSS conditions, Scientific Reports',
     url: 'https://www.nature.com/articles/s41598-026-52022-8',
   },
+  uptime: {
+    name: 'Uptime Institute, Data centers weather solar storms',
+    url: 'https://journal.uptimeinstitute.com/data-centers-weather-solar-storms/',
+  },
+  dhsPnt: {
+    name: 'DHS, Resilient Positioning, Navigation, and Timing Reference Architecture',
+    url: 'https://www.dhs.gov/sites/default/files/2022-06/22_0609_st_resilient_pnt_ra.pdf',
+  },
+  starlinkMay2024: {
+    name: 'Starlink reports degraded service in the May 2024 storm (The Register)',
+    url: 'https://www.theregister.com/2024/05/13/starlink_solar_storm/',
+  },
+  cablesGoogle: {
+    name: 'Castellanos and others (Google), Solar storms and submarine internet cables',
+    url: 'https://www.datacenterdynamics.com/en/news/google-researchers-confirm-submarine-cables-are-safe-from-solar-storms/',
+  },
+  cablesJyothi: {
+    name: 'Abdu Jyothi, Solar Superstorms: Planning for an Internet Apocalypse, SIGCOMM 2021',
+    url: 'https://ics.uci.edu/~sabdujyo/papers/sigcomm21-cme.pdf',
+  },
+  srag: {
+    name: 'NASA Space Radiation Analysis Group, why space weather matters to crews',
+    url: 'https://srag.jsc.nasa.gov/SpaceWeather/Motivation.cfm',
+  },
+  sragOverview: {
+    name: 'NASA/JSC Space Radiation Analysis Group, overview of operations (Whitman)',
+    url: 'https://cpaess.ucar.edu/sites/default/files/meetings/2017/documents/Whitman-Kathryn-Space-Radiation.pdf',
+  },
+  artemisShelter: {
+    name: 'NASA, To Protect Artemis II Astronauts, NASA Experts Keep Eyes on Sun',
+    url: 'https://science.nasa.gov/missions/artemis/artemis-2/to-protect-artemis-ii-astronauts-nasa-experts-keep-eyes-on-sun/',
+  },
+  s4Jan2026: {
+    name: 'NOAA SWPC, S4 (Severe) Solar Radiation Storm in Progress, 19 January 2026',
+    url: 'https://www.spaceweather.gov/news/s4-severe-solar-radiation-storm-progress-january-19th-2026',
+  },
+  goesElectrons: {
+    name: 'NOAA SWPC, GOES Electron Flux and its alert for deep dielectric charging',
+    url: 'https://www.swpc.noaa.gov/products/goes-electron-flux',
+  },
+  radiationBelts: {
+    name: "Baker and others, Space Weather Effects in the Earth's Radiation Belts, Space Science Reviews",
+    url: 'https://link.springer.com/article/10.1007/s11214-017-0452-7',
+  },
+  glauert: {
+    name: 'Glauert and others, A 30-Year Simulation of the Outer Electron Radiation Belt, Space Weather',
+    url: 'https://nora.nerc.ac.uk/id/eprint/520357/1/Glauert-2018-A--year-simulation-of-the-outer-ele.pdf',
+  },
+  webbLaunch: {
+    name: 'Minow and others (NASA), Space Weather Launch Constraints for JWST',
+    url: 'https://ntrs.nasa.gov/api/citations/20230013623/downloads/Minow_etal_ASEC_2023_presentation.pdf',
+  },
 } satisfies Record<string, Source>;
 
 type Ctx = { expected: Levels };
@@ -149,7 +203,13 @@ export type Action = {
   needs?: { scale: Scale; from: number };
   say: string | ((c: Ctx) => string);
   sources: Source[];
+  /** Said only for this kind of orbit when the caller names one; said to everyone when they do not. */
+  orbit?: Orbit;
 };
+
+/** low is low Earth orbit; medium is where navigation satellites fly; high is geostationary; beyond is the Moon and deep space. */
+export const ORBITS = ['low', 'medium', 'high', 'beyond'] as const;
+export type Orbit = (typeof ORBITS)[number];
 
 type Driver = { scale: Scale; from: (geomagneticLat: number | null) => number };
 
@@ -339,6 +399,7 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
     actions: [
       {
         when: ['watch', 'imminent'],
+        orbit: 'low',
         say: 'Expect orbit predictions to degrade. NOAA says drag changes affect them from G2, and in May 2024 air density at 400 kilometres reached six times normal.',
         sources: [SRC.noaa, SRC.parkerLinares],
       },
@@ -348,12 +409,30 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
         sources: [SRC.laneve],
       },
       {
+        when: ['watch', 'imminent', 'during'],
+        orbit: 'medium',
+        say: 'In medium orbit, where navigation satellites fly, there is no drag; the hazard is the outer radiation belt. Its energetic electrons build charge inside components, and a storm can raise them enormously, ten thousand times in the 2003 Halloween storm. NOAA measures them at geostationary orbit and not in medium orbit, so treat its electron alert as the nearest warning you have.',
+        sources: [SRC.radiationBelts, SRC.glauert, SRC.goesElectrons],
+      },
+      {
+        when: ['watch', 'imminent', 'during'],
+        orbit: 'high',
+        say: 'In geostationary and other high orbits there is no drag to worry about; the problem is charging. Energetic electrons build charge inside insulation until it discharges, which is why NOAA alerts when electrons above 2 MeV pass 1,000 at its GOES satellites. Hold commanding that can wait and watch for phantom commands.',
+        sources: [SRC.goesElectrons, SRC.noaa],
+      },
+      {
+        when: ['watch', 'imminent'],
+        say: 'For a launch, the published example of a rule is the Webb telescope\'s: no go from twelve hours to ten minutes before lift-off with a NOAA warning out for protons above 100 MeV, or with the flux above 50 MeV past 5, because those protons upset avionics on the way up. Such a rule avoids a storm that is already running; it cannot predict one.',
+        sources: [SRC.webbLaunch],
+      },
+      {
         when: ['watch', 'imminent'],
         say: 'Decide now whether a launch or deployment into low orbit should wait. About one in ten operators surveyed held launches in 2024.',
         sources: [SRC.laneve],
       },
       {
         when: ['imminent', 'during'],
+        orbit: 'low',
         say: 'Treat conjunction warnings as low confidence for about three days. In May 2024 collision avoidance was compromised that long, and about half of all active low orbit satellites manoeuvred at once.',
         sources: [SRC.knipp, SRC.parkerLinares],
       },
@@ -376,16 +455,86 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
       },
       {
         when: ['after'],
+        orbit: 'low',
         say: 'Run fresh orbit determination before trusting ephemerides. Storm time orbit forecasts can be off by tens of kilometres, and several low cubesats re-entered early after May 2024.',
         sources: [SRC.knipp],
       },
       {
         when: ['after'],
+        orbit: 'low',
         say: 'Budget propellant to restore station keeping. Putting spacecraft back where they were cost significant fuel after May 2024.',
         sources: [SRC.knipp],
       },
     ],
     quiet: "Nothing in NOAA's three day forecast should change orbit predictions or radiation risk.",
+  },
+
+  /*
+   * People in space. For a crew the scale that matters is S, protons, and the thing that changes with where they
+   * are is how much of the Earth's magnetic field is in the way: a station in low orbit is inside it for most of
+   * each orbit, a crew on the way to the Moon is outside it altogether. NOAA's scale names spacewalks from S3.
+   * NASA's radiation group publishes what gets through a suit and what gets through a hull, and the Artemis II
+   * shelter plan is public. Flight rules themselves are not published, so nothing here states one: each line
+   * says what a published source says, and that the decision is the flight surgeon's and the flight director's.
+   */
+  crewed_spaceflight: {
+    label: 'crewed spaceflight',
+    drivers: [
+      { scale: 'S', from: at(1) },
+      { scale: 'G', from: at(4) },
+    ],
+    actions: [
+      {
+        when: ['watch', 'imminent'],
+        say: 'Plan spacewalks around the forecast. NOAA recommends astronauts outside the vehicle avoid the radiation from S3 and calls the hazard unavoidable at S4. Protons above about 10 MeV get through a spacesuit; it takes about 100 MeV to get inside the spacecraft.',
+        sources: [SRC.noaa, SRC.sragOverview],
+      },
+      {
+        when: ['during'],
+        needs: { scale: 'S', from: 3 },
+        say: 'Bring anyone outside back in and hold spacewalks: this is the level NOAA names for it. The call is the flight director\'s and the flight surgeon\'s.',
+        sources: [SRC.noaa],
+      },
+      {
+        when: ['imminent', 'during'],
+        orbit: 'beyond',
+        say: 'Beyond low Earth orbit there is no magnetic field in the way, so a crew near the Moon or in deep space takes the whole event. Shelter on the first threshold rather than waiting to see how large it gets.',
+        sources: [SRC.srag, SRC.artemisShelter],
+      },
+      {
+        when: ['imminent', 'during'],
+        orbit: 'low',
+        say: 'In low Earth orbit the magnetic field shields the crew for most of each orbit. The exposed stretches are the passes at high latitude and through the South Atlantic Anomaly, so that is when to be in the most shielded module.',
+        sources: [SRC.srag, SRC.sragOverview],
+      },
+      {
+        when: ['watch', 'imminent', 'during'],
+        say: 'Know where the most shielded part of the vehicle is and how long a shelter takes to build. On Artemis II the crew can build one inside Orion from stowed equipment in about half an hour, at a dose rate set in advance, with a lower level that only raises the watch.',
+        sources: [SRC.artemisShelter],
+      },
+      {
+        when: ['imminent', 'during'],
+        say: 'Decide on the alert, not the forecast. The particles from a large event can arrive tens of minutes after the flare, about half an hour on average, and nobody can time one days ahead.',
+        sources: [SRC.sragOverview],
+      },
+      {
+        when: ['during'],
+        needs: { scale: 'G', from: 4 },
+        orbit: 'low',
+        say: 'A station in low orbit also feels the drag: in May 2024 air density at 400 kilometres reached six times normal, so expect to lose altitude faster and plan the reboost.',
+        sources: [SRC.parkerLinares],
+      },
+      {
+        when: ['after'],
+        say: 'Read the crew dosimeters and the cabin sensors and give the dose to the flight surgeon before the next spacewalk is planned.',
+        sources: [SRC.artemisShelter],
+      },
+    ],
+    quiet: 'No solar radiation storm is running or forecast strongly enough to change a spacewalk or send a crew to shelter.',
+    note: {
+      say: 'The last S4 radiation storm was on 19 January 2026, the first since October 2003.',
+      sources: [SRC.s4Jan2026],
+    },
   },
 
   grid_operator: {
@@ -526,6 +675,64 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
       },
     ],
     quiet: 'No storm in the forecast is strong enough to threaten satellite timing.',
+  },
+
+  /*
+   * Data centres and the AI clusters in them. A storm does not reach the servers: a building on the ground is
+   * under the whole atmosphere, and nobody has documented a geomagnetic storm damaging computing hardware at
+   * ground level. It reaches what the building depends on. The grid that feeds it (the Uptime Institute's
+   * guidance), the GPS time its clocks follow (DHS), satellite links at remote sites (Starlink in May 2024) and
+   * the long-haul routes between regions, where two published studies disagree about undersea cables and
+   * agree that the grid at the landing ends is exposed. Each line below says which, and nothing here claims a
+   * chip is at risk.
+   */
+  data_centre: {
+    label: 'data centres and AI infrastructure',
+    drivers: [{ scale: 'G', from: at(3) }],
+    actions: [
+      {
+        when: ['watch', 'imminent', 'during'],
+        say: 'The risk to a data centre or an AI cluster is the grid, not the servers: a storm drives currents into long transmission lines and can trip or damage transformers. Check generator fuel now and that the transfer to backup power has been tested. The Uptime Institute advises more fuel on site ahead of intense solar activity.',
+        sources: [SRC.uptime],
+      },
+      {
+        when: ['watch', 'imminent'],
+        say: 'Grid operators delay their own planned outages and hold reserves through a storm, so expect less margin from the utility, and do not take a power path of your own out for maintenance until it has passed.',
+        sources: [SRC.nercTemplate],
+      },
+      {
+        when: ['imminent', 'during'],
+        say: 'Clocks that follow GPS should be ready to run in holdover on their own oscillator. NOAA expects satellite navigation to be intermittent at G3, degraded for hours at G4 and for days at G5, so know how long your time servers hold before logs and distributed systems drift apart.',
+        sources: [SRC.noaa, SRC.dhsPnt],
+      },
+      {
+        when: ['imminent', 'during'],
+        say: 'Sites and edge devices that reach the network over low orbit satellites should expect degraded service: Starlink reported it in the May 2024 storm, when about half of all active low orbit satellites manoeuvred at once.',
+        sources: [SRC.starlinkMay2024],
+      },
+      {
+        when: ['during'],
+        needs: { scale: 'G', from: 5 },
+        say: 'At G5 the Uptime Institute suggests considering running on backup power to isolate the site from the grid, and warns that an outage from the largest storms can outlast the fuel. That is the case for spreading training and serving across regions and keeping an offline copy of what cannot be rebuilt.',
+        sources: [SRC.uptime],
+      },
+      {
+        when: ['during'],
+        needs: { scale: 'G', from: 4 },
+        say: 'For traffic between continents: a Google study found undersea cables have voltage margin for a once in a century storm and put the risk in the power grids at their landing ends, while an earlier study put it in the cable repeaters. Either way, do not depend on one long-haul route.',
+        sources: [SRC.cablesGoogle, SRC.cablesJyothi],
+      },
+      {
+        when: ['after'],
+        say: 'Check every time source went back to satellite time cleanly before trusting timestamps across systems, top the fuel back up, and ask the utility whether any transformer feeding you alarmed.',
+        sources: [SRC.cisa, SRC.uptime],
+      },
+    ],
+    quiet: 'No storm in the forecast is strong enough to threaten the grid, the satellite timing or the satellite links a data centre depends on.',
+    note: {
+      say: 'Servers on the ground are not what a storm reaches: it is the grid, GPS time and satellite links they depend on. Chips in orbit are different, where particle strikes flip bits.',
+      sources: [SRC.uptime],
+    },
   },
 
   pipeline: {
@@ -783,7 +990,7 @@ export type Advice = {
  * `step` continues a longer list when the customer asks for the rest, because
  * certification caps what is read aloud and no one holds nine steps in their head.
  */
-export function advise(role: Role, sky: Sky, geomagneticLat: number | null, step = 0): Advice {
+export function advise(role: Role, sky: Sky, geomagneticLat: number | null, step = 0, orbit?: Orbit): Advice {
   const pb = PLAYBOOKS[role];
   const readings = pb.drivers.map((d) =>
     d.scale === 'G' ? readG(d.from(geomagneticLat), sky) : readOdds(d.scale, d.from(geomagneticLat), sky),
@@ -797,6 +1004,8 @@ export function advise(role: Role, sky: Sky, geomagneticLat: number | null, step
       : pb.actions
           .filter((a) => a.when.includes(reading.phase as Exclude<Phase, 'quiet'>))
           .filter((a) => !a.needs || expected[key(a.needs.scale)] >= a.needs.from)
+          // With an orbit named, only what applies there; with none, everything, each line saying which it is about.
+          .filter((a) => !orbit || !a.orbit || a.orbit === orbit)
           .map((a) => ({ say: typeof a.say === 'function' ? a.say({ expected }) : a.say, sources: a.sources }));
 
   const from = Math.max(0, Math.floor(step));

@@ -71,6 +71,14 @@
             "operation": "planting"
           },
           "slow": true
+        },
+        {
+          "say": "I'm a delivery robot in Fargo. Can I trust my GPS position right now?",
+          "tool": "position_trust",
+          "args": {
+            "lat": 46.88,
+            "lon": -96.79
+          }
         }
       ]
     },
@@ -117,6 +125,29 @@
           "tool": "what_should_i_do",
           "args": {
             "role": "aurora"
+          }
+        },
+        {
+          "say": "I run a GPU cluster. What should I do about this storm?",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "data_centre"
+          }
+        },
+        {
+          "say": "We have a crew on the way to the Moon. What should we do about the sun?",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "crewed_spaceflight",
+            "orbit": "beyond"
+          }
+        },
+        {
+          "say": "I run geostationary satellites. Is charging a risk right now?",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "satellite_operator",
+            "orbit": "high"
           }
         }
       ]
@@ -181,7 +212,8 @@
     "remove",
     "plan_season",
     "share_access",
-    "tell_me_more"
+    "tell_me_more",
+    "position_trust"
   ],
   "seed": {
     "field": {

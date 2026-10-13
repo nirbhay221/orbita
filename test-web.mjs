@@ -197,6 +197,23 @@ console.log('\nThe add-on tells a host what this person has saved, never what it
   check('...without the name of any medicine, field or town', !/furosemide|Fargo|North\b/.test(after.slice(after.indexOf('already saved'))), after.slice(-160));
 }
 
+{
+  // A farm whose field was found in Brazil: the host is told to answer in Portuguese, numbers kept as they are.
+  const me2 = `br-${Date.now()}`;
+  const rpc2 = async (method, params) => {
+    const res = await fetch(`${BASE}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'x-orbita-demo': me2 }, body: JSON.stringify({ jsonrpc: '2.0', id: 991, method, params }) });
+    const raw = await res.text();
+    const line = raw.split('\n').find((l) => l.startsWith('data: '));
+    return JSON.parse(line ? line.slice(6) : raw);
+  };
+  const hello = { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'lang-test', version: '0' } };
+  const plain = (await rpc2('initialize', hello)).result?.instructions ?? '';
+  check('a farm with nothing saved is given no language hint', !/is spoken/.test(plain));
+  await rpc2('tools/call', { name: 'register_field', arguments: { name: 'Soja', place: 'Sorriso, Brazil' } });
+  const told = (await rpc2('initialize', hello)).result?.instructions ?? '';
+  check('a farm in Brazil: the host is told to answer in Portuguese, keeping numbers and RTK as given', /Portuguese/.test(told) && /RTK, PPP, SBAS/.test(told), told.slice(-260));
+}
+
 stop();
 rmSync(DATA, { force: true });
 console.log(`\n${pass} passed, ${fail} failed\n`);

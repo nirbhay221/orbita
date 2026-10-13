@@ -27,19 +27,26 @@ import * as records from './tools/records.js';
 import * as roles from './tools/roles.js';
 import * as discovery from './tools/discovery.js';
 import * as season from './tools/season.js';
+import * as agents from './tools/agents.js';
 
 // Re-exported because alerts.ts and server.ts import them from here, and moving
 // them to shared.ts should not make every caller learn the new layout.
 export { statusOperations, resolveFieldTimeZone } from './tools/shared.js';
 import { SPOKEN_ANSWER, say } from './tools/shared.js';
 import { finish } from './finish.js';
+import * as flow from './flow.js';
 
 /**
  * The tools that are not part of the one story this add-on tells, which is a field job and whether it can run.
- * Advice for satellite operators, grid control rooms and aurora watchers is real and tested, and it is a
- * different product. It is published when ORBITA_SCOPE is "all". See brief.ts.
+ * The list of everything else a storm is touching is real and tested, and it is a different product. It is
+ * published when ORBITA_SCOPE is "all". See brief.ts.
+ *
+ * `what_should_i_do` used to be here too. It is one tool for seventeen kinds of operator, from a satellite
+ * operator and a crew in orbit to a grid control room and a data centre, and hidden it meant none of them could
+ * be answered on the deployed server and the demo page's own buttons for them said "I can't do that one". One
+ * more tool in the list is the price of all of that being reachable.
  */
-export const SECONDARY_TOOLS = ['what_should_i_do', 'what_else_is_affected'] as const;
+export const SECONDARY_TOOLS = ['what_else_is_affected'] as const;
 
 /** Whether the tool now running only reads. A read may look at a farm the caller was invited to; a write never does. */
 const reading = new AsyncLocalStorage<boolean>();
@@ -95,7 +102,14 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
     impl.set(name, cb);
     const readOnly = (config.annotations as { readOnlyHint?: boolean } | undefined)?.readOnlyHint === true;
     const wrapped = (...args: unknown[]) =>
-      reading.run(readOnly, async () => finish(name, args[0], shorten((await cb(...args)) as Parameters<typeof shorten>[0], farmOf(), { readOnly })));
+      reading.run(readOnly, async () => {
+        const done = finish(name, args[0], shorten((await cb(...args)) as Parameters<typeof shorten>[0], farmOf(), { readOnly }));
+        // The chain this answer is on: what was just done, the next step, and the ones after. See flow.ts.
+        const sc = done?.structuredContent;
+        if (!sc || done.isError) return done;
+        const chain = flow.describe(farmOf(), name, (sc.nextAction ?? null) as { tool: string; arguments: Record<string, unknown> } | null);
+        return chain ? { ...done, structuredContent: { ...sc, flow: chain } } : done;
+      });
     return raw(name, { outputSchema: SPOKEN_ANSWER, ...config }, wrapped);
   };
 
@@ -107,6 +121,7 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
   roles.register(server, farmFor);
   discovery.register(server, farmFor);
   season.register(server, farmFor);
+  agents.register(server, farmFor);
 
   if (merged) {
     type Part = { content?: { text?: string }[]; structuredContent?: Record<string, unknown> };

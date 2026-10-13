@@ -245,7 +245,7 @@ console.log('\nNothing is said twice in one answer, and the next step is named')
   const blocked = await who('can_i_run', { operation: 'planting' });
   check('a blocked job still names its own next step, the watch', blocked.data.go === false && blocked.data.nextAction?.tool === 'watch_jobs');
   const watch = await who(blocked.data.nextAction.tool, blocked.data.nextAction.arguments);
-  check('following it starts the watch, and that points at checking it', watch.data.watching === true && watch.data.nextAction?.tool === 'watch_jobs' && watch.data.nextAction.arguments.action === 'check', JSON.stringify(watch.data));
+  check('following it starts the watch, and with nobody to tell that points at adding somebody', watch.data.watching === true && watch.data.nextAction?.tool === 'crew_contact' && watch.data.nextAction.arguments.action === 'add' && watch.data.flow?.done.slice(-2).join() === 'can_i_run,watch_jobs', JSON.stringify(watch.data));
   swpc.seedForTest(before);
 }
 
@@ -400,6 +400,13 @@ console.log('\nNear the magnetic equator, after dark');
   check('a clear window in Pune ends before the evening, not the next morning', win && Date.parse(win.end) <= Date.parse('2026-03-20T15:00:00Z'), JSON.stringify(win));
   const trade = await import('./dist/trade.js');
   check('the drone line for the evening hold does not blame a storm or the compass', !/compass|storm/.test(trade.adviceNow('drone_survey', false, 2, 'space_weather', true)));
+  // Over South America the season is the December solstice, not the equinoxes. Sorriso, Mato Grosso, soy
+  // country: 21:30 local solar time is about 01:13 UTC.
+  const sorriso = { name: 'Sorriso', lat: -12.55, lon: -55.71 };
+  const nov = d.assess('planting', 2, rtk, sorriso, at('2026-11-21T01:13:00Z'));
+  check('an RTK job in Mato Grosso on a November evening is a hold, with the South American season named', !nov.go && nov.equatorial === true && /October to March over South America/.test(nov.reason), nov.reason);
+  check('...in June it is not, because bubbles are rare there then', d.assess('planting', 2, rtk, sorriso, at('2026-06-21T01:13:00Z')).go);
+  check('...and Pune in November, past its equinox season, is not held', d.assess('drone_survey', 2, rtk, pune, at('2026-11-20T16:35:00Z')).go);
   check('...and Fargo, far from the magnetic equator, is untouched at the same hour', d.assess('drone_survey', 2, rtk, fargo, at('2026-03-21T03:30:00Z')).equatorial === undefined);
 }
 
@@ -413,6 +420,305 @@ console.log('\nRain over the field');
   check('...and said for spraying, with GPS left out of it', /Most sprays need one to four dry hours/.test(ch.rainSentence('spraying', rain, () => '3 PM')) && /GPS accuracy is not affected/.test(ch.rainSentence('spraying', rain, () => '3 PM')));
   check('...and for a drone', /most drones are not built to fly in it/.test(ch.rainSentence('drone_survey', rain, () => '3 PM')));
   check('a dry spell finds nothing', ch.rainAhead(18.52, 73.86, new Date(t0 + 4 * 3_600_000), 4) === null);
+}
+
+console.log('\nWhen it is not the sun: GPS tests, satellites out, and what aircraft reported');
+{
+  const i = await import('./dist/interference.js');
+  // The Coast Guard's schedule, as its PDF comes out as text: no spaces between the columns.
+  const pdf = 'USCG NAVCEN 2026 GPS TESTING\nSCHEDULE\nLAST UPDATE 9/28/26\n1\nGPS CoordinatesRange\n@\n50ft\nRange\n@\n10,000ft\nEnd DateStart DateLocationGPS#Test Name\n' +
+    '33-50-01N 080-29-28W31NM119NM17 Oct28 SepColumbia, SCGPS 26-01PECRSC\n32-36-24N 114-12-05W131 NM191 NM06 Oct06 OctYuma, AZGPS 26-02MAWTS1\n19-41-55N 155-37-09W162NM244NM05 Jan20 DecKamuela, HIGPS 26-68POHAHI\n';
+  const parsed = i.parseTests(pdf);
+  const col = parsed.list.find((t) => t.name === 'PECRSC');
+  check('the schedule is read: three tests, with the date it was last updated', parsed.list.length === 3 && parsed.updated === '9/28/26', JSON.stringify(parsed.list.map((t) => t.name)));
+  check('...Columbia: position, the radius at 50 feet, and both dates', col && Math.abs(col.lat - 33.8336) < 0.001 && Math.abs(col.lon + 80.4911) < 0.001 && col.groundNm === 31 && col.start === '2026-09-28T00:00:00.000Z' && col.end === '2026-10-17T23:59:59.000Z' && col.place === 'Columbia, SC', JSON.stringify(col));
+  check('...a radius written "131 NM" with a space is read too', parsed.list.find((t) => t.name === 'MAWTS1')?.groundNm === 131);
+  check('...a test ending in January that began in December began the year before', parsed.list.find((t) => t.name === 'POHAHI')?.start === '2025-12-20T00:00:00.000Z');
+  check('a page that is not the schedule yields nothing, not a guess', i.parseTests('Access denied').list.length === 0);
+
+  const now = Date.parse('2026-10-12T12:00:00Z');
+  const sof = '<GPSISFILE FILEID="SOF">' +
+    '<HISTORICAL SVID="8" SVN="38" NAME="NANU" TYPE="UNUSABLE" REFERENCE="1998006" START_YEAR="1998" START_DOY="009" START_HR="09" START_MIN="55" START_SEC="00" END_YEAR="1998" END_DOY="009" END_HR="22" END_MIN="56" END_SEC="00" />' +
+    '<HISTORICAL SVID="5" SVN="50" NAME="NANU" TYPE="UNUSABLE" REFERENCE="2026080" START_YEAR="2026" START_DOY="280" START_HR="10" START_MIN="00" START_SEC="00" END_YEAR="2026" END_DOY="280" END_HR="16" END_MIN="00" END_SEC="00" />' +
+    '<PREDICTED SVID="31" SVN="52" NAME="NANU" TYPE="FCSTMX" REFERENCE="2026086" START_YEAR="2026" START_DOY="286" START_HR="15" START_MIN="00" START_SEC="00" END_YEAR="2026" END_DOY="286" END_HR="23" END_MIN="00" END_SEC="00" /></GPSISFILE>';
+  const outs = i.parseSof(sof, now);
+  check('the satellite outage file: the 1998 outage is dropped, last week\'s and tomorrow\'s are kept', outs.length === 2 && outs.map((o) => o.prn).join() === '5,31', JSON.stringify(outs));
+  check('...day 286 of 2026 at 15:00 is 13 October, and it is marked as scheduled', outs[1].start === '2026-10-13T15:00:00.000Z' && outs[1].scheduled === true);
+
+  const fargo = { lat: 46.88, lon: -96.79 };
+  const columbia = { lat: 34.0, lon: -81.03 };
+  const cell = i.cellOf(fargo.lat, fargo.lon);
+  i.seedForTest({ tests: parsed.list, satellites: outs, jam: { '2026-10-11': { [cell]: [60, 13] }, '2026-10-10': { [cell]: [60, 3] }, '2026-10-09': { [cell]: [4, 3] } } });
+  check('aircraft reports: 13 bad of 73 is red, with one taken off as the guard against a faulty transponder', JSON.stringify(i.reportedOver(fargo.lat, fargo.lon, '2026-10-11')) === JSON.stringify({ date: '2026-10-11', pct: 16, aircraft: 73, level: 'high' }), JSON.stringify(i.reportedOver(fargo.lat, fargo.lon, '2026-10-11')));
+  check('...3 bad of 63 is "some"', i.reportedOver(fargo.lat, fargo.lon, '2026-10-10')?.level === 'some');
+  check('...seven aircraft is too few to say anything', i.reportedOver(fargo.lat, fargo.lon, '2026-10-09') === null);
+  check('...and a day that is not held is null', i.reportedOver(fargo.lat, fargo.lon, '2026-01-01') === null);
+
+  const atCol = i.near(columbia.lat, columbia.lon, new Date('2026-10-12T15:00:00Z'));
+  check('a field 33 miles from the Columbia test, inside its 36 mile reach on the ground, is told', atCol.tests.length === 1 && Math.round(atCol.tests[0].milesAway) === 33, JSON.stringify(atCol.tests));
+  check('...in plain words, with how far it reaches and when it ends', /^One thing that is not the sun: a military GPS interference test near Columbia, SC is scheduled through October 17 and can reach receivers on the ground out to about 36 miles; this field is about 33 miles from its centre, so expect dropouts while it runs\.$/.test(i.sayAhead(atCol)), i.sayAhead(atCol));
+  check('...and not after it has ended', i.near(columbia.lat, columbia.lon, new Date('2026-10-19T15:00:00Z')).tests.length === 0);
+  check('...nor 80 miles away, outside its reach at ground level', i.near(35.0, -81.03, new Date('2026-10-12T15:00:00Z')).tests.length === 0);
+  const atFargo = i.near(fargo.lat, fargo.lon, new Date('2026-10-12T15:00:00Z'));
+  check('the newest day of aircraft reports is used for a question about now', atFargo.reported?.date === '2026-10-11' && /aircraft over this area reported degraded GPS on October 11, 16 percent of them/.test(i.sayAhead(atFargo)), i.sayAhead(atFargo));
+  check('one satellite scheduled out is not said ahead: it does not break a fix', !/satellite/.test(i.sayAhead(i.near(fargo.lat, fargo.lon, new Date('2026-10-13T16:00:00Z')))));
+  const then = i.near(fargo.lat, fargo.lon, new Date('2026-10-07T12:00:00Z'));
+  check('asked what happened: the satellite that was out then is named, with what it means', /GPS satellite 5 was out of service then, which a receiver that also tracks Galileo or GLONASS would not notice\./.test(i.sayThen(then, false)), i.sayThen(then, false));
+  check('a test is "the likeliest cause" when the sun was quiet, and "may have added to it" when it was not', /likeliest cause/.test(i.sayThen(atCol, false)) && /may have added to it/.test(i.sayThen(atCol, true)));
+  i.seedForTest({ jam: { '2026-10-11': { [cell]: [80, 1] } } });
+  const clean = i.near(fargo.lat, fargo.lon, new Date('2026-10-12T15:00:00Z'));
+  check('nothing found: what was checked is said as ruled out', i.ruledOut(clean) === 'I checked the other published causes: no military GPS test was scheduled over the field, no GPS satellite was out and aircraft reported nothing unusual.', i.ruledOut(clean));
+  i.seedForTest({ tests: null });
+  check('a schedule that could not be read is "could not check", never "no test"', /^I checked the other published causes: no GPS satellite was out and aircraft reported nothing unusual\. I could not check the GPS testing schedule\.$/.test(i.ruledOut(i.near(fargo.lat, fargo.lon, new Date('2026-10-12T15:00:00Z')))), i.ruledOut(i.near(fargo.lat, fargo.lon, new Date('2026-10-12T15:00:00Z'))));
+
+  // Through the tool: a job the sky allows, under a test that is running.
+  const today = new Date();
+  const test = { name: 'TESTSC', id: 'GPS 26-99', place: 'Columbia, SC', lat: 33.8336, lon: -80.4911, groundNm: 31, start: new Date(today.getTime() - 86_400_000).toISOString(), end: new Date(today.getTime() + 5 * 86_400_000).toISOString() };
+  i.seedForTest({ tests: [test], satellites: [], jam: {} });
+  const who = await connect('acct:jam');
+  await who('register_field', { name: 'Congaree', lat: columbia.lat, lon: columbia.lon });
+  await who('register_equipment', { name: 'planter', correction: 'rtk' });
+  const run = await who('can_i_run', { operation: 'planting' });
+  check('"can I plant": the sky is clear, and the GPS test over the field is said aloud', /Clear for planting/.test(run.said) && /a military GPS interference test near Columbia, SC/.test(run.said), run.said);
+  i.seedForTest({ tests: [], satellites: [], jam: {} });
+  const quiet = await who('can_i_run', { operation: 'planting' });
+  check('...and with no test and no reports, nothing is added', !/not the sun/.test(quiet.said), quiet.said);
+  i.seedForTest({ tests: null, satellites: null, jam: null });
+}
+
+console.log('\nFor a machine: can this position be trusted');
+{
+  const i = await import('./dist/interference.js');
+  const quietSky = swpc.current();
+  const withKp = (k) => swpc.seedForTest({ ...quietSky, fetchedAt: new Date().toISOString(), slots: quietSky.slots.map((s) => ({ ...s, kp: k })) });
+  const agent = await connect('acct:agent');
+  const fargo = { lat: 46.88, lon: -96.79 };
+  i.seedForTest({ tests: [], satellites: [], jam: { [new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)]: { [i.cellOf(fargo.lat, fargo.lon)]: [90, 1] } } });
+  withKp(2);
+  const ok = await agent('position_trust', { ...fargo });
+  check('a quiet sky, nothing published against it: trust, as a word an agent can branch on', ok.data.verdict === 'trust' && ok.data.confidence === 'high' && /^Trust it\./.test(ok.said) && ok.data.reasons.length === 0, ok.said);
+  check('...with what was checked, and when to ask again', ok.data.checks.spaceWeather.kp === 2 && Array.isArray(ok.data.checks.gpsTests) && ok.data.checks.unchecked.length === 0 && ok.data.recheckInMinutes === 30, JSON.stringify(ok.data.checks));
+  check('...a receiver with no correction is judged against five metres unless told', ok.data.needM === 5 && ok.data.correction === 'autonomous');
+
+  const tight = await agent('position_trust', { ...fargo, correction: 'autonomous', needMeters: 0.5 });
+  check('asked for half a metre from an uncorrected receiver: do not trust, and why', tight.data.verdict === 'do_not_trust' && /outside the 50 centimetres needed/.test(tight.said) && /Hold the action/.test(tight.said), tight.said);
+
+  withKp(8.7);
+  const storm = await agent('position_trust', { ...fargo, correction: 'rtk', needMeters: 0.03 });
+  check('RTK in a severe storm: do not trust, because receivers there lose the fix', storm.data.verdict === 'do_not_trust' && /lose their fix altogether/.test(storm.said), storm.said);
+  withKp(2);
+
+  const today = new Date();
+  i.seedForTest({ tests: [{ name: 'T', id: 'GPS 26-99', place: 'Fargo, ND', lat: 46.9, lon: -96.8, groundNm: 40, start: new Date(today.getTime() - 86_400_000).toISOString(), end: new Date(today.getTime() + 86_400_000).toISOString() }] });
+  const jam = await agent('position_trust', { ...fargo });
+  check('inside a military GPS test: verify against something independent, even though the sky is quiet', jam.data.verdict === 'verify' && /Verify before acting/.test(jam.said) && /military GPS interference test near Fargo, ND/.test(jam.said) && /inertial sensors, a camera, a known landmark/.test(jam.said) && jam.data.recheckInMinutes === 10, jam.said);
+
+  i.seedForTest({ tests: null });
+  const blind = await agent('position_trust', { ...fargo });
+  check('a source that could not be read is never "trust": verify, and it says what it could not check', blind.data.verdict === 'verify' && /could not check the GPS testing schedule/.test(blind.said) && blind.data.checks.unchecked.includes('the GPS testing schedule'), blind.said);
+  i.seedForTest({ tests: [] });
+
+  const none = await (await connect('acct:agent-empty'))('position_trust', {});
+  check('no position and no saved field: it asks for one, and does not guess', none.data.unavailable === true && /latitude and longitude/.test(none.said), none.said);
+  await agent('register_field', { name: 'Yard', lat: 46.88, lon: -96.79 });
+  const named = await agent('position_trust', { field: 'Yard', correction: 'rtk', needMeters: 0.05 });
+  check('a saved field can be named in place of coordinates', named.data.position?.lat === 46.88 && named.data.verdict === 'trust', named.said);
+  i.seedForTest({ tests: null, satellites: null, jam: null });
+  swpc.seedForTest(quietSky);
+}
+
+console.log('\nData centres and AI infrastructure');
+{
+  const pb = await import('./dist/playbook.js');
+  const lv = (g) => ({ g, s: 0, r: 0 });
+  const sky = (g) => ({ now: new Date(), levels: lv(g), yesterday: lv(0), days: [], slots: [] });
+  const quiet = pb.advise('data_centre', sky(0), 40);
+  check('on a quiet day it says nothing needs doing', quiet.phase === 'quiet' && /No storm in the forecast is strong enough/.test(quiet.spoken), quiet.spoken);
+  check('...and that it is not the servers a storm reaches', /Servers on the ground are not what a storm reaches/.test(quiet.note?.say ?? ''));
+  const g4 = pb.advise('data_centre', sky(4), 40);
+  check('during a G4 the first thing said is the grid and the fuel, from the Uptime Institute', /^.*The risk to a data centre or an AI cluster is the grid, not the servers/.test(g4.actions[0]?.say ?? '') && g4.actions[0].sources[0].name.startsWith('Uptime Institute'), g4.actions[0]?.say);
+  check('...then GPS time in holdover, satellite links, and the undersea cable studies that disagree', g4.actions.some((a) => /holdover/.test(a.say)) && g4.actions.some((a) => /Starlink reported it in the May 2024 storm/.test(a.say)) && g4.actions.some((a) => /a Google study found undersea cables have voltage margin/.test(a.say) && /an earlier study put it in the cable repeaters/.test(a.say)));
+  check('...isolating on backup power is only said at G5', !g4.actions.some((a) => /isolate the site/.test(a.say)) && pb.advise('data_centre', sky(5), 40).actions.some((a) => /isolate the site from the grid/.test(a.say)));
+  check('every line names an https source, and none says a chip on the ground is at risk', pb.PLAYBOOKS.data_centre.actions.every((a) => a.sources.length && a.sources.every((s) => /^https:\/\//.test(s.url))) && !/bit flip|chips? (are|is) at risk/i.test(JSON.stringify(pb.PLAYBOOKS.data_centre.actions)));
+  check('"a GPU cluster" and "AI infrastructure" are in the hint the host fills the role from', /GPU or AI training cluster/.test(pb.ROLE_HINT));
+}
+
+console.log('\nPeople and spacecraft in orbit');
+{
+  const pb = await import('./dist/playbook.js');
+  const pa = await import('./dist/particles.js');
+  const lv = (g, s) => ({ g, s, r: 0 });
+  const sky = (g, s) => ({ now: new Date(), levels: lv(g, s), yesterday: lv(0, 0), days: [], slots: [] });
+
+  const quiet = pb.advise('crewed_spaceflight', sky(0, 0), 40);
+  check('a crew on a quiet day hears that nothing changes a spacewalk', quiet.phase === 'quiet' && /change a spacewalk or send a crew to shelter/.test(quiet.spoken), quiet.spoken);
+  const s3 = pb.advise('crewed_spaceflight', sky(0, 3), 40);
+  check('in an S3 radiation storm the first thing said is to bring anyone outside back in', /^Bring anyone outside back in and hold spacewalks/.test(s3.actions[0]?.say ?? ''), s3.actions[0]?.say);
+  check('...and it says whose call that is, and states no flight rule of its own', /flight director's and the flight surgeon's/.test(s3.actions[0].say));
+  check('...at S2 that line is not said: NOAA names spacewalks from S3', !pb.advise('crewed_spaceflight', sky(0, 2), 40).actions.some((a) => /Bring anyone outside/.test(a.say)));
+  const moon = pb.advise('crewed_spaceflight', sky(0, 3), 40, 0, 'beyond');
+  check('a crew beyond low orbit is told there is no magnetic field in the way, and to shelter on the first threshold', moon.actions.some((a) => /no magnetic field in the way/.test(a.say) && /Shelter on the first threshold/.test(a.say)) && !moon.actions.some((a) => /South Atlantic Anomaly/.test(a.say)), moon.actions.map((a) => a.say.slice(0, 40)).join(' | '));
+  const station = pb.advise('crewed_spaceflight', sky(4, 3), 40, 0, 'low');
+  check('a station crew is told when the field does not shield them, and that the station is losing altitude', station.actions.some((a) => /South Atlantic Anomaly/.test(a.say)) && station.actions.some((a) => /plan the reboost/.test(a.say)) && !station.actions.some((a) => /Shelter on the first threshold/.test(a.say)));
+  check('with no orbit named, both are said, each saying which it is about', s3.actions.some((a) => /^Beyond low Earth orbit/.test(a.say)) && s3.actions.some((a) => /^In low Earth orbit/.test(a.say)));
+  check('the Artemis II shelter is said as published: built from stowed equipment in about half an hour', pb.PLAYBOOKS.crewed_spaceflight.actions.some((a) => /build one inside Orion from stowed equipment in about half an hour/.test(a.say) && a.sources[0].url.startsWith('https://science.nasa.gov/')));
+  check('every line for a crew names an https source', pb.PLAYBOOKS.crewed_spaceflight.actions.every((a) => a.sources.length && a.sources.every((s) => /^https:\/\//.test(s.url))));
+
+  const low = pb.advise('satellite_operator', sky(4, 0), 40, 0, 'low');
+  const high = pb.advise('satellite_operator', sky(4, 0), 40, 0, 'high');
+  check('a low orbit operator hears about drag and conjunctions, not about electron charging', low.actions.some((a) => /conjunction warnings/.test(a.say)) && !low.actions.some((a) => /no drag to worry about/.test(a.say)));
+  check('a geostationary operator hears about charging, and not about drag or conjunctions', high.actions.some((a) => /no drag to worry about; the problem is charging/.test(a.say) && /pass 1,000/.test(a.say)) && !high.actions.some((a) => /conjunction warnings|orbit predictions to degrade/.test(a.say)), high.actions.map((a) => a.say.slice(0, 40)).join(' | '));
+  const watch = pb.PLAYBOOKS.satellite_operator.actions.find((a) => /Webb telescope/.test(a.say));
+  check('the launch rule is the published Webb one, with what it cannot do', /twelve hours to ten minutes before lift-off/.test(watch.say) && /flux above 50 MeV past 5/.test(watch.say) && /cannot predict one/.test(watch.say) && watch.sources[0].url.startsWith('https://ntrs.nasa.gov/'));
+
+  // What the GOES satellites measure, in the feed's own rows.
+  const rows = (energy, flux, t = '2026-10-13T01:15:00Z') => ({ time_tag: t, satellite: 19, flux, energy });
+  const calm = pa.parse([rows('>=2 MeV', 324, '2026-10-12T20:00:00Z'), rows('>=2 MeV', 152.9)], [rows('>=10 MeV', 0.235), rows('>=50 MeV', 0.227), rows('>=100 MeV', 0.222)]);
+  check('the newest reading of each energy is taken, and the day\'s most for electrons', calm.electrons === 152.9 && calm.electronsDayMax === 324 && calm.protons10 === 0.235 && calm.measuredAt === '2026-10-13T01:15:00Z', JSON.stringify(calm));
+  check('calm electrons are said against NOAA\'s alert line', pa.sayHighOrbit(calm) === 'Measured now at geostationary orbit, electrons above 2 MeV are at 153, under the 1,000 where NOAA alerts for charging building up inside spacecraft.', pa.sayHighOrbit(calm));
+  const hot = pa.parse([rows('>=2 MeV', 4200)], [rows('>=10 MeV', 1500), rows('>=50 MeV', 40), rows('>=100 MeV', 6)]);
+  check('past the line: hold commanding that can wait', /are at 4,200, past the 1,000/.test(pa.sayHighOrbit(hot)) && /Hold commanding that can wait/.test(pa.sayHighOrbit(hot)), pa.sayHighOrbit(hot));
+  const after = pa.parse([rows('>=2 MeV', 2000, '2026-10-12T20:00:00Z'), rows('>=2 MeV', 600)], [rows('>=10 MeV', 0.2)]);
+  check('back under it after a day above: charge built up may still discharge', /back under NOAA's alert line of 1,000 after passing it in the last day/.test(pa.sayHighOrbit(after)), pa.sayHighOrbit(after));
+  check('protons at 1,500 are an S3 storm, and the ones that get inside a spacecraft are said as raised', /are at 1,500, an S3 radiation storm\./.test(pa.sayCrew(hot)) && /get inside a spacecraft, are at 6\.0, which is raised/.test(pa.sayCrew(hot)), pa.sayCrew(hot));
+  check('quiet protons are said as under where a storm begins, and background inside', /under the 10 where a radiation storm begins/.test(pa.sayCrew(calm)) && /are at background/.test(pa.sayCrew(calm)), pa.sayCrew(calm));
+  check('a launch is judged against the Webb rule both ways', /under the 5 that was a no go/.test(pa.sayLaunch(calm)) && /are at 40 now, past the 5 that was a no go/.test(pa.sayLaunch(hot)), pa.sayLaunch(hot));
+  check('with no reading, nothing is said', pa.sayHighOrbit(null) === '' && pa.sayCrew(null) === '' && pa.sayLaunch(null) === '' && pa.parse([], []) === null);
+
+  // Through the tool, with the scope that publishes the operator roles.
+  process.env.ORBITA_SCOPE = 'all';
+  const crew = await connect('acct:crew-in-orbit');
+  pa.seedForTest(hot);
+  const said = await crew('what_should_i_do', { role: 'crewed_spaceflight', orbit: 'beyond' });
+  check('asked by a crew: the advice, then what is measured this minute', /protons above 10 MeV, the ones that get through a spacesuit, are at 1,500/.test(said.said) && said.data.orbit === 'beyond' && said.data.measuredNow?.protons10 === 1500, said.said);
+  const geo = await crew('what_should_i_do', { role: 'satellite_operator', orbit: 'high' });
+  check('asked by a geostationary operator: the electron reading and the launch reading', /electrons above 2 MeV are at 4,200/.test(geo.said) && /For a launch: protons above 50 MeV are at 40 now/.test(geo.said), geo.said);
+  const leo = await crew('what_should_i_do', { role: 'satellite_operator', orbit: 'low' });
+  check('...a low orbit operator is not read the geostationary electron number', !/geostationary orbit, electrons/.test(leo.said) && /For a launch/.test(leo.said), leo.said);
+  pa.seedForTest(null);
+  const blind = await crew('what_should_i_do', { role: 'crewed_spaceflight' });
+  check('with no live reading the advice stands alone, and no number is invented', !/Measured now/.test(blind.said) && blind.data.measuredNow === undefined, blind.said);
+  delete process.env.ORBITA_SCOPE;
+  check('"astronauts", "a space station" and "the Moon" are in the hint the host fills the role from', /astronauts, a crewed spacecraft or capsule, a space station, a spacewalk, or a mission to the Moon/.test(pb.ROLE_HINT));
+}
+
+console.log('\nFor a spacecraft: can it trust where it thinks it is');
+{
+  const sc = await import('./dist/spacecraft.js');
+  const pa = await import('./dist/particles.js');
+  const pb = await import('./dist/playbook.js');
+  const calm = { electrons: 150, electronsDayMax: 300, protons10: 0.2, protons50: 0.2, protons100: 0.2, measuredAt: '2026-10-13T01:15:00Z' };
+  const charged = { ...calm, electrons: 4200, electronsDayMax: 4200 };
+  const fargo = { lat: 46.9, lon: -96.8 };
+  check('550 km is low orbit, 20,200 is medium, 35,786 is high', sc.regimeOf(550) === 'low' && sc.regimeOf(20200) === 'medium' && sc.regimeOf(35786) === 'high');
+
+  const quiet = sc.judge({ altitudeKm: 550, ...fargo, g: 0, s: 0, particles: calm });
+  check('low orbit on a quiet day: trust, naming the two things judged', quiet.verdict === 'trust' && /the predicted orbit and the onboard fix/.test(quiet.spoken), quiet.spoken);
+  const g2 = sc.judge({ altitudeKm: 550, ...fargo, g: 2, s: 0, particles: calm });
+  check('at G2, the level NOAA names for drag on orbit predictions: verify, with fresh orbit determination', g2.verdict === 'verify' && /the level from which NOAA says drag changes orbit predictions/.test(g2.spoken) && /Run fresh orbit determination/.test(g2.spoken), g2.spoken);
+  const g4 = sc.judge({ altitudeKm: 420, ...fargo, g: 4, s: 0, particles: calm });
+  check('at G4: do not trust an orbit predicted before the storm, with the published size of the error', g4.verdict === 'do_not_trust' && /errors of several kilometres within a day/.test(g4.spoken) && /about two days/.test(g4.spoken), g4.spoken);
+  // 23:00 UTC over 40 degrees west is 20:20 local solar time, on the magnetic equator.
+  const dusk = sc.judge({ altitudeKm: 500, lat: -3, lon: -40, g: 0, s: 0, particles: calm, now: new Date('2026-10-13T23:00:00Z') });
+  check('over the magnetic equator after sunset, where Swarm lost its GPS signal: verify, on a quiet day', dusk.verdict === 'verify' && /Swarm satellites lost their GPS signal to plasma irregularities/.test(dusk.spoken), dusk.spoken);
+  const noon = sc.judge({ altitudeKm: 500, lat: -3, lon: -40, g: 0, s: 0, particles: calm, now: new Date('2026-10-13T15:00:00Z') });
+  check('...the same place at midday is trusted', noon.verdict === 'trust', noon.spoken);
+  const polar = sc.judge({ altitudeKm: 500, lat: 78, lon: 16, g: 1, s: 0, particles: calm });
+  check('at high latitude during geomagnetic activity, the other place Swarm lost it: verify', polar.verdict === 'verify' && /the other place Swarm lost its GPS signal/.test(polar.spoken), polar.spoken);
+  const nowhere = sc.judge({ altitudeKm: 500, g: 0, s: 0, particles: calm });
+  check('with no point below it given, low orbit is verify and says what it could not judge', nowhere.verdict === 'verify' && nowhere.unchecked.length === 1 && /could not check where the spacecraft is over the ground/.test(nowhere.spoken), nowhere.spoken);
+
+  const meo = sc.judge({ altitudeKm: 20200, g: 4, s: 0, particles: calm });
+  check('medium orbit in a G4 storm is not told about drag: there is none', meo.verdict === 'trust' && !/drag|predicted orbit/.test(meo.spoken), meo.spoken);
+  const meoHot = sc.judge({ altitudeKm: 20200, g: 0, s: 0, particles: charged });
+  check('...with electrons past NOAA\'s line it is verify, saying the reading is geostationary, the nearest there is', meoHot.verdict === 'verify' && /are at 4,200, measured at geostationary orbit, the nearest reading there is for medium orbit, past the 1,000/.test(meoHot.spoken), meoHot.spoken);
+  const geo = sc.judge({ altitudeKm: 35786, g: 3, s: 2, particles: calm });
+  check('geostationary at G3 and S2: verify, for surface charging and upsets, each at the level NOAA names', geo.verdict === 'verify' && /NOAA expects surface charging/.test(geo.spoken) && /single event upsets in memory/.test(geo.spoken) && /Hold commanding that can wait/.test(geo.spoken), geo.spoken);
+  check('...surface charging is not claimed at G2', !/surface charging/.test(sc.judge({ altitudeKm: 35786, g: 2, s: 0, particles: calm }).spoken));
+  const s4 = sc.judge({ altitudeKm: 35786, g: 0, s: 4, particles: calm });
+  check('an S4 radiation storm: do not trust what the spacecraft reports, at any height', s4.verdict === 'do_not_trust' && /star tracker problems that can throw off a spacecraft's orientation/.test(s4.spoken) && sc.judge({ altitudeKm: 500, ...fargo, g: 0, s: 4, particles: calm }).verdict === 'do_not_trust', s4.spoken);
+  const blind = sc.judge({ altitudeKm: 35786, g: 0, s: 0, particles: null });
+  check('with no particle reading, high orbit is verify, never trust', blind.verdict === 'verify' && /could not check/.test(blind.spoken), blind.spoken);
+
+  // Through the tool.
+  pa.seedForTest(calm);
+  const craft = await connect('acct:spacecraft');
+  const leo = await craft('position_trust', { altitudeKm: 550, lat: 46.9, lon: -96.8 });
+  check('position_trust with an altitude answers for a spacecraft, in the same three words', leo.data.spacecraft === true && leo.data.orbit === 'low' && ['trust', 'verify', 'do_not_trust'].includes(leo.data.verdict) && leo.data.checks.particles?.electrons === 150, leo.said);
+  const high = await craft('position_trust', { altitudeKm: 35786 });
+  check('...and needs no point on the ground for a geostationary satellite', high.data.orbit === 'high' && high.data.verdict === 'trust', high.said);
+  const ground = await craft('position_trust', { lat: 46.9, lon: -96.8 });
+  check('...without an altitude it is still the check for a receiver on the ground', ground.data.spacecraft === undefined && typeof ground.data.expectedErrorM === 'number');
+  pa.seedForTest(null);
+
+  // Medium orbit in the advice for operators.
+  const lv = (g, s) => ({ g, s, r: 0 });
+  const sky = (g, s) => ({ now: new Date(), levels: lv(g, s), yesterday: lv(0, 0), days: [], slots: [] });
+  const adv = pb.advise('satellite_operator', sky(4, 0), 40, 0, 'medium');
+  check('a navigation satellite operator hears the outer radiation belt, not drag, conjunctions or geostationary charging', adv.actions.some((a) => /where navigation satellites fly, there is no drag; the hazard is the outer radiation belt/.test(a.say) && /ten thousand times in the 2003 Halloween storm/.test(a.say)) && !adv.actions.some((a) => /conjunction warnings|In geostationary and other high orbits/.test(a.say)), adv.actions.map((a) => a.say.slice(0, 40)).join(' | '));
+  check('...and is told the electron reading is from geostationary orbit, not its own', adv.actions.some((a) => /NOAA measures them at geostationary orbit and not in medium orbit/.test(a.say)));
+}
+
+console.log('\nOne request, several steps: the chain every answer is on');
+{
+  const flow = await import('./dist/flow.js');
+  const i = await import('./dist/interference.js');
+  const before = swpc.current();
+  const withKp = (k) => swpc.seedForTest({ ...before, fetchedAt: new Date().toISOString(), slots: before.slots.map((s) => ({ ...s, kp: k })) });
+  i.seedForTest({ tests: [], satellites: [], jam: {} });
+  flow.resetForTest();
+
+  // A job the sky allows: nothing is offered aloud, and the record of it is the step that follows.
+  withKp(2);
+  const farmer = await connect('acct:chain-go');
+  await farmer('register_field', { name: 'North 40', lat: 40.92, lon: -98.34 });
+  await farmer('register_equipment', { name: 'planter', correction: 'rtk' });
+  const go = await farmer('can_i_run', { operation: 'planting' });
+  check('a clear job points at logging it, with the field and machine it was about', go.data.go === true && go.data.nextAction?.tool === 'log_job' && go.data.nextAction.arguments.operation === 'planting' && go.data.nextAction.arguments.field === go.data.fieldId && go.data.nextAction.arguments.equipment === go.data.equipmentId, JSON.stringify(go.data.nextAction));
+  check('...without asking "shall I log it" before the planter has moved', !/log/i.test(go.said), go.said);
+  check('...and the chain says what follows: the log, then the report', go.data.flow?.next === 'log_job' && go.data.flow.then.join() === 'job_report' && go.data.flow.done.slice(-1)[0] === 'can_i_run', JSON.stringify(go.data.flow));
+  const logged = await farmer('log_job', go.data.nextAction.arguments);
+  check('following it logs the job, and that points at the report', logged.data.nextAction?.tool === 'job_report' && logged.data.flow?.done.slice(-2).join() === 'can_i_run,log_job', JSON.stringify(logged.data.flow));
+  const report = await farmer('job_report', {});
+  check('the report is the end of the chain, with the three steps behind it', report.data.nextAction == null && report.data.flow?.next === null && report.data.flow.done.slice(-3).join() === 'can_i_run,log_job,job_report', JSON.stringify(report.data.flow));
+
+  // A job the sky blocks for the next half day, clear after: when, watch it, who to tell.
+  const cutoff = Date.now() + 12 * 3_600_000;
+  swpc.seedForTest({ ...before, fetchedAt: new Date().toISOString(), slots: before.slots.map((s) => ({ ...s, kp: new Date(s.time).getTime() < cutoff ? 8.7 : 2 })) });
+  flow.resetForTest();
+  const held = await connect('acct:chain-hold');
+  await held('register_field', { name: 'North 40', lat: 40.92, lon: -98.34 });
+  await held('register_equipment', { name: 'planter', correction: 'rtk' });
+  const no = await held('can_i_run', { operation: 'planting' });
+  check('a blocked job points at watching it, then at who to tell', no.data.go === false && no.data.nextAction?.tool === 'watch_jobs' && no.data.flow?.then.join() === 'crew_contact', JSON.stringify(no.data.flow));
+  const watch = await held('watch_jobs', no.data.nextAction.arguments);
+  check('the watch, with nobody to tell, asks who and points at adding them', /Want somebody on the crew emailed when it clears\? Tell me who\.$/.test(watch.said) && watch.data.nextAction?.tool === 'crew_contact', watch.said.slice(-90));
+  withKp(2);
+  const cleared = await held('watch_jobs', { action: 'check' });
+  check('when it clears, the check points back at the job itself', cleared.data.clear?.length === 1 && cleared.data.nextAction?.tool === 'can_i_run' && cleared.data.nextAction.arguments.operation === 'planting', JSON.stringify(cleared.data.nextAction));
+
+  // Looking back at a bad day: the cause goes into the record.
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86_400_000);
+  i.seedForTest({ tests: [{ name: 'T', id: 'GPS 26-98', place: 'Grand Island, NE', lat: 40.92, lon: -98.34, groundNm: 40, start: new Date(today.getTime() - 3 * 86_400_000).toISOString(), end: new Date(today.getTime() + 86_400_000).toISOString() }], satellites: [], jam: {} });
+  const back = await held('what_happened', { when: yesterday.toISOString().slice(0, 10), operation: 'planting' });
+  check('a bad day explained by a GPS test points at logging it, with the cause written in', back.data.nextAction?.tool === 'log_job' && /military GPS interference test/.test(back.data.nextAction.arguments.note) && back.data.nextAction.arguments.operation === 'planting' && typeof back.data.nextAction.arguments.when === 'string', JSON.stringify(back.data.nextAction));
+  i.seedForTest({ tests: [], satellites: [], jam: {} });
+  const calmDay = await held('what_happened', { when: yesterday.toISOString().slice(0, 10), operation: 'planting' });
+  check('...a day with no cause found points at nothing, and invents no record', calmDay.data.nextAction == null, JSON.stringify(calmDay.data.nextAction));
+
+  // A machine told to verify is told to ask again, with the same position.
+  i.seedForTest({ tests: [{ name: 'T', id: 'GPS 26-97', place: 'Fargo, ND', lat: 46.9, lon: -96.8, groundNm: 40, start: new Date(today.getTime() - 86_400_000).toISOString(), end: new Date(today.getTime() + 86_400_000).toISOString() }], satellites: [], jam: {} });
+  const robot = await connect('acct:chain-robot');
+  const verify = await robot('position_trust', { lat: 46.88, lon: -96.79, needMeters: 5 });
+  check('"verify" hands the agent the same call to make again', verify.data.verdict === 'verify' && verify.data.nextAction?.tool === 'position_trust' && verify.data.nextAction.arguments.lat === 46.88 && verify.data.nextAction.arguments.needMeters === 5 && verify.data.recheckInMinutes === 10, JSON.stringify(verify.data.nextAction));
+  i.seedForTest({ tests: [], satellites: [], jam: { [new Date(today.getTime() - 86_400_000).toISOString().slice(0, 10)]: { [i.cellOf(46.88, -96.79)]: [90, 1] } } });
+  const trusted = await robot('position_trust', { lat: 46.88, lon: -96.79 });
+  check('..."trust" points at nothing', trusted.data.verdict === 'trust' && trusted.data.nextAction == null, JSON.stringify(trusted.data.nextAction));
+
+  i.seedForTest({ tests: null, satellites: null, jam: null });
+  swpc.seedForTest(before);
+  flow.resetForTest();
 }
 
 await new Promise((r) => listener.close(r));
