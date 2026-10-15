@@ -161,11 +161,16 @@ export function register(server: McpServer, farmOf: () => string): void {
           'sbas, also WAAS in North America, EGNOS in Europe, MSAS in Japan, GAGAN in India, sub-metre. ' +
           'autonomous for no correction at all, plain GPS, metres.',
         ),
+        hardened: z
+          .boolean()
+          .optional()
+          .describe('true only when the customer says the receiver has scintillation protection, such as Trimble IonoGuard or a scintillation-resistant PPP service'),
       },
     },
     async (args) => {
       const id = farmOf();
-      const eq = { ...args, id: newId('eq'), name: clean(args.name), correction: args.correction as Correction };
+      const { hardened, ...rest } = args as typeof args & { hardened?: boolean };
+      const eq = { ...rest, id: newId('eq'), name: clean(args.name), correction: args.correction as Correction, ...(hardened ? { hardened: true } : {}) };
       if (!/[a-z0-9]/i.test(eq.name)) {
         return say('I need a name for the machine that I can say back to you, like the planter or the sprayer. What do you call it?', { added: false, reason: 'name' });
       }
@@ -174,6 +179,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         store.update(id, (f) => {
           const hit = f.equipment.find((x) => x.id === known.id);
           if (hit) Object.assign(hit, eq, { id: known.id });
+          if (hit && hardened === false) delete hit.hardened;
         });
         return say(`You already have ${eq.name}, so I've set it to ${eq.correction.toUpperCase()} rather than adding a second one.`, {
           equipmentId: known.id,
@@ -188,7 +194,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       }
       store.update(id, (f) => void f.equipment.push(eq));
       const next = store.get(id).fields.length ? ' Ask me whether you can run a job.' : ' Now tell me a field and the nearest town.';
-      return say(`Added ${eq.name} on ${eq.correction.toUpperCase()}.${next}`, { equipmentId: eq.id });
+      return say(`Added ${eq.name} on ${eq.correction.toUpperCase()}${eq.hardened ? ', with scintillation protection' : ''}.${next}`, { equipmentId: eq.id, ...(eq.hardened ? { hardened: true } : {}) });
     },
   );
 

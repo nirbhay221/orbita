@@ -17,6 +17,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { InMemoryTaskStore, InMemoryTaskMessageQueue } from '@modelcontextprotocol/sdk/experimental/tasks/stores/in-memory.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { registerTools, resolveFieldTimeZone } from './tools.js';
+import { registerSkills } from './skill.js';
 import * as store from './store.js';
 import * as swpc from './swpc.js';
 import * as solarwind from './solarwind.js';
@@ -163,6 +164,9 @@ function build(farmId: string): McpServer {
 
   registerTools(server, () => farmId);
   speakErrorsPlainly(server);
+
+  // The Agent Skill for this add-on, readable from the same connection. See skill.ts.
+  registerSkills(server);
 
   server.registerResource(
     'window',

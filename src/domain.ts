@@ -48,7 +48,25 @@ export type Equipment = {
   id: string;
   name: string;
   correction: Correction;
+  /**
+   * A receiver built to ride out scintillation: Trimble's IonoGuard on its NAV-900 and ProPoint base stations, or
+   * a correction service with scintillation mitigation such as Hexagon's PPP. Only ever what the customer said.
+   *
+   * It changes one thing. Scintillation, the fast flicker that plasma bubbles and a disturbed sky put on the
+   * signal, is what these products are built for, and the vendors report it working: Hexagon's field data on
+   * strong scintillation days shows about 1 to 1.5 hours of outage against 5 hours for a competitor's RTK. So the
+   * evening bubble hours and a measured disturbed sky become "watch the fix", not "hold off", for this machine.
+   * A storm's own error is not scintillation, and is judged as for any other receiver. Vendor figures, said as
+   * such.
+   *   https://autonomoustuff.com/velocity-magazine/velocity-2024/mitigating-the-effects-of-ionospheric-scintillation-on-precision-ag
+   *   https://www.farms.com/news/solar-events-disrupting-satellite-signals-trimble-has-a-solution-210775.aspx
+   */
+  hardened?: boolean;
 };
+
+/** What is said to a machine built to ride out scintillation, in the hours that would otherwise hold it. */
+export const HARDENED_WATCH =
+  'Your receiver is built to ride out scintillation, so this goes ahead, but keep an eye on the fix status: the makers report fewer and shorter dropouts, not none.';
 
 /**
  * How much lateral error each job can absorb before it costs you money.
@@ -322,7 +340,9 @@ export function assess(
   const quiet = Math.min(expectedErrorM(2, eq, field, at), expectedErrorM(0, eq, field, at));
   const tol = TOLERANCE_M[operation];
   // Carrier-phase work near the magnetic equator after dark, whatever Kp says. See equatorialEvening.
-  const bubbles = (eq.correction === 'rtk' || eq.correction === 'ppp') && tol < 0.3 && equatorialEvening(field, at);
+  const bubbleHours = (eq.correction === 'rtk' || eq.correction === 'ppp') && tol < 0.3 && equatorialEvening(field, at);
+  // A receiver built for scintillation is not held by it. See Equipment.hardened.
+  const bubbles = bubbleHours && !eq.hardened;
   const go = err <= tol && !bubbles;
   const g = G_SCALE(kp);
   const label = OPERATION_LABEL[operation];
@@ -340,6 +360,7 @@ export function assess(
     limitedBy = 'clear';
     // The verdict, then the one number that backs it, in the job's own terms; Kp last, for whoever tracks it.
     reason = `Clear for ${label}. Expected drift is about ${inches(err)}, inside the ${inches(tol)} it needs, at Kp ${kp.toFixed(1)}${g === 'none' ? '' : ` (${g})`}.`;
+    if (bubbleHours) reason += ` It is the evening plasma bubble hours near the magnetic equator. ${HARDENED_WATCH}`;
   } else if (quiet > tol) {
     // Not the sun. This rig cannot hit that tolerance on its best day.
     limitedBy = 'equipment';
@@ -421,7 +442,7 @@ export function nextWindow(
     const when = begins <= now.getTime() ? now : new Date(begins + 90 * 60_000);
     // The evening plasma bubbles near the magnetic equator close a window as surely as a storm. Checked at both
     // ends of the block, because a three-hour block can straddle sunset.
-    const carrier = (eq.correction === 'rtk' || eq.correction === 'ppp') && tol < 0.3;
+    const carrier = (eq.correction === 'rtk' || eq.correction === 'ppp') && tol < 0.3 && !eq.hardened;
     const bubbles = carrier && [begins + 30 * 60_000, begins + 150 * 60_000].some((t) => equatorialEvening(field, new Date(Math.max(t, now.getTime()))));
     const ok = expectedErrorM(s.kp, eq, field, when) <= tol && !bubbles;
     if (ok) {

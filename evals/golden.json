@@ -448,6 +448,70 @@
         "action": "add",
         "name": "Dana"
       }
+    },
+    {
+      "say": "my planter has IonoGuard on it and runs RTK",
+      "tool": "register_equipment",
+      "args": {
+        "correction": "rtk",
+        "hardened": true
+      }
+    },
+    {
+      "say": "the new rover has scintillation protection, it is on PPP",
+      "tool": "register_equipment",
+      "args": {
+        "correction": "ppp",
+        "hardened": true
+      }
+    },
+    {
+      "say": "is GPS spoofed around Odesa",
+      "tool": "position_trust"
+    },
+    {
+      "say": "I am a drone over Kaliningrad, can I trust my position, my receiver has IonoGuard",
+      "tool": "position_trust",
+      "args": {
+        "hardened": true
+      }
+    },
+    {
+      "say": "can my survey rover trust its fix right now near Tallinn",
+      "tool": "position_trust",
+      "alsoOk": [
+        "can_i_run"
+      ],
+      "why": "A survey rover is a survey job, and can_i_run answers whether it holds its accuracy."
+    },
+    {
+      "say": "I run a data centre, how long can our clocks run without GPS",
+      "tool": "what_should_i_do",
+      "args": {
+        "role": "data_centre"
+      }
+    },
+    {
+      "say": "we run network timing, what about holdover in this storm",
+      "tool": "what_should_i_do",
+      "args": {
+        "role": "timing"
+      }
+    },
+    {
+      "say": "was it spoofing that wrecked my rows in Lahore last Tuesday",
+      "tool": "what_happened"
+    },
+    {
+      "say": "can I plant my field near Munich today",
+      "tool": "can_i_run",
+      "args": {
+        "operation": "planting"
+      }
+    },
+    {
+      "say": "turn off the RTK on my tractor",
+      "tool": null
     }
   ]
 }

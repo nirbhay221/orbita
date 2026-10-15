@@ -21,6 +21,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY web ./web
 COPY ui ./ui
+COPY skills ./skills
 # Registered farms live here. Mount a volume over it to keep them across runs.
 RUN mkdir -p /app/data && chown node:node /app/data
 USER node

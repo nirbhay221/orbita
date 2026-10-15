@@ -49,8 +49,10 @@ turn, and a proactive channel for MCP add-ons, none of which exist today.
 | S3 | Holds the application bundle the instance pulls |
 | IAM | An instance role limited to the bundle, the two parameter prefixes, SES and Polly |
 | SES (v2) | Emails confirmed crew contacts when a watched job clears or a storm is coming |
+| Strands Agents SDK | The agent in `strands/`: Strands' MCP client connects to this server, the Agent Skill it serves becomes the system prompt, each tool is wrapped so the agent sees the next step, and writes wait for a yes. Its model is Claude through Strands' Anthropic provider |
 | Polly | Speaks the same sentence the tool returns, on the demo page, with per-caller and daily caps |
 
-Not used: Bedrock and CloudFront. The stand-in model calls Anthropic's API directly, and the account could not
+Not used: Bedrock and CloudFront. Bedrock is not available to this account, so the Strands agent reaches Claude
+through Strands' Anthropic provider instead; moving it to Bedrock is a change of one model class. The stand-in model calls Anthropic's API directly, and the account could not
 create a CloudFront distribution, which is why the public address is an API Gateway HTTP API (see
 `deploy/README.md`).

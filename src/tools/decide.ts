@@ -18,6 +18,7 @@ import * as solarwind from '../solarwind.js';
 import * as geomag from '../geomag.js';
 import * as glotec from '../glotec.js';
 import * as roti from '../roti.js';
+import { HARDENED_WATCH } from '../domain.js';
 import * as interference from '../interference.js';
 import * as crewheat from '../crewheat.js';
 import * as crewday from '../crewday.js';
@@ -228,7 +229,11 @@ export function register(server: McpServer, farmOf: () => string): void {
        */
       let measuredClear = false;
       const sky = asksAboutNow && (eq.correction === 'rtk' || eq.correction === 'ppp') ? roti.over(f.lat, f.lon) : null;
-      if (sky?.state === 'disturbed' && verdict.go && verdict.limitedBy !== 'equipment') {
+      if (sky?.state === 'disturbed' && verdict.go && verdict.limitedBy !== 'equipment' && eq.hardened) {
+        // Built for exactly this. See Equipment.hardened.
+        verdict.reason = `${verdict.reason} ${roti.say(sky)} ${HARDENED_WATCH}`;
+        measuredBlock = true;
+      } else if (sky?.state === 'disturbed' && verdict.go && verdict.limitedBy !== 'equipment') {
         verdict.go = false;
         verdict.limitedBy = 'space_weather';
         verdict.reason =

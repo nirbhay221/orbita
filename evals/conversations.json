@@ -1,0 +1,129 @@
+{
+  "_comment": "Conversations, not sentences. Each is several turns from one person, and each turn is scored with every earlier turn and every earlier answer in front of the model, the way a host keeps them. They are written in the patterns real people were recorded using, not in the phrasing a tool description suggests. Sources: the words farmers used in the May 2024 storm (Iowa Capital Dispatch, Albert Lea Tribune, AP via Fox); older adults' month of recorded Alexa use, where a quarter of turns failed and repeating, rephrasing and 'never mind' were the usual repairs (Mahmood, Wang and Huang, arXiv 2403.02421); and 844 recorded voice-assistant check-ins whose breakdowns were mostly about earlier turns ('what about yesterday though?') and asking why (Mathur and others, arXiv 2510.06690). tool null means the right answer calls nothing. anyOf lists the tools that are each a reasonable reading.",
+  "sources": [
+    "https://iowacapitaldispatch.com/?p=39507",
+    "https://albertleatribune.com/2024/05/northern-lights-solar-storm-interrupted-tractor-gps-system-halting-planting-for-minnesota-farmers",
+    "https://www.fox9.com/news/solar-storm-2024-gps-farming-problems",
+    "https://arxiv.org/html/2403.02421v3",
+    "https://arxiv.org/html/2510.06690v1"
+  ],
+  "conversations": [
+    {
+      "name": "a blocked job, carried through",
+      "pattern": "one request leading to the next",
+      "turns": [
+        { "say": "can I plant the North 40", "tool": "can_i_run", "args": { "operation": "planting" } },
+        { "say": "ok so when does it clear", "tool": "can_i_run" },
+        { "say": "alright watch it for me", "tool": "watch_jobs", "args": { "action": "start" } },
+        { "say": "and let Dale know, dale@example.com", "tool": "crew_contact", "args": { "action": "add" } }
+      ]
+    },
+    {
+      "name": "the tractors stop, in the farmer's own words",
+      "pattern": "May 2024: 'the tractors were sitting at the ends of the field', 'auto steer wouldn't engage'",
+      "turns": [
+        { "say": "all my tractors are sitting at the ends of the field, auto steer won't engage, is it the sun", "anyOf": ["storm_status", "can_i_run", "farm_status"] },
+        { "say": "the dealer says turn off RTK, should I", "anyOf": ["can_i_run", "what_should_i_do"] },
+        { "say": "how long is this going to last", "anyOf": ["storm_status", "can_i_run"] }
+      ]
+    },
+    {
+      "name": "looking back at a bad afternoon",
+      "pattern": "'the GPS showed the tractor going in circles'",
+      "turns": [
+        { "say": "yesterday afternoon the tractor was going in circles on the GPS while we were planting, what happened", "tool": "what_happened" },
+        { "say": "ok put that in the log", "tool": "log_job" }
+      ]
+    },
+    {
+      "name": "and tomorrow?",
+      "pattern": "a follow-up that only means something after the answer before it",
+      "turns": [
+        { "say": "could I spray South Cut this afternoon", "tool": "can_i_run", "args": { "operation": "spraying" } },
+        { "say": "what about tomorrow morning though", "tool": "can_i_run", "args": { "operation": "spraying" } }
+      ]
+    },
+    {
+      "name": "the same thing twice, then giving up",
+      "pattern": "repeating was the commonest repair, and 'never mind' ended many",
+      "turns": [
+        { "say": "what's the kp", "tool": "storm_status" },
+        { "say": "what's the kp", "tool": "storm_status" },
+        { "say": "never mind", "tool": null }
+      ]
+    },
+    {
+      "name": "asking why",
+      "pattern": "'why are you asking me now?': explanations were a third of breakdowns",
+      "turns": [
+        { "say": "can I plant the North 40 right now", "tool": "can_i_run" },
+        { "say": "why not", "anyOf": ["tell_me_more", "can_i_run"] }
+      ]
+    },
+    {
+      "name": "a correction",
+      "pattern": "rephrasing after being misunderstood",
+      "turns": [
+        { "say": "can I plant the North 40", "tool": "can_i_run", "args": { "operation": "planting" } },
+        { "say": "no sorry I meant spraying", "tool": "can_i_run", "args": { "operation": "spraying" } }
+      ]
+    },
+    {
+      "name": "setting up in passing",
+      "pattern": "telling it things in the order they come to mind",
+      "turns": [
+        { "say": "I've got a new field, the Home Quarter, it's near Grand Island Nebraska", "tool": "my_farm" },
+        { "say": "the sprayer runs RTK", "tool": "my_farm" },
+        { "say": "so can I go", "tool": "can_i_run" }
+      ]
+    },
+    {
+      "name": "a drone survey",
+      "pattern": "a job that is not farming",
+      "turns": [
+        { "say": "I've got a drone mapping job this afternoon, is the GPS going to behave", "anyOf": ["can_i_run", "what_should_i_do"] },
+        { "say": "how long have I got", "tool": "can_i_run" }
+      ]
+    },
+    {
+      "name": "the day's work, then the record",
+      "pattern": "reporting in passing",
+      "turns": [
+        { "say": "we got eighty acres of planting done today", "tool": "log_job" },
+        { "say": "send the week's report to the office", "tool": "job_report" }
+      ]
+    },
+    {
+      "name": "a machine asks",
+      "pattern": "an agent, not a person",
+      "turns": [
+        { "say": "I'm a delivery robot in Fargo, can I trust my GPS position right now", "tool": "position_trust" },
+        { "say": "and in ten minutes", "tool": "position_trust", "args": { "inMinutes": 10 } }
+      ]
+    },
+    {
+      "name": "off the subject, then back",
+      "pattern": "a question it cannot answer, then one it can",
+      "turns": [
+        { "say": "what's corn at today", "tool": null },
+        { "say": "ok well is the GPS any good today", "anyOf": ["can_i_run", "storm_status", "farm_status"] }
+      ]
+    },
+    {
+      "name": "weeks, then this weekend",
+      "pattern": "a longer view, then the near one",
+      "turns": [
+        { "say": "which weeks are worth booking the custom planter for", "tool": "plan_season" },
+        { "say": "and this weekend", "anyOf": ["can_i_run", "plan_season"] }
+      ]
+    },
+    {
+      "name": "thanks, that's all",
+      "pattern": "'thank you' and 'I got it' used to end",
+      "turns": [
+        { "say": "what's the sun doing", "tool": "storm_status" },
+        { "say": "thanks, that's all I needed", "tool": null }
+      ]
+    }
+  ]
+}

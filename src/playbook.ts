@@ -77,6 +77,19 @@ export type Source = { name: string; url: string };
 
 const SRC = {
   noaa: { name: 'NOAA Space Weather Scales', url: 'https://www.spaceweather.gov/noaa-scales-explanation' },
+  /*
+   * How long a clock keeps time with GPS gone depends on its oscillator. The one published table by time budget
+   * is a vendor's, said as that: Microchip's TimeProvider 4500 datasheet gives the time to drift past 1.5
+   * microseconds (the end-to-end budget for mobile networks that share time) as about 16.5 hours for a standard
+   * oven-controlled quartz oscillator, about 52 hours for a better one and about 4.3 days for rubidium. The ITU-T
+   * G.8272.1 standard for an enhanced primary reference time clock requires holding within 100 nanoseconds of
+   * UTC for 14 days.
+   */
+  holdoverTable: {
+    name: 'Microchip TimeProvider 4500 datasheet, holdover by time budget (vendor figures)',
+    url: 'https://www.microchip.com/content/dam/mchp/documents/FTD/ProductDocuments/Brochures/TimeProvider-4500-Series-Release-3.0-DS00005123.pdf',
+  },
+  eprtc: { name: 'ITU-T G.8272.1, enhanced primary reference time clock (via Microchip)', url: 'https://www.microchip.com/en-us/about/media-center/blog/2020/enhanced-primary-reference-time-clock-eprtc' },
   nercTemplate: {
     name: 'NERC Geomagnetic Disturbance Operating Procedure Template, Transmission Operator',
     url: 'https://www.nerc.com/globalassets/who-we-are/standing-committees/rstc/template_top.pdf',
@@ -664,6 +677,17 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
         sources: [SRC.cisa],
       },
       {
+        when: ['watch', 'imminent'],
+        say: 'Know how long your clocks keep time without GPS. A vendor table puts drifting past the 1.5 microseconds mobile networks allow at about 16 hours for a standard quartz oscillator, 2 days for a better one and 4 days for rubidium.',
+        sources: [SRC.holdoverTable],
+      },
+      {
+        when: ['watch', 'imminent', 'during'],
+        needs: { scale: 'G', from: 4 },
+        say: 'Hours of degraded GPS at G4 is within what rubidium rides out and past what a standard quartz oscillator does. An enhanced reference clock to the ITU standard holds within 100 nanoseconds for 14 days.',
+        sources: [SRC.holdoverTable, SRC.eprtc, SRC.noaa],
+      },
+      {
         when: ['imminent', 'during'],
         say: 'Plan for how long you can run without GPS time. NOAA expects satellite navigation to be intermittent at G3, degraded for hours at G4 and for days at G5.',
         sources: [SRC.noaa],
@@ -704,6 +728,17 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
         when: ['imminent', 'during'],
         say: 'Clocks that follow GPS should be ready to run in holdover on their own oscillator. NOAA expects satellite navigation to be intermittent at G3, degraded for hours at G4 and for days at G5, so know how long your time servers hold before logs and distributed systems drift apart.',
         sources: [SRC.noaa, SRC.dhsPnt],
+      },
+      {
+        when: ['watch', 'imminent'],
+        say: 'Know how long your clocks keep time without GPS. A vendor table puts drifting past the 1.5 microseconds mobile networks allow at about 16 hours for a standard quartz oscillator, 2 days for a better one and 4 days for rubidium.',
+        sources: [SRC.holdoverTable],
+      },
+      {
+        when: ['watch', 'imminent', 'during'],
+        needs: { scale: 'G', from: 4 },
+        say: 'Hours of degraded GPS at G4 is within what rubidium rides out and past what a standard quartz oscillator does. An enhanced reference clock to the ITU standard holds within 100 nanoseconds for 14 days.',
+        sources: [SRC.holdoverTable, SRC.eprtc, SRC.noaa],
       },
       {
         when: ['imminent', 'during'],

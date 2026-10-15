@@ -15,6 +15,8 @@ process.env.ORBITA_DATA = `${DIR}/farms.json`;
 process.env.ORBITA_OUTBOX = `${DIR}/outbox.jsonl`;
 process.env.ORBITA_AUTH_DATA = `${DIR}/auth.json`;
 process.env.ORBITA_PUBLIC_URL = 'https://orbita.example.org';
+// The aircraft reports are off unless asked for (no published licence); the tests of that feature ask for them.
+process.env.ORBITA_GPSJAM = 'on';
 delete process.env.ORBITA_DATA_KEY;
 delete process.env.ORBITA_SCOPE;
 delete process.env.ORBITA_RECIPIENT_CONSENT;

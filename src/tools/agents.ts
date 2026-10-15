@@ -30,6 +30,7 @@ import * as swpc from '../swpc.js';
 import * as roti from '../roti.js';
 import * as solarwind from '../solarwind.js';
 import * as interference from '../interference.js';
+import * as spoofing from '../spoofing.js';
 import * as particles from '../particles.js';
 import * as spacecraft from '../spacecraft.js';
 import * as store from '../store.js';
@@ -49,7 +50,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
       description:
         'For a software agent, robot, drone, autonomous machine or spacecraft about to act on its position: whether ' +
-        'that position can be trusted right now, as one of three verdicts (trust it, verify it first, or do not ' +
+        'that position can be trusted right now, or a set number of minutes ahead (inMinutes, judged from the forecast), as one of three verdicts (trust it, verify it first, or do not ' +
         'trust it), with the reasons. On the ground it combines space weather, the measured sky, planned military ' +
         'GPS tests and aircraft-reported jamming; for a spacecraft, give its altitude and it judges drag, its own ' +
         'receiver and charging. Call this when an agent or machine asks whether to rely on its position or whether ' +
@@ -66,13 +67,21 @@ export function register(server: McpServer, farmOf: () => string): void {
           .optional()
           .describe('For a spacecraft, its altitude in kilometres: about 400 to 550 for low orbit, 20,200 for a navigation satellite, 35,786 for geostationary. With it, latitude and longitude are the point on the ground below, and are optional'),
         needMeters: z.number().positive().max(1000).optional().describe('The accuracy the action needs, in metres. 5 when not given'),
+        inMinutes: z
+          .number()
+          .int()
+          .min(0)
+          .max(360)
+          .optional()
+          .describe('How many minutes from now the action will happen, when it is not now, e.g. 10 for "and in ten minutes". Judged from the forecast for that time; up to six hours'),
+        hardened: z.boolean().optional().describe('true when the receiver has scintillation protection, such as Trimble IonoGuard or a scintillation-resistant PPP service'),
         correction: z
           .enum(['rtk', 'ppp', 'sbas', 'autonomous'])
           .optional()
           .describe('How the receiver is corrected: rtk, ppp, sbas, or autonomous for none. Autonomous when not given'),
       },
     },
-    async ({ lat, lon, field, needMeters, correction, altitudeKm }) => {
+    async ({ lat, lon, field, needMeters, correction, altitudeKm, hardened, inMinutes }) => {
       // A spacecraft is judged differently: drag and its own receiver in low orbit, charging above it. See spacecraft.ts.
       if (altitudeKm != null && altitudeKm >= 100) {
         const snap = swpc.current();
@@ -108,8 +117,15 @@ export function register(server: McpServer, farmOf: () => string): void {
       if (!where) {
         return say('I need a latitude and longitude, or the name of a saved field, to judge a position.', { unavailable: true, reason: 'no_position' });
       }
-      const now = new Date();
-      const kp = kpRightNow() ?? swpc.kpAt(now);
+      /*
+       * Now, or a few minutes ahead. A machine planning its next move asks "and in ten minutes?", and the conversation
+       * tests found the tool could only say "I can't tell you that ahead of time". Ahead, the Kp forecast for that
+       * time, the test schedule and the equatorial evening are judged at that time. What cannot be known ahead is not
+       * pretended: the sky can only be measured now, and the solar wind warns at most an hour out.
+       */
+      const ahead = Math.max(0, Math.min(360, Math.round(inMinutes ?? 0)));
+      const now = new Date(Date.now() + ahead * 60_000);
+      const kp = ahead ? swpc.kpAt(now) : kpRightNow() ?? swpc.kpAt(now);
       if (!kp) return say(NOAA_DOWN, { unavailable: true, verdict: 'verify' as Trust, reason: 'no_forecast' });
 
       const corr = (correction ?? 'autonomous') as Correction;
@@ -127,13 +143,13 @@ export function register(server: McpServer, farmOf: () => string): void {
       else if (err > need) against.push(`the expected error is about ${metres(err)} at Kp ${kp.kp.toFixed(1)}, outside the ${metres(need)} needed`);
 
       // The sky measured over the point in the last few minutes, for receivers that hold a carrier-phase fix.
-      const sky = carrier ? roti.over(where.lat, where.lon) : null;
+      const sky = carrier && !ahead ? roti.over(where.lat, where.lon) : null;
       if (sky?.state === 'disturbed') {
-        (need < 0.3 ? against : caution).push(`${Math.round(sky.activeShare * 100)} percent of the satellite signals over the point are disturbed right now, which in published tests halves how long RTK holds a fix`);
+        (need < 0.3 && !hardened ? against : caution).push(`${Math.round(sky.activeShare * 100)} percent of the satellite signals over the point are disturbed right now, which in published tests halves how long RTK holds a fix`);
       }
       // After sunset near the magnetic equator, in that longitude's season: bubbles, on quiet days too.
       if (carrier && equatorialEvening(where, now)) {
-        (need < 0.3 ? against : caution).push(`it is the evening plasma bubble hours near the magnetic equator, ${bubbleSeason(where.lon).words}, when carrier-phase receivers lose their fix on quiet days too`);
+        (need < 0.3 && !hardened ? against : caution).push(`it is the evening plasma bubble hours near the magnetic equator, ${bubbleSeason(where.lon).words}, when carrier-phase receivers lose their fix on quiet days too`);
       }
       // What is not the sun.
       const other = interference.near(where.lat, where.lon, now);
@@ -141,8 +157,10 @@ export function register(server: McpServer, farmOf: () => string): void {
       if (test) caution.push(`a military GPS interference test near ${test.place} is scheduled until ${test.end.slice(0, 10)} and the point is inside its reach on the ground`);
       if (other.reported?.level === 'high') caution.push(`${other.reported.pct} percent of aircraft over the area reported degraded GPS on ${other.reported.date}, a sign of jamming or interference`);
       if (other.satellites.length >= 3) caution.push(`${other.satellites.length} GPS satellites are out of service at once`);
+      // Where the regulators say GPS is jammed and spoofed as a matter of course. See spoofing.ts.
+      if (other.zone) caution.push(spoofing.reason(other.zone));
       // A storm about to arrive on a position just called good.
-      const upstream = solarwind.incoming();
+      const upstream = ahead <= 60 ? solarwind.incoming() : null;
       if (upstream?.level === 'likely') caution.push('the solar wind upstream says a disturbance is likely within the hour');
       // What could not be read never counts as clear.
       const age = swpc.ageMinutes();
@@ -165,8 +183,10 @@ export function register(server: McpServer, farmOf: () => string): void {
             ? ' Check the position against something independent, inertial sensors, a camera, a known landmark or a second constellation, and stop if they disagree.'
             : ' Hold the action, or fall back to a source that does not depend on GPS, until this clears.';
 
-      return say(`${lead}${how}`, {
+      const when = ahead ? `From the forecast for ${ahead} minutes from now: ` : '';
+      return say(`${when}${lead}${how}`, {
         verdict,
+        ...(ahead ? { inMinutes: ahead, at: now.toISOString(), forecastOnly: true } : {}),
         // The same three words as a number an agent can threshold on.
         confidence: verdict === 'trust' ? 'high' : verdict === 'verify' ? 'reduced' : 'low',
         expectedErrorM: err,
@@ -181,6 +201,7 @@ export function register(server: McpServer, farmOf: () => string): void {
           gpsTests: other.tests.map((t) => ({ name: t.name, place: t.place, milesAway: Math.round(t.milesAway ?? 0), until: t.end })),
           aircraftReports: other.reported,
           satellitesOut: other.satellites.map((s) => s.prn),
+          spoofingRegion: other.zone ?? null,
           unchecked,
         },
         // When to ask again: sooner when something is moving.

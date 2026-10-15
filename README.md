@@ -37,22 +37,58 @@ The Latin `orbita` meant a track cut into the ground by a wheel. Built for the
 Source and AWS Builder mini challenges. Self-hosted MCP server, spec 2025-11-25, Streamable HTTP, 15 tools by
 default, with an MCP Apps panel for the Echo Show.
 
+## One storm
+
+Orbita turns NOAA space weather into decisions: whether a farm job, a machine or a spacecraft can trust its
+position right now, and what a satellite operator, a grid room, an airline or a household should do about a storm.
+
+On 10 May 2024 a G5 storm hit in the middle of planting. "All the tractors were sitting at the ends of the field," a
+Nebraska farmer said; in South Dakota the screen showed the tractor "going in circles" and auto-steer would not
+engage. In March 2026 a military GPS exercise on the North Carolina coast did the same to farms that had no
+warning at all. Nobody told them either was coming, or when it would clear.
+
+| The farmer says | Orbita |
+|---|---|
+| "Can I plant the North 40?" | Hold off, why in inches against what planting needs, and when the next clear window opens |
+| "Alright, watch it for me." | It watches, and asks who on the crew should be emailed when it clears |
+| "Yesterday afternoon the tractor was going in circles while we were planting, what happened?" | Whether the sun explains that hour on that field; if not, which other published cause does (a military test, a region where GPS is spoofed), and what to check |
+| A delivery robot, an autonomous sprayer or a satellite asks the same server | One word it can act on: trust, verify or do not trust, with the reasons and when to ask again; "and in ten minutes?" is judged from the forecast for that time, and says so |
+
+**Who it is for, in three groups.** Field work (farms, surveyors, drone mappers, grade crews), machines that act on
+a position (robots, drones, autonomous equipment, spacecraft), and everyone else the same storm reaches (satellite,
+grid, airline, HF radio, timing and data centre, pipeline, drilling, rail, vessel, mining, fleet and aurora). The
+first is the story; the other two are the same data, asked differently.
+
+**The model talks; code decides.** The assistant's job is to understand the farmer. Every verdict and number is
+computed by code from NOAA and the other published sources, so no model can turn "hold off" into "probably fine". It
+never says trust when a reading could not be had.
+
+**Tested the way people talk.** Fourteen conversations in the patterns real users were recorded in (farmers' own
+words from May 2024, repeats, "never mind", "what about tomorrow though", "why not", corrections), played turn by
+turn against the real tools, got 32 of 33 turns right on Opus (`conversations.mjs`,
+`evals/conversations-last-run.json`). The miss was a delivery robot asking "and in ten minutes?", which the model
+rightly said the position check could not answer ahead of time. That was a gap, so the check now takes `inMinutes`
+and judges that time from the forecast, and the same conversation then went 2 for 2
+(`evals/conversations-rerun-machine.json`).
+
 ## What is real, and what is not
 
 Nothing here is mocked for the demo. Where something stands in for a thing we could not reach, it is named.
 
 | Part | Status |
 |---|---|
-| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 1,829 automated checks, run on every push |
+| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 1,957 automated checks, run on every push |
+| Agent Skill | **Real**: `skills/orbita-gps-trust`, to the open Agent Skills format, passing the format's own validator. Installable as a folder, and readable from the server as `skill://` resources |
+| Strands agent | **Real**: `strands/agent.mjs`, on AWS's Strands Agents SDK. It reads the skill from the server and follows each next step. The chain, the yes before a write and the step cap are checked with a scripted model at no cost; the path through Claude needs a key and is not in the automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
-| The sky over the field, measured | **Real, live**: the German Aerospace Center's one-minute disturbance readings (ROTI) from about 4,000 satellite links worldwide, read within 400 km of the field. Free for scientific use; commercial use needs DLR's written permission |
+| The sky over the field, measured | **Real, live**: the German Aerospace Center's one-minute disturbance readings (ROTI) from about 4,000 satellite links worldwide, read within 400 km of the field. Free for scientific use. Orbita is free and open source and sells nothing, so it uses the data on those terms. Commercial use would need the IMPC's written permission, so anyone who runs a copy commercially can set `ORBITA_ROTI=off` and the forecast then decides alone. We thank DLR who is maintaining the IMPC services |
 | Ground magnetometers | **Real** (USGS), **United States only** |
-| What is not the sun: GPS tests, satellite outages, aircraft-reported interference | **Real, live**: the Coast Guard's GPS testing schedule and satellite outage file, and GPSJAM's daily aircraft reports. The testing schedule covers the United States only |
+| What is not the sun: GPS tests, satellite outages, spoofing regions, aircraft-reported interference | **Real, live**: the Coast Guard's GPS testing schedule and satellite outage file, which cover the United States. Elsewhere a quiet schedule is never said as "no test": the answer says that planned tests there are announced to pilots by NOTAM, which the UK CAA and Australia's Defence publish in a form that cannot be read automatically. **Real, from the regulators**: the regions the FAA (March 2026) and EASA (July 2026) list for routine jamming and spoofing, drawn as boxes around the regions they name. GPSJAM's daily aircraft reports publish no licence, so they are **off unless switched on** |
 | The past: "what happened at 3 pm on May 10 2024" | **Real**, from the archived Kp record, by the hour |
 | Crew heat | **Real**: Open-Meteo's hourly forecast over each field |
 | Kp to expected drift | **A model**, anchored to three published measurements and scored against real receivers at four sites for the 2024 season ([BACKTEST.md](BACKTEST.md)) |
 | Emails to the crew | **Real**, through Amazon SES, only after the crew member agrees. The account is in the SES sandbox (production access requested), so today it reaches verified addresses only. The public demo shows the email in an inbox panel instead |
-| The talking demo | **Real model**: Claude Haiku 4.5 reads the real tool list and picks a tool, as Alexa+ would. With no model available, word rules pick instead, and the screen says which |
+| The talking demo | **Real model**: Claude Sonnet 5.5 reads the real tool list and picks a tool, as Alexa+ would. With no model available, word rules pick instead, and the screen says which |
 | Alexa+ itself | **Not available to us.** MCP add-on access is in preview |
 | Echo Show panel | **Real MCP App**, tested against a simulated host. Not seen on a real device |
 
@@ -69,7 +105,7 @@ This file is long because the reasoning is the work. If you are evaluating the p
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
 Free NOAA, USGS and DLR products, no API keys for the data. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 1,829 checks.
+external is called inside a turn. `npm test` runs 1,957 checks.
 
 ## The problem
 
@@ -445,8 +481,26 @@ over the field, no GPS satellite was out and aircraft reported nothing unusual")
 correction link, the base station, a cable, trees. A source that could not be read is "I could not check", never
 "nothing there".
 
-GPSJAM publishes no licence. Its daily file is read live, never stored in this repository, and credited in every
-answer's data; `ORBITA_GPSJAM=off` turns it off. Anyone running this commercially should ask its author first.
+GPSJAM publishes no licence, and the hackathon's rules ask for authorisation to use third-party data, so the
+aircraft reports are off unless `ORBITA_GPSJAM=on` is set. When on, the daily file is read live, never stored in
+this repository, and credited in every answer's data. Anyone turning it on should ask its author first.
+
+**Spoofing.** A jammed receiver knows it has lost the signal. A spoofed one locks onto a fake and reports a
+confident, wrong position. Nothing published says where that is happening hour by hour on the ground, but the two
+aviation regulators publish where it happens routinely: the FAA's GPS/GNSS Interference Resource Guide (v1.1, March
+2026) and EASA's Safety Information Bulletin 2022-02R4 (July 2026) name the eastern Mediterranean, the Black Sea,
+the Baltic, the Arctic, Iraq and Iran, the Gulf, the Caucasus, northern Libya, the India and Pakistan border, the
+Korean peninsula and the area around Beijing (`src/spoofing.ts`). A field or a position inside one is told so, with
+the check that catches spoofing: compare against a marker or a sensor that does not use GPS, and stop if the
+position or the clock jumps. A machine there gets `verify`, not `trust`. The boxes are drawn around the regions the
+regulators name, not their exact borders, and they mean "regularly reported", never "happening now".
+
+**Receivers built for scintillation.** Trimble's IonoGuard and Hexagon's scintillation-resistant PPP are built to
+ride out the fast flicker that plasma bubbles and a disturbed sky put on the signal; Hexagon reports about 1 to 1.5
+hours of outage on strong scintillation days against 5 hours for a competitor's RTK. A machine saved with
+`hardened` (or a `position_trust` call that says so) is not held by the evening bubble hours or a measured
+disturbed sky. It is told to go ahead and watch the fix, because the makers report fewer dropouts, not none. A
+storm's own error is not scintillation and is judged as for any receiver. Vendor figures, said as such.
 
 ## For an agent that acts on a position
 
@@ -463,11 +517,11 @@ receiver is corrected, and returns one word with its reasons (`src/tools/agents.
 | Verdict | Meaning | What the agent is told to do |
 |---|---|---|
 | `trust` | The expected error is inside what was asked for, and nothing published says otherwise | Go on, ask again in 30 minutes |
-| `verify` | Probably fine, and something says to check first: a military GPS test over the point, aircraft reporting interference, a disturbed sky, a storm an hour upstream, or a source that could not be read | Check against inertial sensors, a camera, a landmark or a second constellation, and stop if they disagree |
+| `verify` | Probably fine, and something says to check first: a military GPS test over the point, a region the regulators list for spoofing, aircraft reporting interference, a disturbed sky, a storm an hour upstream, or a source that could not be read | Check against inertial sensors, a camera, a landmark or a second constellation, and stop if they disagree |
 | `do_not_trust` | The expected error is outside what was asked for, or receivers there lose their fix | Hold the action, or fall back to something that does not depend on GPS |
 
 It is every check Orbita has in one call: the Kp forecast and nowcast, the measured sky overhead, the equatorial
-evening season, planned military GPS tests, aircraft-reported interference and the age of the feeds themselves.
+evening season, planned military GPS tests, the regulators' spoofing regions, aircraft-reported interference when switched on, and the age of the feeds themselves.
 A source that could not be read moves the answer to `verify`, never to `trust`. The structured result carries
 each check, so an agent can log why it stopped.
 
@@ -629,6 +683,68 @@ under deuteranopia, effectively identical for around 8 percent of men. So bar he
 magnitude in a single hue, the verdict comes from position against a drawn tolerance line, and
 every blocked block is additionally hatched and worded.
 
+## The Agent Skill
+
+The tools say what each one does. They do not say how to carry a caller through a job: which tool answers which
+sentence, when to follow the next step without asking and when to wait for a yes, and what a machine should do
+with each of the three verdicts. That is written down once, as an [Agent Skill](https://agentskills.io), in
+`skills/orbita-gps-trust`.
+
+| File | What it holds |
+|---|---|
+| `SKILL.md` | When to use Orbita, the sentence-to-tool table, how to follow a chain, how to say the answer, how a machine acts on a verdict, and what it does not cover |
+| `references/tools.md` | Every tool with its arguments, written from the server's own tool list by `scripts/skill-tools.mjs` |
+| `references/chains.md` | Each next step an answer can name, and the condition the server applies before naming it |
+| `references/machines.md` | What moves a position verdict, on the ground and in orbit, and when to ask again |
+| `scripts/connect.mjs` | Connects to an Orbita server and lists its tools. It reads only, and needs nothing but Node |
+
+There are two ways to get it. Copy the folder into an assistant's skills location, as with any Agent Skill. Or
+read it from the server: every file is also an MCP resource at `skill://orbita-gps-trust/...`, listed with the
+skill's description and a SHA-256 of its text, so an agent that has only connected to the server can load the
+skill from the same connection it calls the tools on. The addresses follow the Skills over MCP draft (SEP-2640).
+Only resources are used, which every host already reads; the draft's own methods are not final and are not
+implemented.
+
+```bash
+node skills/orbita-gps-trust/scripts/connect.mjs                         # a server on this machine
+node skills/orbita-gps-trust/scripts/connect.mjs https://host/mcp --demo  # the public demo
+```
+
+A skill that drifts from its server is worse than none, so `test-skill.mjs` holds the two together: every tool
+the skill names exists, every tool the server offers is in the skill, the tool reference matches the live tool
+list exactly, each chain in it is one the code really names, and the numbers it gives a machine (5 metres by
+default, 0.3 metres for the strict line, ask again in 10 or 30 minutes) are the ones in the code. The format is
+checked against the specification and by its reference validator, `skills-ref`.
+
+## A Strands agent that follows the chain
+
+Every answer names the step that follows. `strands/agent.mjs` is the agent that follows them, built on the
+[Strands Agents SDK](https://strandsagents.com), AWS's open agent framework. It lives in its own folder with
+its own dependencies, so the server's are untouched.
+
+| What it does | How |
+|---|---|
+| Connects to Orbita | Strands' MCP client, over Streamable HTTP |
+| Learns how to use it | Reads the Agent Skill from the same connection (`skill://orbita-gps-trust/SKILL.md`) and uses it, with the server's instructions, as its system prompt. Nothing is copied into the agent |
+| Sees the chain | Each tool is wrapped as a Strands tool that returns `say`, `nextAction` and `flow`. A plain MCP adapter passes on only the text, and the next step is in the structured half |
+| Asks before it saves or sends | A tool the server does not mark read-only is refused unless the caller has said yes (`--yes`). The rule is in code, not in the prompt |
+| Has a ceiling | At most six tool calls a run and 700 tokens a reply, on the smallest current Claude model by default |
+
+```bash
+cd strands && npm install
+
+node agent.mjs --plan --url https://host/mcp --demo     # no model, no key, no cost
+ANTHROPIC_API_KEY=... node agent.mjs "Can I plant the North 40?" --url https://host/mcp --demo
+```
+
+`--plan` swaps Claude for a scripted model that starts at one tool and calls whatever `nextAction` each answer
+names. It runs through the same Strands agent loop, the same wrapped tools and the same guard, which is how the
+chain is tested for nothing: `node strands/test.mjs` runs the real tools in process on a seeded severe storm and checks
+that one request runs from the storm, to the farm, to the job it is hurting, and stops to ask before it starts a watch, that nothing is saved without a yes, and that the cap holds. 27 checks, no key, no network.
+
+The path through Claude uses Strands' Anthropic provider and needs a key. It costs a few cents a run, so it is
+not part of the automated checks.
+
 ## On a screen
 
 `/echo.html` is a stand-in for an Echo Show. Down the page are the lines somebody might say; each is a real tool
@@ -672,18 +788,23 @@ Or without installing Node at all:
 docker build -t orbita . && docker run -p 8788:8788 orbita
 ```
 
-`npm test` runs everything, 1,829 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 1,957 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 1,471 checks, no live data
-npm run test:live           # 239 checks, against a running server and the real feed
+npm run test:unit           # 1,703 checks, no live data
+npm run test:live           # 254 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines
 node test-playbook.mjs      # roles, phases, triggers, odds, voice limits, sources, the grid base rate
 node test-actions.mjs       # watches, crew emails, storm alerts, job log, repeats, a fresh start, retention
 node test-solarwind.mjs     # travel time from L1, what counts as incoming, one definition of now
 node test-panel.mjs         # the MCP Apps handshake against a simulated host
+node test-skill.mjs         # the Agent Skill: its format, every tool and chain it names, and reading it over MCP
+node test-gaps.mjs          # spoofing regions, receivers built for scintillation, holdover, aircraft reports off by default
+node test-conversations.mjs # whole conversations in the patterns real users were recorded in, with a scripted host
+node test-readme.mjs        # every count, file, setting and result this README states, against the code
+node strands/test.mjs       # the Strands agent, with a scripted model: needs `npm install` in strands/ first
 node test-auth.mjs          # OAuth 2.1 with PKCE against a running server
 node test-static-client.mjs # the account linking shape Alexa+ actually uses
 node test-web.mjs           # the demo page, every request on it, one farm per visitor, older hosts
@@ -905,7 +1026,7 @@ than an error: a host that calls nothing when nothing fits is behaving correctly
 
 It is not Alexa. It does not share Alexa's prompt, its turn budget or its judgment about when to call
 something, and that disclaimer travels in the response payload rather than living here. The model is Claude
-Haiku 4.5, with a daily cap of 25 calls, and it is given the server's own instructions, which say what this farm
+Sonnet 5.5, with a daily cap of 25 calls (Haiku 4.5 answered one turn in five with a question instead of a tool in the conversation tests, so it was replaced), and it is given the server's own instructions, which say what this farm
 has saved as counts and never names. With no key, or once the cap is reached, plain word rules choose the tool
 (`src/rules.ts`) and the screen says so. The demo page takes typed or spoken words; hearing and speaking are the
 browser's own.
@@ -1089,8 +1210,11 @@ time in a single pass. A sentence that was stable at the saved baseline and is n
 It costs one model call per sentence per trial, so it is not part of `npm test`. `npm run eval -- --preflight` asks the API to count the tokens of the real request, which is free, proves the request is accepted, and prints what a full run would cost; the tool list is cached across calls, which cuts the input bill by about nine tenths, and `--budget <dollars>` stops a run that reaches its limit rather than finishing it. What needs no model is: the
 golden file is checked against the live tool list (a renamed tool, an argument that no longer exists or an
 enum value nobody can pass fails the build), and the scorer and the runner are tested against a fake host
-that is deliberately flaky, over-eager or sends bad arguments. Last live run (Opus 5.5, 3 trials, all sentences stable, routing, declining and arguments all 100%, every chosen
-read-only call answered, $0.96). Read that with care: the first live runs missed several sentences, and the
+that is deliberately flaky, over-eager or sends bad arguments. Live runs on Opus 5.5: on 1 October, 3 trials, all sentences stable, routing, declining and arguments all 100%,
+every chosen read-only call answered ($0.96). On 14 October, after ten sentences for receivers built for
+scintillation, spoofing regions and holdover, 1 trial: tool choice 98.8% of 80, arguments 100% ($0.50). The one miss,
+a survey rover asking whether to trust its fix, chose the survey job check, and is accepted with the reason written
+in the golden file. Read that with care: the first live runs missed several sentences, and the
 fixes were tool descriptions plus a few golden sentences that were not fair single-turn tests (a required value only
 the customer knows, so asking back is correct), so 100% is a regression baseline and not a blind score. A golden set is also fixed, so it cannot notice a failure it does not contain, and cases should be
 added from real misses.
@@ -1118,7 +1242,7 @@ Named deliberately, because it exists.
   [`mcp-noaa-swpc`](https://github.com/pipeworx-io/mcp-noaa-swpc),
   [`noaa-spaceweather-mcp-server`](https://github.com/cyanheads/noaa-spaceweather-mcp-server),
   [`spaceweather-mcp`](https://github.com/hoon1983/spaceweather-mcp),
-  [`space-weather-mcp`](https://github.com/mrfentmen/space-weather-mcp), and
+  [`noaa-space-weather-mcp`](https://github.com/numa08/noaa-space-weather-mcp), and
   [`solar-mcp`](https://github.com/qso-graph/solar-mcp), which adds an HF band outlook for amateur
   radio. They expose the feed. None is an Alexa+ add-on, and none says what a satellite team, a grid
   control room, a dispatcher or a household should do, or when.

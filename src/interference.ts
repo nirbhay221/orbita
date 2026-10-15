@@ -30,6 +30,7 @@
  */
 
 import { gridDisk, latLngToCell } from 'h3-js';
+import * as spoofing from './spoofing.js';
 
 export type GpsTest = { name: string; id: string; place: string; lat: number; lon: number; groundNm: number; start: string; end: string; milesAway?: number };
 export type SatOutage = { prn: number; start: string; end: string | null; scheduled: boolean };
@@ -42,7 +43,29 @@ export type Found = {
   unchecked: string[];
   /** Too few aircraft crossed the area that day for their reports to say anything either way. */
   sparse?: boolean;
+  /** A region the FAA or EASA lists for routine jamming and spoofing. See spoofing.ts. */
+  zone?: spoofing.Zone | null;
+  /** Outside the United States, where the Coast Guard's test schedule says nothing either way. */
+  abroad?: boolean;
 };
+
+/*
+ * The Coast Guard's schedule is for tests in the United States. Elsewhere planned military jamming is announced
+ * too, but not in a form that can be read: the UK's CAA and Australia's Defence give notice by NOTAM a few days
+ * ahead (CAA Skywise alert SW2026/262; AvSEF consultations), and their pages refuse automated reads. So outside
+ * the United States a quiet schedule is never said as "no test was scheduled", and the answer says where to look.
+ *   https://skywise.caa.co.uk/alerts/upcoming-jamming-activity-jul-aug-2026/
+ *   https://www.avsef.gov.au/consultations/proposed-gnss-jamming-jervis-bay-airfield-yjby-nowra
+ */
+const US_BOXES = [
+  { lat: [24.3, 49.5], lon: [-125.0, -66.8] }, // the lower 48
+  { lat: [51.0, 71.6], lon: [-180.0, -129.0] }, // Alaska
+  { lat: [18.8, 22.4], lon: [-160.5, -154.6] }, // Hawaii
+  { lat: [17.8, 18.6], lon: [-67.4, -65.2] }, // Puerto Rico
+];
+export const inUS = (lat: number, lon: number): boolean => US_BOXES.some((b) => lat >= b.lat[0] && lat <= b.lat[1] && lon >= b.lon[0] && lon <= b.lon[1]);
+export const ABROAD_NOTE =
+  'Planned military GPS tests are published for the United States only; elsewhere they are announced to pilots by NOTAM a few days ahead, so ask your dealer or check the local NOTAMs.';
 
 const AGENT = { 'User-Agent': 'orbita/0.1 (Alexa+ add-on; GNSS fieldwork)' };
 const TESTS_URL = 'https://www.navcen.uscg.gov/sites/default/files/pdf/gps/gpsnotices/GPS_Interference.pdf';
@@ -139,7 +162,7 @@ async function readSats(): Promise<void> {
   }
 }
 
-const jamOn = (): boolean => (process.env.ORBITA_GPSJAM ?? 'on').toLowerCase() !== 'off';
+const jamOn = (): boolean => (process.env.ORBITA_GPSJAM ?? 'off').toLowerCase() === 'on';
 
 /** One day's counts, "hex,count_good_aircraft,count_bad_aircraft". */
 export function parseJam(csv: string): Map<string, [number, number]> {
@@ -237,7 +260,7 @@ export function near(lat: number, lon: number, at: Date = new Date()): Found {
   const reported = jamOn() ? reportedOver(lat, lon, jamDays.has(asked) ? asked : jamLatest ?? '') : null;
   if (jamOn() && !jamLatest) unchecked.push('aircraft interference reports');
   const sparse = jamOn() && !!jamLatest && aircraftOver(lat, lon, jamDays.has(asked) ? asked : jamLatest) < 20;
-  return { tests: active, satellites: out, reported, unchecked, sparse };
+  return { tests: active, satellites: out, reported, unchecked, sparse, zone: spoofing.zoneAt(lat, lon), abroad: !inUS(lat, lon) };
 }
 
 /** For a question about a past day: that day's aircraft reports, fetched if they are not held. */
@@ -274,6 +297,7 @@ export function sayAhead(found: Found): string {
     parts.push(`${test ? 'And aircraft' : 'One thing that is not the sun: aircraft'} over this area reported degraded GPS on ${dayMonth(`${found.reported.date}T12:00:00Z`)}, ${found.reported.pct} percent of them, which is a sign of jamming or interference nearby.`);
   }
   if (found.satellites.length >= 3) parts.push(`${found.satellites.length} GPS satellites are out of service at once, which is unusual and thins the sky for a receiver that tracks GPS alone.`);
+  if (found.zone) parts.push(parts.length ? `And ${spoofing.reason(found.zone).replace(/^the /, 'the ')}: check your line against a marker you know before you trust it.` : spoofing.sayAhead(found.zone));
   return parts.join(' ');
 }
 
@@ -294,6 +318,9 @@ export function sayThen(found: Found, sunToo: boolean): string {
   if (found.reported) {
     parts.push(`Aircraft over the area reported degraded GPS that day, ${found.reported.pct} percent of them, ${found.reported.level === 'high' ? 'which points to jamming or interference nearby' : 'a little more than usual'}.`);
   }
+  if (found.zone) {
+    parts.push(`${spoofing.whoSays(found.zone)} ${found.zone.name} as an area where GPS is regularly jammed and spoofed, so that may explain it, and spoofing leaves no trace a receiver reports.`);
+  }
   if (found.satellites.length) {
     const prns = found.satellites.map((s) => s.prn).sort((a, b) => a - b);
     parts.push(`GPS satellite${prns.length === 1 ? '' : 's'} ${prns.join(' and ')} ${prns.length === 1 ? 'was' : 'were'} out of service then, which a receiver that also tracks Galileo or GLONASS would not notice.`);
@@ -303,21 +330,23 @@ export function sayThen(found: Found, sunToo: boolean): string {
 
 /** When nothing was found: what was looked at and ruled out, and what could not be looked at. */
 export function ruledOut(found: Found): string {
-  if (found.tests.length || found.reported || found.satellites.length) return '';
+  if (found.tests.length || found.reported || found.satellites.length || found.zone) return '';
   const checked = [
-    found.unchecked.includes('the GPS testing schedule') ? '' : 'no military GPS test was scheduled over the field',
+    found.unchecked.includes('the GPS testing schedule') || found.abroad ? '' : 'no military GPS test was scheduled over the field',
     found.unchecked.includes('the satellite outage list') ? '' : 'no GPS satellite was out',
     found.unchecked.includes('aircraft interference reports') || !jamOn() || found.sparse ? '' : 'aircraft reported nothing unusual',
   ].filter(Boolean);
   const said = checked.length ? `I checked the other published causes: ${checked.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : '';
   const not = found.unchecked.length ? ` I could not check ${found.unchecked.join(' or ')}.` : '';
-  return `${said}${not}`.trim();
+  const abroad = found.abroad ? ` ${ABROAD_NOTE}` : '';
+  return `${said}${not}${abroad}`.trim();
 }
 
 export const SOURCES = [
   'https://www.navcen.uscg.gov/sites/default/files/pdf/gps/gpsnotices/GPS_Interference.pdf',
   'https://www.navcen.uscg.gov/sites/default/files/gps/sof/current_sof.sof',
   'https://gpsjam.org (John Wiseman; data from airplanes.live and ADS-B Exchange)',
+  ...spoofing.SOURCES,
 ];
 
 export const status = () => ({ tests: tests ? tests.list.length : null, testsUpdated: tests?.updated ?? null, satelliteOutages: sats ? sats.list.length : null, aircraftReportsFor: jamLatest });

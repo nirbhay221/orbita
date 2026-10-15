@@ -83,7 +83,14 @@ const km = (aLat: number, aLon: number, bLat: number, bLon: number): number => {
 };
 
 /** The sky within 400 km of a place, from the last minute that was read. Null when there is nothing fresh. */
+/**
+ * The licence asks for written permission for commercial use, so the feed can be switched off with ORBITA_ROTI=off
+ * by anyone who runs a copy commercially. Off, the forecast decides alone, as it does where too few links are overhead.
+ */
+export const rotiOn = (): boolean => (process.env.ORBITA_ROTI ?? 'on').toLowerCase() !== 'off';
+
 export function over(lat: number, lon: number, now = Date.now()): Sky | null {
+  if (!rotiOn()) return null;
   if (!links.length || now - fetchedAt > STALE_MS) return null;
   const near = links.filter((l) => Math.abs(l.lat - lat) < 5 && km(lat, lon, l.lat, l.lon) <= RADIUS_KM).map((l) => l.roti).sort((a, b) => a - b);
   if (!near.length) return null;
@@ -141,6 +148,7 @@ export async function refresh(): Promise<void> {
 
 /** Every five minutes: the file is a minute old when written, and about a megabyte. */
 export async function start(everyMs = 5 * 60_000): Promise<void> {
+  if (!rotiOn()) return;
   await refresh();
   if (!timer) {
     timer = setInterval(() => void refresh(), everyMs);

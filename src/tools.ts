@@ -144,12 +144,13 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
           baselineKm: z.number().positive().optional().describe('Distance to the RTK base station in kilometres, if they know it'),
           machineName: z.string().optional().describe('Name of the machine, e.g. "planter", "sprayer", "rover"'),
           correction: z.enum(['rtk', 'ppp', 'sbas', 'autonomous']).optional().describe('The correction that machine runs: rtk, ppp, sbas (also WAAS, EGNOS or GAGAN in India) or autonomous for none (NavIC or plain GPS alone)'),
+          hardened: z.boolean().optional().describe('true only when they say the receiver has scintillation protection, such as Trimble IonoGuard or a scintillation-resistant PPP service'),
           removeWhat: z.enum(['field', 'machine', 'everything']).optional().describe('Only to take something off: a field, a machine, or everything when they say start over or delete my data'),
           removeName: z.string().optional().describe('The name of the field or machine to remove'),
         },
       },
       async (input: unknown) => {
-        const a = (input ?? {}) as { fieldName?: string; place?: string; crop?: string; acres?: number; baselineKm?: number; machineName?: string; correction?: string; removeWhat?: string; removeName?: string };
+        const a = (input ?? {}) as { fieldName?: string; place?: string; crop?: string; acres?: number; baselineKm?: number; machineName?: string; correction?: string; hardened?: boolean; removeWhat?: string; removeName?: string };
         const call = (tool: string, args: Record<string, unknown>) => impl.get(tool)!(args) as Promise<Part>;
         if (a.removeWhat) return call('remove', { what: a.removeWhat, ...(a.removeName ? { name: a.removeName } : {}) });
         const said: string[] = [];
@@ -164,7 +165,7 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
         if (a.fieldName) {
           await step('register_field', { name: a.fieldName, ...(a.place ? { place: a.place } : {}), ...(a.crop ? { crop: a.crop } : {}), ...(a.acres ? { acres: a.acres } : {}), ...(a.baselineKm ? { baselineKm: a.baselineKm } : {}) });
         }
-        if (a.machineName && a.correction) await step('register_equipment', { name: a.machineName, correction: a.correction });
+        if (a.machineName && a.correction) await step('register_equipment', { name: a.machineName, correction: a.correction, ...(typeof a.hardened === 'boolean' ? { hardened: a.hardened } : {}) });
         if (a.machineName && !a.correction) said.push(`What correction does ${a.machineName} run: RTK, WAAS, PPP or none?`);
         if (!said.length) return say('Tell me a field and its nearest town, or a machine and the correction it runs.', { needs: 'field_or_machine' });
         // Each half ends by asking for the other. When both were given, neither question is left to ask.

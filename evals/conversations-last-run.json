@@ -1,0 +1,587 @@
+{
+  "at": "2026-10-15T02:13:51.179Z",
+  "model": "claude-opus-5-5",
+  "summary": {
+    "conversations": 14,
+    "conversationsAllRight": 13,
+    "turns": 33,
+    "turnsRight": 32,
+    "laterTurns": 32,
+    "costUsd": 0.23
+  },
+  "results": [
+    {
+      "name": "a blocked job, carried through",
+      "pattern": "one request leading to the next",
+      "turns": [
+        {
+          "say": "can I plant the North 40",
+          "want": [
+            "can_i_run"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "field": "North 40"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "ok so when does it clear",
+          "want": [
+            "can_i_run"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "field": "North 40"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "alright watch it for me",
+          "want": [
+            "watch_jobs"
+          ],
+          "got": "watch_jobs",
+          "args": {
+            "action": "start",
+            "operation": "planting",
+            "field": "North 40"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "and let Dale know, dale@example.com",
+          "want": [
+            "crew_contact"
+          ],
+          "got": "crew_contact",
+          "args": {
+            "action": "add",
+            "name": "Dale",
+            "email": "dale@example.com"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "the tractors stop, in the farmer's own words",
+      "pattern": "May 2024: 'the tractors were sitting at the ends of the field', 'auto steer wouldn't engage'",
+      "turns": [
+        {
+          "say": "all my tractors are sitting at the ends of the field, auto steer won't engage, is it the sun",
+          "want": [
+            "storm_status",
+            "can_i_run",
+            "farm_status"
+          ],
+          "got": "farm_status",
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "the dealer says turn off RTK, should I",
+          "want": [
+            "can_i_run",
+            "what_should_i_do"
+          ],
+          "got": "what_should_i_do",
+          "args": {
+            "role": "field_crew"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "how long is this going to last",
+          "want": [
+            "storm_status",
+            "can_i_run"
+          ],
+          "got": "storm_status",
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "looking back at a bad afternoon",
+      "pattern": "'the GPS showed the tractor going in circles'",
+      "turns": [
+        {
+          "say": "yesterday afternoon the tractor was going in circles on the GPS while we were planting, what happened",
+          "want": [
+            "what_happened"
+          ],
+          "got": "what_happened",
+          "args": {
+            "when": "yesterday afternoon",
+            "operation": "planting",
+            "equipment": "the tractor"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "ok put that in the log",
+          "want": [
+            "log_job"
+          ],
+          "got": "log_job",
+          "args": {
+            "operation": "planting",
+            "when": "yesterday afternoon",
+            "note": "tractor was going in circles on the GPS while planting"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "and tomorrow?",
+      "pattern": "a follow-up that only means something after the answer before it",
+      "turns": [
+        {
+          "say": "could I spray South Cut this afternoon",
+          "want": [
+            "can_i_run"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "spraying",
+            "field": "South Cut",
+            "when": "this afternoon"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "what about tomorrow morning though",
+          "want": [
+            "can_i_run"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "spraying",
+            "field": "South Cut",
+            "when": "tomorrow morning"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "the same thing twice, then giving up",
+      "pattern": "repeating was the commonest repair, and 'never mind' ended many",
+      "turns": [
+        {
+          "say": "what's the kp",
+          "want": [
+            "storm_status"
+          ],
+          "got": "storm_status",
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "what's the kp",
+          "want": [
+            "storm_status"
+          ],
+          "got": "storm_status",
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "never mind",
+          "want": [
+            null
+          ],
+          "got": null,
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": "No problem. Just ask whenever you want the Kp again or need to know if a job can run."
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "asking why",
+      "pattern": "'why are you asking me now?': explanations were a third of breakdowns",
+      "turns": [
+        {
+          "say": "can I plant the North 40 right now",
+          "want": [
+            "can_i_run"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "field": "North 40"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "why not",
+          "want": [
+            "tell_me_more",
+            "can_i_run"
+          ],
+          "got": "tell_me_more",
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "a correction",
+      "pattern": "rephrasing after being misunderstood",
+      "turns": [
+        {
+          "say": "can I plant the North 40",
+          "want": [
+            "can_i_run"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "field": "North 40"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "no sorry I meant spraying",
+          "want": [
+            "can_i_run"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "spraying",
+            "field": "North 40"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "setting up in passing",
+      "pattern": "telling it things in the order they come to mind",
+      "turns": [
+        {
+          "say": "I've got a new field, the Home Quarter, it's near Grand Island Nebraska",
+          "want": [
+            "my_farm"
+          ],
+          "got": "my_farm",
+          "args": {
+            "fieldName": "Home Quarter",
+            "place": "Grand Island, Nebraska"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "the sprayer runs RTK",
+          "want": [
+            "my_farm"
+          ],
+          "got": "my_farm",
+          "args": {
+            "machineName": "sprayer",
+            "correction": "rtk"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "so can I go",
+          "want": [
+            "can_i_run"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "spraying",
+            "equipment": "sprayer",
+            "field": "Home Quarter"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "a drone survey",
+      "pattern": "a job that is not farming",
+      "turns": [
+        {
+          "say": "I've got a drone mapping job this afternoon, is the GPS going to behave",
+          "want": [
+            "can_i_run",
+            "what_should_i_do"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "drone_survey",
+            "when": "this afternoon"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "how long have I got",
+          "want": [
+            "can_i_run"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "drone_survey",
+            "when": "this afternoon"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "the day's work, then the record",
+      "pattern": "reporting in passing",
+      "turns": [
+        {
+          "say": "we got eighty acres of planting done today",
+          "want": [
+            "log_job"
+          ],
+          "got": "log_job",
+          "args": {
+            "operation": "planting",
+            "acres": 80,
+            "when": "today"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "send the week's report to the office",
+          "want": [
+            "job_report"
+          ],
+          "got": "job_report",
+          "args": {
+            "days": 7,
+            "emailTo": "office"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "a machine asks",
+      "pattern": "an agent, not a person",
+      "turns": [
+        {
+          "say": "I'm a delivery robot in Fargo, can I trust my GPS position right now",
+          "want": [
+            "position_trust"
+          ],
+          "got": "position_trust",
+          "args": {
+            "lat": 46.877,
+            "lon": -96.79
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "and in ten minutes",
+          "want": [
+            "position_trust"
+          ],
+          "got": null,
+          "args": {},
+          "ok": false,
+          "toolOk": false,
+          "argsOk": true,
+          "said": "I can't tell you that ahead of time. Orbita's position check only covers right now, and none of its tools can forecast your position error for a later time. Since you're a robot and not a field job, t"
+        }
+      ],
+      "allRight": false
+    },
+    {
+      "name": "off the subject, then back",
+      "pattern": "a question it cannot answer, then one it can",
+      "turns": [
+        {
+          "say": "what's corn at today",
+          "want": [
+            null
+          ],
+          "got": null,
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": "Orbita can't help with that. It doesn't have grain prices or market quotes. It only covers space weather and whether your GPS-guided jobs will stay accurate. For today's corn price, try your elevator,"
+        },
+        {
+          "say": "ok well is the GPS any good today",
+          "want": [
+            "can_i_run",
+            "storm_status",
+            "farm_status"
+          ],
+          "got": "farm_status",
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "weeks, then this weekend",
+      "pattern": "a longer view, then the near one",
+      "turns": [
+        {
+          "say": "which weeks are worth booking the custom planter for",
+          "want": [
+            "plan_season"
+          ],
+          "got": "plan_season",
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "and this weekend",
+          "want": [
+            "can_i_run",
+            "plan_season"
+          ],
+          "got": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "when": "this weekend"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "thanks, that's all",
+      "pattern": "'thank you' and 'I got it' used to end",
+      "turns": [
+        {
+          "say": "what's the sun doing",
+          "want": [
+            "storm_status"
+          ],
+          "got": "storm_status",
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "thanks, that's all I needed",
+          "want": [
+            null
+          ],
+          "got": null,
+          "args": {},
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": "You're welcome. If you need to know whether a job can run while this storm is going on, just ask."
+        }
+      ],
+      "allRight": true
+    }
+  ]
+}
