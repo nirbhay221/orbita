@@ -155,7 +155,7 @@ const EARTH_KM = 6371;
  * USGS network is dense over North America and sparse everywhere else, so for
  * most of the world the correct output here is silence.
  */
-const NEAR_KM = 600;
+export const NEAR_KM = 600;
 const REGIONAL_KM = 2000;
 
 export type Reading = {

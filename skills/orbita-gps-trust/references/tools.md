@@ -178,10 +178,11 @@ Look back at a past day, or a time on that day, and say whether space weather ex
 
 Reads.
 
-Protective steps for somebody who looks after something a solar storm can reach: drones, satellites, the power grid, flights, HF radio, GPS timing, pipelines, directional drilling, railway signalling, a vessel holding position, automated mining, a vehicle fleet, aurora watching, or a household. Timed to the NOAA forecast. Call this when someone asks what they should do, whether to postpone, or says what they operate and asks whether it will affect them. Read the answer aloud as given. It is not for whether a field job can run (use can_i_run) or for the current Kp (use storm_status).
+Protective steps for somebody who looks after something a solar storm can reach: drones, satellites, the power grid, flights, HF radio, GPS timing, pipelines, directional drilling, railway signalling, a vessel holding position, automated mining, a vehicle fleet, aurora watching, a household, a small plane, a magnetic survey or robots. Timed to the NOAA forecast. Call this when someone asks what they should do, whether to postpone, or says what they operate and asks whether it will affect them. Read the answer aloud as given. It is not for whether a field job can run (use can_i_run) or for the current Kp (use storm_status).
 
 | Argument | Values | Needed |
 |---|---|---|
-| `role` | field_crew, drone_pilot, satellite_operator, crewed_spaceflight, grid_operator, airline, hf_radio, timing, data_centre, pipeline, drilling, rail, maritime_dp, mining, fleet, aurora, household | no |
+| `role` | field_crew, drone_pilot, satellite_operator, crewed_spaceflight, grid_operator, airline, hf_radio, timing, data_centre, pipeline, drilling, rail, maritime_dp, mining, fleet, aurora, household, general_aviation, magnetic_survey, robots | no |
 | `orbit` | low, medium, high, beyond | no |
 | `step` | integer | no |
+| `place` | string | no |

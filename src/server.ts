@@ -9,6 +9,7 @@ import { chooseByWords } from './rules.js';
 import * as roti from './roti.js';
 import * as interference from './interference.js';
 import * as particles from './particles.js';
+import * as ground from './ground.js';
 import { speakErrorsPlainly } from './plainly.js';
 import express from 'express';
 import { readFileSync } from 'node:fs';
@@ -109,7 +110,8 @@ function instructionsFor(farmId: string): string {
   const base =
         'This add-on turns the NOAA space weather forecast into decisions. It tells field crews, surveyors, drone ' +
         'mappers and grade crews whether GPS guidance will hold accuracy, and tells satellite, grid, airline, HF radio, ' +
-        'timing, pipeline, drilling, rail, vessel positioning, mining and fleet operators, aurora watchers and ' +
+        'timing, pipeline, drilling, rail, vessel positioning, mining, fleet, robot and magnetic survey operators, ' +
+        'small plane pilots, aurora watchers and ' +
         'households what to do about a storm and when. ' +
         'Always read the returned reason aloud, it names the binding constraint and what to do next. ' +
         'If NOAA is unreachable, say so plainly rather than guessing; a wrong go-ahead costs a season. ' +
@@ -240,6 +242,7 @@ app.get('/health', (_req, res) => {
     auth: AUTH_ON ? 'oauth2.1+pkce' : 'off (local dev)',
     noaa: snap ? { slots: snap.slots.length, alerts: snap.alerts.length, ageMinutes: swpc.ageMinutes(), stale: snap.stale } : null,
     ground: { observatories: geomag.watched(), ageMinutes: geomag.ageMinutes() },
+    absorptionAndEfield: { ageMinutes: ground.ageMinutes() },
     ionosphere: glotec.status(),
     skyLinks: roti.status(),
     crewHeat: crewheat.status(),
@@ -585,6 +588,7 @@ for (const [, farm] of store.allEntries()) {
     glotec.watch(field.lat, field.lon);
     crewheat.watch(field.lat, field.lon);
   }
+  if (farm.rolePlace) geomag.watch(farm.rolePlace.lat, farm.rolePlace.lon);
 }
 await geomag.start();
 
@@ -599,6 +603,8 @@ await Promise.allSettled([glotec.start(), swpcplus.start(), aurora.start(), ntri
 // Not awaited: a slow PDF at the Coast Guard must not hold the server from answering.
 void interference.start();
 void particles.start();
+// HF absorption and the ground electric field, for the operators what_should_i_do answers. See ground.ts.
+void ground.start();
 // The crew's half of the same decision: the heat over each field for the hours a job would run. Not awaited,
 // because nothing about whether the receiver holds its line should wait on a weather forecast.
 void crewheat.start();

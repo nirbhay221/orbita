@@ -138,6 +138,25 @@ check('...with what has actually happened, not just what the scale allows',
 check('...and never as a prediction about their own street',
   says(homeG5, /not a prediction about your street/), homeG5.spoken);
 
+console.log('\nSmall planes, magnetic surveys, robots and a radio burst');
+// WAAS dropped LPV at the G5 of May 2024 (FAA DR 158). A G3 has not taken it away, so it is not said there.
+const gaG3 = advise('general_aviation', sky({ levels: { g: 3, s: 0, r: 0 } }), null);
+check('a pilot is not told to drop LPV at a G3', gaG3.phase === 'quiet', gaG3.phase);
+const gaG5 = advise('general_aviation', sky({ levels: { g: 5, s: 0, r: 0 } }), null);
+check('...but at a G5 is told to fly the LNAV minimums', gaG5.phase === 'during' && says(gaG5, /LNAV minimums/), gaG5.spoken);
+const gaSoon = advise('general_aviation', sky({ slots: slots({ 9: 8.3 }) }), null);
+check('...and a day ahead to plan without LPV, with May 2024 behind it', says(gaSoon, /as if LPV approaches are not there/) && says(gaSoon, /May 2024/), gaSoon.spoken);
+const magG1 = advise('magnetic_survey', sky({ levels: { g: 1, s: 0, r: 0 } }), null);
+check('a magnetic survey stops at a G1, because the storm is in what it measures', magG1.phase === 'during' && says(magG1, /storms of any size/), magG1.spoken);
+const robotG3 = advise('robots', sky({ levels: { g: 3, s: 0, r: 0 } }), null);
+check('a parked robot stays parked through a G3', says(robotG3, /leave it parked/), robotG3.spoken);
+check('...and the robot answer carries that there is no robot case on record', /Nobody has published a robot/.test(robotG3.note?.say ?? ''), JSON.stringify(robotG3.note));
+check('...and does not talk about the grid below G5', !says(robotG3, /voltage/), robotG3.spoken);
+check('a G5 tells robot owners about a safe stop', says(advise('robots', sky({ levels: { g: 5, s: 0, r: 0 } }), null), /safe stop/));
+const flare = advise('field_crew', sky({ levels: { g: 0, s: 0, r: 3 } }), null);
+check('a strong flare running warns a field crew about a radio burst', flare.phase === 'during' && says(flare, /December 2006/), flare.spoken);
+check('...and an R1 does not', !says(advise('field_crew', sky({ levels: { g: 0, s: 0, r: 1 } }), null), /radio burst/));
+
 console.log('\nVoice rules: at most three steps at a time, and a way to hear the rest');
 const long = advise('satellite_operator', sky({ levels: { g: 3, s: 2, r: 0 } }), null);
 check('never more than three steps read aloud', long.spokenSteps <= 3, String(long.spokenSteps));

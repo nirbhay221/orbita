@@ -49,7 +49,7 @@ export type Sky = {
 export const ROLES = [
   'field_crew', 'drone_pilot', 'satellite_operator', 'crewed_spaceflight', 'grid_operator', 'airline',
   'hf_radio', 'timing', 'data_centre', 'pipeline', 'drilling', 'rail', 'maritime_dp', 'mining',
-  'fleet', 'aurora', 'household',
+  'fleet', 'aurora', 'household', 'general_aviation', 'magnetic_survey', 'robots',
 ] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -71,7 +71,10 @@ export const ROLE_HINT =
   'cable layers or survey ships. ' +
   'mining for open pit mining, autonomous haulage, haul trucks, blast hole drilling or mine surveying. ' +
   'fleet for tracking trucks, vans, deliveries, telematics or a yard. ' +
-  'aurora for seeing the northern lights. household for someone at home.';
+  'aurora for seeing the northern lights. household for someone at home. ' +
+  'general_aviation for a private or small plane pilot, flight training, or flying a GPS, WAAS or LPV approach. ' +
+  'magnetic_survey for an aeromagnetic, airborne or ground magnetic survey, or magnetometer prospecting. ' +
+  'robots for robot lawn mowers, delivery or sidewalk robots, warehouse or yard robots, or home robots.';
 
 export type Source = { name: string; url: string };
 
@@ -206,6 +209,30 @@ const SRC = {
     name: 'Minow and others (NASA), Space Weather Launch Constraints for JWST',
     url: 'https://ntrs.nasa.gov/api/citations/20230013623/downloads/Minow_etal_ASEC_2023_presentation.pdf',
   },
+  waasMay2024: {
+    name: 'FAA William J. Hughes Technical Center, WAAS Discrepancy Report 158, ionospheric activity 10 to 12 May 2024',
+    url: 'https://www.nstb.tc.faa.gov/Discrepancy%20Reports%20PDF/DR%20158%20Iono%20Activity%20May%2010%20-%2012%202024.pdf',
+  },
+  satNavNews: {
+    name: 'FAA SatNavNews, volume 78, summer 2024',
+    url: 'https://www.faa.gov/sites/faa.gov/files/SatNavNews_vol78_Summer_2024_Final.pdf',
+  },
+  bomSurvey: {
+    name: 'Australian Bureau of Meteorology Space Weather Services, Geomagnetic Pulsations in Aeromagnetic Surveys',
+    url: 'https://sws.bom.gov.au/Educational/3/1/2',
+  },
+  usgsReflights: {
+    name: 'USGS Open-File Report 02-98, survey specifications appendix',
+    url: 'https://pubs.usgs.gov/of/2002/0098/APPENDIX.HTM',
+  },
+  radioBurst: {
+    name: 'Cerruti and others, Effect of intense December 2006 solar radio bursts on GPS receivers, Space Weather (2008)',
+    url: 'https://doi.org/10.1029/2007SW000375',
+  },
+  danishRtk: {
+    name: 'Ingenioren, Danish farmers hit by huge solar storm: machinery at a standstill (May 2024)',
+    url: 'https://ing.dk/artikel/danish-farmers-hit-huge-solar-storm-machinery-standstill',
+  },
 } satisfies Record<string, Source>;
 
 type Ctx = { expected: Levels };
@@ -257,12 +284,26 @@ const AURORA_REACH: Record<number, string> = {
 export const PLAYBOOKS: Record<Role, Playbook> = {
   field_crew: {
     label: 'GPS guided field work',
-    drivers: [{ scale: 'G', from: at(1) }],
+    drivers: [
+      { scale: 'G', from: at(1) },
+      { scale: 'R', from: at(3) },
+    ],
     actions: [
       {
         when: ['watch', 'imminent', 'during', 'after'],
         say: 'Ask me whether you can run the job on your field, and I will check it against your rig and the accuracy that job needs.',
         sources: [SRC.noaa],
+      },
+      /*
+       * A big flare can come with a solar radio burst, which drowns the GPS signal itself on the daylit side. In
+       * December 2006 one cut the dual frequency stations tracking four satellites from over 120 to under 60. Rare,
+       * short, and nothing the geomagnetic forecast sees coming, so it is said only while a strong flare is running.
+       */
+      {
+        when: ['during'],
+        needs: { scale: 'R', from: 3 },
+        say: 'A strong solar flare is running. Rarely one comes with a radio burst that drowns GPS on the daylit side for some minutes, as in December 2006, so if guidance drops in daylight now, wait a few minutes before you blame the rig.',
+        sources: [SRC.noaa, SRC.radioBurst],
       },
     ],
     quiet: 'Nothing in the forecast should upset satellite guidance for field work.',
@@ -863,6 +904,91 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
       },
     ],
     quiet: "Nothing in NOAA's forecast should affect your home. Storms like this do not damage phones, cars or anything in the house.",
+  },
+
+  /*
+   * A small plane flying a GPS approach depends on WAAS for the vertical guidance, and WAAS switches that off
+   * when the ionosphere is too disturbed to trust. In May 2024 it did, across the lower 48 and Alaska from
+   * about 19:00 UTC on the 10th to 10:30 UTC on the 11th, while the lateral only LNAV service carried on.
+   */
+  general_aviation: {
+    label: 'flying a small plane',
+    drivers: [{ scale: 'G', from: at(4) }],
+    actions: [
+      {
+        when: ['watch', 'imminent'],
+        say: 'Plan the flight as if LPV approaches are not there. In May 2024 WAAS lost LPV and LP across the lower 48 and Alaska for about fifteen hours while LNAV kept working, so pick a destination and an alternate you can reach on LNAV minimums or an ILS.',
+        sources: [SRC.waasMay2024],
+      },
+      {
+        when: ['watch', 'imminent', 'during'],
+        say: 'Check the WAAS NOTAMs before you go. When the ionosphere is too disturbed WAAS suspends vertical guidance, and LPV and LNAV slash VNAV approaches will not load.',
+        sources: [SRC.satNavNews],
+      },
+      {
+        when: ['during'],
+        say: 'If the box will only give you LNAV, fly the LNAV minimums, and expect to need better weather at the airport than you planned for.',
+        sources: [SRC.satNavNews, SRC.waasMay2024],
+      },
+    ],
+    quiet: 'Nothing in the forecast should take WAAS vertical guidance away. NOTAMs still have the last word for your airport.',
+  },
+
+  /*
+   * A magnetic survey measures the Earth's field, so a storm is not a fault in the kit, it is noise in the thing
+   * being measured. Contracts set a tolerance on the base station record and lines flown outside it are flown
+   * again. Storm variations cannot be corrected out the way the ordinary daily swing can.
+   */
+  magnetic_survey: {
+    label: 'magnetic survey',
+    drivers: [{ scale: 'G', from: at(1) }],
+    actions: [
+      {
+        when: ['watch', 'imminent'],
+        say: 'Plan the flying days around the storm. Survey specifications commonly call conditions unfit when the field changes by 5 nanotesla in 5 minutes or 10 in 10, and lines flown outside the tolerance get flown again.',
+        sources: [SRC.bomSurvey, SRC.usgsReflights],
+      },
+      {
+        when: ['during'],
+        say: 'Surveys are generally stopped during storms of any size, because storm variations cannot be corrected out like the daily swing. Keep the base station running and check its record against your contract before the next line.',
+        sources: [SRC.bomSurvey],
+      },
+    ],
+    quiet: "No geomagnetic storm is in NOAA's forecast. Check the base station for the ordinary daily swing as usual.",
+  },
+
+  /*
+   * Wire free mowers, yard and delivery robots steer by the same centimetre RTK fix that farms lost in May 2024,
+   * so the farm evidence carries over: permanent receivers held about 2 cm through Kp 5 and 6 and lost precise
+   * positioning at Kp 8 and 9 (evals/receivers.mjs). Nobody has published a robot losing its way in a storm, and
+   * the note says so.
+   */
+  robots: {
+    label: 'robots',
+    drivers: [{ scale: 'G', from: at(3) }],
+    actions: [
+      {
+        when: ['watch', 'imminent'],
+        say: 'Robots that steer by RTK, like wire free mowers and yard robots, use the same centimetre fix that dropped out on farm tractors in May 2024. Hold off unattended runs over the storm nights, and know whether yours stops or carries on when the fix goes.',
+        sources: [SRC.noaa, SRC.danishRtk],
+      },
+      {
+        when: ['during'],
+        say: 'If a robot stops with a lost fix, leave it parked until the storm passes rather than driving it home on a poor position.',
+        sources: [SRC.danishRtk],
+      },
+      {
+        when: ['watch', 'imminent', 'during'],
+        needs: { scale: 'G', from: 5 },
+        say: 'At G5 NOAA expects some grids to have voltage problems. A robot that needs the cloud or a remote operator should have a safe stop for when the link goes.',
+        sources: [SRC.noaa],
+      },
+    ],
+    quiet: "Nothing in NOAA's forecast should upset the satellite fix robots steer by.",
+    note: {
+      say: 'Nobody has published a robot losing its way in a storm. This is the farm evidence applied to the same receivers.',
+      sources: [SRC.danishRtk],
+    },
   },
 };
 

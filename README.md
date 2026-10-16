@@ -30,7 +30,8 @@ fields, machines and correction type, and answers for that job:
 
 It works anywhere: exposure is computed from geomagnetic latitude, so a field in Punjab, Bavaria or Patagonia is
 judged where it actually sits. Satellite teams, grid rooms, airlines, HF radio, timing, pipelines, drilling, rail,
-vessel positioning, mining, fleets, aurora watchers and households get advice for their work from the same data.
+vessel positioning, mining, fleets, robots, magnetic surveys, small plane pilots, aurora watchers and households get
+advice for their work from the same data.
 
 The Latin `orbita` meant a track cut into the ground by a wheel. Built for the
 [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com), Alexa+ track, plus the Open
@@ -77,12 +78,13 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 1,957 automated checks, run on every push |
+| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,004 automated checks, run on every push |
 | Agent Skill | **Real**: `skills/orbita-gps-trust`, to the open Agent Skills format, passing the format's own validator. Installable as a folder, and readable from the server as `skill://` resources |
 | Strands agent | **Real**: `strands/agent.mjs`, on AWS's Strands Agents SDK. It reads the skill from the server and follows each next step. The chain, the yes before a write and the step cap are checked with a scripted model at no cost; the path through Claude needs a key and is not in the automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
 | The sky over the field, measured | **Real, live**: the German Aerospace Center's one-minute disturbance readings (ROTI) from about 4,000 satellite links worldwide, read within 400 km of the field. Free for scientific use. Orbita is free and open source and sells nothing, so it uses the data on those terms. Commercial use would need the IMPC's written permission, so anyone who runs a copy commercially can set `ORBITA_ROTI=off` and the forecast then decides alone. We thank DLR who is maintaining the IMPC services |
 | Ground magnetometers | **Real** (USGS), **United States only** |
+| Ground electric field, HF absorption | **Real, live**: NOAA's geoelectric field model (lower 48 and Canada) and D-RAP (worldwide), read at the place an operator names |
 | What is not the sun: GPS tests, satellite outages, spoofing regions, aircraft-reported interference | **Real, live**: the Coast Guard's GPS testing schedule and satellite outage file, which cover the United States. Elsewhere a quiet schedule is never said as "no test": the answer says that planned tests there are announced to pilots by NOTAM, which the UK CAA and Australia's Defence publish in a form that cannot be read automatically. **Real, from the regulators**: the regions the FAA (March 2026) and EASA (July 2026) list for routine jamming and spoofing, drawn as boxes around the regions they name. GPSJAM's daily aircraft reports publish no licence, so they are **off unless switched on** |
 | The past: "what happened at 3 pm on May 10 2024" | **Real**, from the archived Kp record, by the hour |
 | Crew heat | **Real**: Open-Meteo's hourly forecast over each field |
@@ -105,7 +107,7 @@ This file is long because the reasoning is the work. If you are evaluating the p
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
 Free NOAA, USGS and DLR products, no API keys for the data. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 1,957 checks.
+external is called inside a turn. `npm test` runs 2,004 checks.
 
 ## The problem
 
@@ -262,12 +264,26 @@ from the source that describes the effect, and its own steps for each phase of a
 | Vehicle fleets | G3 | Ordinary tracking rides through most storms, so it stays quiet until the strong end: satellite messaging in remote areas, yard equipment that needs centimetres, and rough geofences and arrival times at G4 | RTI for NIST (2019); NOAA scales |
 | Aurora watchers | G1 | How far south NOAA says aurora has been seen at that level | NOAA scales |
 | Households | G5 | Charge phones and keep a torch ready; storms do not damage phones, cars or anything in the house | NOAA scales |
-| Field crews | G1 | Hands over to the go or no go for their own field and rig | this project |
+| Small plane pilots | G4 | Plan as if LPV is not there, with an alternate on LNAV minimums or an ILS; check WAAS NOTAMs; fly LNAV minimums if that is all the box gives. In May 2024 WAAS lost LPV and LP over the lower 48 and Alaska for about fifteen hours while LNAV kept working | FAA WAAS Discrepancy Report 158; FAA SatNavNews (2024) |
+| Magnetic surveys | G1 | Plan flying days around the storm, since specifications call 5 nT in 5 minutes or 10 in 10 unfit and lines outside tolerance are flown again; stop during storms of any size and check the base station before the next line | Australian Bureau of Meteorology; USGS Open-File Report 02-98 |
+| Robots | G3 | Wire free mowers and yard robots use the same RTK fix tractors lost in May 2024: no unattended runs over storm nights, and a stopped robot stays parked; at G5 a safe stop for anything that needs the cloud. It says no robot case is on record | Ingenioren (May 2024); NOAA scales; this project's receiver study |
+| Field crews | G1, or R3 | Hands over to the go or no go for their own field and rig. While a strong flare runs, a rare solar radio burst can drown GPS on the daylit side for minutes, as in December 2006 | this project; Cerruti et al. (2008) |
 
 **It is timed.** Each answer is in one of five phases: quiet, a watch one to three days out,
 imminent within the day, during, and after. A grid control room two days from a G3 hears about
 black start units, not redispatch. Forecast times are said in UTC, because that is what operators
 run on.
+
+**It reads the ground where they are.** Tell it the place once ("our substation near Fargo") and it is
+remembered. A grid room, a pipeline or a railway then hears NOAA's modelled ground electric field at that
+spot, next to the one published reference point, NERC TPL-007's once in a hundred years case of 8 volts
+per kilometre. NOAA gives no line for when the field matters and asks for caution in acting on its maps,
+so Orbita never calls a number dangerous. An HF station or a dispatcher hears which frequencies are
+being absorbed over them and NOAA's recovery estimate. A magnetic survey or a drilling crew within 600 km
+of an observatory hears what that magnetometer is doing. What each reading will not do matters as much:
+on a calm day a few millivolts are kept in the data and not read out, the ordinary daytime absorption
+below 5 MHz is never mentioned, a place off a map gets no number, and a magnetometer 1,000 km away is
+not handed over as the customer's own (`src/ground.ts`, `test-ground.mjs`).
 
 **Flares and proton events only come with odds.** NOAA publishes day ahead probabilities for radio
 blackouts and radiation storms, not timings, so those roles move to a watch at a 25 percent chance
@@ -297,7 +313,7 @@ anything in the house.** There is a test asserting the spoken answer never claim
 
 ## Data
 
-Twelve free NOAA and USGS products, no API key, no documented rate limit.
+Free NOAA and USGS products, no API key, no documented rate limit.
 
 The forecast, which is where this started:
 
@@ -329,6 +345,11 @@ The rest of the catalogue, each one for somebody this add-on already answers:
   season is not a three day question
 * **Solar flare and proton probabilities** for the HF radio operator and the dispatcher, and
   **electron fluence** for the satellite operator
+* **D-RAP**, NOAA's world map of the highest HF frequency losing at least 1 dB to absorption, for the
+  HF operator and the dispatcher, read at the place they name
+* **The geoelectric field**, NOAA's one minute model of the electric field in the ground over the lower
+  48 and Canada, in millivolts per kilometre, from the 3D empirical model where it covers and the 1D one
+  elsewhere, as NOAA recommends. This is what drives current into power lines, pipelines and rails
 
 NOAA's live products reach back about seven days. For older questions the retrospective uses the
 GFZ Potsdam archive, who produce the Kp index itself and publish the full record free without a key.
@@ -534,7 +555,7 @@ position_trust { lat: 46.88, lon: -96.79 }
 
 ## Data centres and AI infrastructure
 
-One of seventeen roles `what_should_i_do` answers: somebody who runs a data centre, a cloud region or a GPU cluster.
+One of twenty roles `what_should_i_do` answers: somebody who runs a data centre, a cloud region or a GPU cluster.
 A storm does not reach servers on the ground, and nothing here claims it does: nobody has documented a
 geomagnetic storm damaging computing hardware at ground level. It reaches what the building depends on, and each
 line of advice names which and where it comes from (`data_centre` in `src/playbook.ts`):
@@ -636,9 +657,10 @@ grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are liste
   one sentence; or takes one off, or everything, only when asked a second time
 
 **Everyone else a storm reaches**
-* `what_should_i_do` is one tool for seventeen kinds of operator: satellites (by orbit), crewed spaceflight, the
+* `what_should_i_do` is one tool for twenty kinds of operator: satellites (by orbit), crewed spaceflight, the
   power grid, data centres and AI infrastructure, flights, HF radio, GPS timing, pipelines, drilling, rail, a
-  vessel holding position, mining, fleets, drones, aurora watchers and households. It was published only with
+  vessel holding position, mining, fleets, drones, robots, magnetic surveys, small planes, aurora watchers and
+  households. It was published only with
   `ORBITA_SCOPE=all` until it was noticed that this left every one of them unanswerable on the deployed server
 
 **Published only with `ORBITA_SCOPE=all`:** `what_else_is_affected`.
@@ -788,11 +810,11 @@ Or without installing Node at all:
 docker build -t orbita . && docker run -p 8788:8788 orbita
 ```
 
-`npm test` runs everything, 1,957 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 2,004 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 1,703 checks, no live data
+npm run test:unit           # 1,750 checks, no live data
 npm run test:live           # 254 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines

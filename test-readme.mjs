@@ -19,7 +19,7 @@ const check = (label, cond, detail = '') => {
 };
 
 const readme = readFileSync('./README.md', 'utf8');
-const WORDS = { fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18 };
+const WORDS = { fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20 };
 const number = (w) => (/^\d/.test(w) ? Number(w.replace(/,/g, '')) : WORDS[w.toLowerCase()]);
 
 const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
@@ -47,7 +47,7 @@ console.log('\nCounts');
 const toolClaims = [...readme.matchAll(/(\d+) tools by default/g)].map((m) => Number(m[1]));
 check('"N tools by default" is the number a host is shown', toolClaims.length > 0 && toolClaims.every((n) => n === tools.length), `${toolClaims} vs ${tools.length}`);
 const { ROLES } = await import('./dist/playbook.js');
-const roles = [...readme.matchAll(/\b([a-z]+teen|\d+) (?:roles|kinds of operator)/g)].map((m) => number(m[1])).filter(Boolean);
+const roles = [...readme.matchAll(/\b([a-z]+teen|twenty|\d+) (?:roles|kinds of operator)/g)].map((m) => number(m[1])).filter(Boolean);
 check('the number of roles is the number the playbook has', roles.length > 0 && roles.every((n) => n === ROLES.length), `${roles} vs ${ROLES.length}`);
 
 console.log('\nCheck counts');

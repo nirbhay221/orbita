@@ -66,6 +66,8 @@ export type Farm = {
   waiting: Watch[];
   /** What the customer looks after, so they need not repeat it every time. */
   role?: string;
+  /** Where the thing they look after is, for what_should_i_do, when it is not one of their fields. */
+  rolePlace?: { name: string; lat: number; lon: number };
   crew: CrewContact[];
   jobLog: JobEntry[];
   /** Alerts already sent, as "storm:2026-09-15", so a crew is never emailed twice for one storm day. */
