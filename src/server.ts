@@ -10,6 +10,7 @@ import * as roti from './roti.js';
 import * as interference from './interference.js';
 import * as particles from './particles.js';
 import * as ground from './ground.js';
+import * as machineAlerts from './machinealerts.js';
 import { speakErrorsPlainly } from './plainly.js';
 import express from 'express';
 import { readFileSync } from 'node:fs';
@@ -110,7 +111,8 @@ function instructionsFor(farmId: string): string {
   const base =
         'This add-on turns the NOAA space weather forecast into decisions. It tells field crews, surveyors, drone ' +
         'mappers and grade crews whether GPS guidance will hold accuracy, and tells satellite, grid, airline, HF radio, ' +
-        'timing, pipeline, drilling, rail, vessel positioning, mining, fleet, robot and magnetic survey operators, ' +
+        'timing, pipeline, drilling, rail, vessel positioning, shipping, undersea cable, mining, fleet, robot and ' +
+        'magnetic survey operators, ' +
         'small plane pilots, aurora watchers and ' +
         'households what to do about a storm and when. ' +
         'Always read the returned reason aloud, it names the binding constraint and what to do next. ' +
@@ -178,6 +180,20 @@ function build(farmId: string): McpServer {
       contents: [
         { uri: uri.href, mimeType: 'text/html;profile=mcp-app', text: readFileSync(WINDOW_HTML, 'utf8') },
       ],
+    }),
+  );
+
+  // What a scheduler for a fleet polls: each saved site and machine, out of tolerance or not, over three days.
+  server.registerResource(
+    'alerts',
+    'orbita://alerts',
+    {
+      title: 'Alerts for machines',
+      description: 'For each saved site and machine: whether the next three days put it out of tolerance, when, and the clear windows. Poll it; etag changes only when an alert does.',
+      mimeType: 'application/json',
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(machineAlerts.forFarm(store.get(farmId))) }],
     }),
   );
 

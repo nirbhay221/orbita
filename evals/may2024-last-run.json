@@ -1,0 +1,148 @@
+{
+  "right": 11,
+  "of": 11,
+  "results": [
+    {
+      "event": "may2024",
+      "who": "grid_operator",
+      "moment": "watch",
+      "at": "2024-05-09T18:00:00Z",
+      "kp": 2.333,
+      "ok": true,
+      "means": "told a day ahead to get ready, not only once it hit",
+      "happened": "Operators received early notice from NOAA SWPC and put GMD operating procedures into effect before the storm arrived.",
+      "source": "https://www.nerc.com/globalassets/programs/rapa/gmd/reference-documents/may-2024-gmd-event-review.pdf",
+      "said": "NOAA's outlook reaches G4 on Friday. Check black start units and cranking paths are ready, and warn field crews they may be sent to substations to monitor on site. If your GIC studies support it, return equipment on outage to service, especially series capacitors, and delay planned outages."
+    },
+    {
+      "event": "may2024",
+      "who": "grid_operator",
+      "moment": "g5",
+      "at": "2024-05-11T01:30:00Z",
+      "kp": 9,
+      "ok": true,
+      "means": "pointed at the equipment that was actually affected",
+      "happened": "The grid stayed stable through G3 to G5, with isolated effects on transformers, voltage support equipment, breakers and harmonic filters.",
+      "source": "https://www.nerc.com/globalassets/programs/rapa/gmd/reference-documents/may-2024-gmd-event-review.pdf",
+      "said": "A geomagnetic storm is running now at G5. Watch reactive reserves, voltage and MVAR swings, harmonics, and transformer temperature and gassing. NERC's starting point for concern is ten amps of GIC per phase on heavily loaded transformers. Hold reactive reserves up and take load off susceptible equipment, and act on at least two indicators, never GIC alone."
+    },
+    {
+      "event": "may2024",
+      "who": "general_aviation",
+      "moment": "g4",
+      "at": "2024-05-10T20:00:00Z",
+      "kp": 8.667,
+      "ok": true,
+      "means": "told to fly LNAV during the hours LPV was gone",
+      "happened": "WAAS lost LPV and LP service over the lower 48 and Alaska from about 19:12 UTC on 10 May to 10:25 UTC on 11 May, while LNAV kept working.",
+      "source": "https://www.nstb.tc.faa.gov/Discrepancy%20Reports%20PDF/DR%20158%20Iono%20Activity%20May%2010%20-%2012%202024.pdf",
+      "said": "A geomagnetic storm is running now at G4. Check the WAAS NOTAMs before you go. When the ionosphere is too disturbed WAAS suspends vertical guidance, and LPV and LNAV slash VNAV approaches will not load. If the box will only give you LNAV, fly the LNAV minimums, and expect to need better weather at the airport than you planned for."
+    },
+    {
+      "event": "may2024",
+      "who": "airline",
+      "moment": "decision",
+      "at": "2024-05-10T15:00:00Z",
+      "kp": 7.667,
+      "ok": true,
+      "means": "told, with the storm under way, to plan the lower latitude track",
+      "happened": "At 15 UTC on 10 May, about seven hours before UAL 990 left San Francisco for Paris, United told the crew to fly a lower latitude, lower altitude route because of the risk of losing communications on high latitude routes. It peaked at 51 degrees north instead of about 65, and the crew took a lower dose than on a quiet day.",
+      "source": "https://www.frontiersin.org/journals/astronomy-and-space-sciences/articles/10.3389/fspas.2025.1657731/full",
+      "said": "NOAA's outlook reaches G4 on Friday. Put the space weather advisory in the flight packet and brief crews. That is how most crews heard about it in 2024. Where a flight can wait, delay it. Otherwise plan a lower latitude, lower altitude track: in May 2024 United kept UAL 990 south of 51 degrees and around 10.4 to 11 kilometres, and the crew took a lower dose than on a quiet day."
+    },
+    {
+      "event": "may2024",
+      "who": "airline",
+      "moment": "g5",
+      "at": "2024-05-11T01:30:00Z",
+      "kp": 9,
+      "ok": true,
+      "means": "a flight leaving at the height of the storm still hears the reroute",
+      "happened": "Flights kept leaving through the G5 night. The routing United chose for UAL 990 was for any flight crossing high latitudes while the storm ran.",
+      "source": "https://www.frontiersin.org/journals/astronomy-and-space-sciences/articles/10.3389/fspas.2025.1657731/full",
+      "said": "A geomagnetic storm at G5 and a radio blackout at R3 are running now. HF contact on the sunlit side can be lost for an hour or more, so do not plan around HF alone. For flights leaving while it runs, plan the lower latitude, lower altitude track too. United set UAL 990 south of 51 degrees seven hours before departure in May 2024, with the storm already under way, because high latitude routes risked losing communications. Satellite navigation can be degraded for hours and WAAS was affected in May 2024, so have an approach that does not depend on it."
+    },
+    {
+      "event": "may2024",
+      "who": "satellite_operator",
+      "moment": "g4",
+      "at": "2024-05-10T20:00:00Z",
+      "kp": 8.667,
+      "ok": true,
+      "means": "warned that orbit predictions and conjunctions would be off",
+      "happened": "About half of the roughly 10,000 satellites in low orbit manoeuvred, the largest migration on record, as drag rose and orbit predictions went wrong.",
+      "source": "https://arc.aiaa.org/doi/10.2514/1.A36164",
+      "said": "A geomagnetic storm is running now at G4. In medium orbit, where navigation satellites fly, there is no drag; the hazard is the outer radiation belt. Its energetic electrons build charge inside components, and a storm can raise them enormously, ten thousand times in the 2003 Halloween storm. NOAA measures them at geostationary orbit and not in medium orbit, so treat its electron alert as the nearest warning you have. In geostationary and other high orbits there is no drag to worry about; the problem is charging. Energetic electrons build charge inside insulation until it discharges, which is why NOAA alerts when electrons above 2 MeV pass 1,000 at its GOES satellites. Hold commanding that can wait and watch for phantom commands. Treat conjunction warnings as low confidence for about three days. In May 2024 collision avoidance was compromised that long, and about half of all active low orbit satellites manoeuvred at once. Choose deliberately between safe mode and staying in service. In May 2024 Planet paused imaging, a UK cubesat was powered down and ICESat-2 dropped into safe hold on its own, while other operators stayed in service because losing it cost more. NOAA expects surface charging on spacecraft components from G3."
+    },
+    {
+      "event": "may2024",
+      "who": "drone_pilot",
+      "moment": "g4",
+      "at": "2024-05-10T20:00:00Z",
+      "kp": 8.667,
+      "ok": true,
+      "means": "told to keep it close, be ready to fly without GPS, or stay down",
+      "happened": "Drone users reported unstable hover, GPS loss and crashes.",
+      "source": "https://en.wikipedia.org/wiki/May_2024_solar_storms",
+      "said": "A geomagnetic storm is running now at G4. Keep the aircraft close and in sight. The home point and return to home can be less precise, so be ready to fly it back yourself. Postpone mapping flights. NOAA expects intermittent satellite navigation problems from G3, and the error lands in every image."
+    },
+    {
+      "event": "may2024",
+      "who": "hf_radio",
+      "moment": "g5",
+      "at": "2024-05-11T01:30:00Z",
+      "kp": 9,
+      "ok": true,
+      "means": "told HF was out on the sunlit side and fading at high latitude",
+      "happened": "NOAA reported HF degradation through the storm, and an X5.8 flare at 01:23 UTC on 11 May blacked out HF on the sunlit side.",
+      "source": "https://en.wikipedia.org/wiki/May_2024_solar_storms",
+      "said": "A geomagnetic storm at G5 and a radio blackout at R3 are running now. A radio blackout is running on the sunlit side of the Earth. At R2 it lasts tens of minutes and at R3 about an hour, so wait it out or work a path on the night side. HF fades at higher latitudes while the geomagnetic storm runs."
+    },
+    {
+      "event": "may2024",
+      "who": "household",
+      "moment": "g5",
+      "at": "2024-05-11T01:30:00Z",
+      "kp": 9,
+      "ok": true,
+      "means": "not frightened, told what actually happened before",
+      "happened": "FEMA and the Department of Energy reported no significant impact on people, and the North American grid stayed up.",
+      "source": "https://www.nerc.com/globalassets/programs/rapa/gmd/reference-documents/may-2024-gmd-event-review.pdf",
+      "said": "A geomagnetic storm is running now at G5. NOAA says some power grids can see voltage problems at G5. That has actually happened once, in Quebec in 1989, and the G5 in May 2024 passed over North America with the lights on, so this is not a prediction about your street. Charging phones and finding a torch costs you nothing though. If you are on satellite internet, expect it to be slower for a while. Starlink reported degraded service during the May 2024 storm."
+    },
+    {
+      "event": "may2024",
+      "who": "field_crew",
+      "moment": "g4",
+      "at": "2024-05-10T20:00:00Z",
+      "kp": 8.667,
+      "ok": true,
+      "means": "a hold for RTK planting, not a go",
+      "happened": "Farmers on RTK in Nebraska stopped planting: tractors sat at the ends of the field and auto-steer would not engage.",
+      "source": "https://www.404media.co/solar-storm-knocks-out-tractor-gps-systems-during-peak-planting-season",
+      "said": "Hold off planting. Kp 8.7 (G4 severe) is strong enough that receivers here lose their precise fix altogether, as they did in May 2024, and planting needs it inside 2.0 inches."
+    },
+    {
+      "event": "may2024",
+      "who": "household",
+      "moment": "g4",
+      "at": "2024-05-10T20:00:00Z",
+      "kp": 8.667,
+      "ok": true,
+      "means": "a household at G4 is not alarmed",
+      "happened": "Nothing happened to homes at G4.",
+      "source": "https://www.nerc.com/globalassets/programs/rapa/gmd/reference-documents/may-2024-gmd-event-review.pdf",
+      "said": "Nothing in NOAA's forecast should affect your home. Storms like this do not damage phones, cars or anything in the house."
+    }
+  ],
+  "notCovered": [
+    {
+      "what": "GOES-16 stopped sending data from 00:19 to about 02:00 UTC on 13 May.",
+      "why": "Orbita does not serve people who depend on GOES imagery."
+    },
+    {
+      "what": "Transpower in New Zealand declared a grid emergency and took lines out as a precaution.",
+      "why": "Orbita's grid advice is the NERC template; it does not know a given utility's own procedure."
+    }
+  ]
+}

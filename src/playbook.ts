@@ -50,6 +50,7 @@ export const ROLES = [
   'field_crew', 'drone_pilot', 'satellite_operator', 'crewed_spaceflight', 'grid_operator', 'airline',
   'hf_radio', 'timing', 'data_centre', 'pipeline', 'drilling', 'rail', 'maritime_dp', 'mining',
   'fleet', 'aurora', 'household', 'general_aviation', 'magnetic_survey', 'robots',
+  'shipping', 'subsea_cable', 'satellite_services',
 ] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -74,7 +75,10 @@ export const ROLE_HINT =
   'aurora for seeing the northern lights. household for someone at home. ' +
   'general_aviation for a private or small plane pilot, flight training, or flying a GPS, WAAS or LPV approach. ' +
   'magnetic_survey for an aeromagnetic, airborne or ground magnetic survey, or magnetometer prospecting. ' +
-  'robots for robot lawn mowers, delivery or sidewalk robots, warehouse or yard robots, or home robots.';
+  'robots for robot lawn mowers, delivery or sidewalk robots, warehouse or yard robots, or home robots. ' +
+  'shipping for navigating a ship, a ferry, a fishing boat or a yacht, the bridge or the officer of the watch. ' +
+  'subsea_cable for operating undersea telecom or internet cables, their power feed or a cable landing station. ' +
+  'satellite_services for relying on satellite TV, satellite weather imagery or a satellite data feed.';
 
 export type Source = { name: string; url: string };
 
@@ -232,6 +236,30 @@ const SRC = {
   danishRtk: {
     name: 'Ingenioren, Danish farmers hit by huge solar storm: machinery at a standstill (May 2024)',
     url: 'https://ing.dk/artikel/danish-farmers-hit-huge-solar-storm-machinery-standstill',
+  },
+  uscgTrustVerify: {
+    name: 'US Coast Guard marine safety alert, Global Navigation Satellite Systems: Trust, But Verify, 19 January 2016',
+    url: 'https://amerisurv.com/?p=15313',
+  },
+  medford1989: {
+    name: 'Medford and others, Transatlantic Earth Potential Variations During the March 1989 Magnetic Storms, Geophysical Research Letters (1989)',
+    url: 'https://www.nokia.com/bell-labs/publications-and-media/publications/transatlantic-earth-potential-variations-during-the-march-1989-magnetic-storms',
+  },
+  boteler2024: {
+    name: 'Boteler and others, An Examination of Geomagnetic Induction in Submarine Cables, Space Weather (2024)',
+    url: 'https://doi.org/10.1029/2023SW003687',
+  },
+  goes16May2024: {
+    name: 'May 2024 solar storms (Wikipedia, citing NOAA): GOES-16 stopped transmitting all data on 13 May 2024',
+    url: 'https://en.wikipedia.org/wiki/May_2024_solar_storms',
+  },
+  dlrSectors: {
+    name: 'DLR, the impact of space weather on Earth: satellite communications and TV broadcasting, meteorological forecasting',
+    url: 'https://www.dlr.de/en/research-and-transfer/featured-topics/space-weather/visualising-space-weather/infographic-impact-of-space-weather-on-earth',
+  },
+  yizengaw2026: {
+    name: 'Yizengaw and others, the November 2025 superstorm over the American sector, Geophysical Research Letters (2026)',
+    url: 'https://doi.org/10.1029/2026GL124645',
   },
 } satisfies Record<string, Source>;
 
@@ -657,11 +685,28 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
         say: 'HF contact on the sunlit side can be lost for an hour or more, so do not plan around HF alone.',
         sources: [SRC.noaa],
       },
+      // NOAA puts single event upsets in satellite electronics from S3. Avionics at cruise sit under the same particles
+      // with less shielding than the ground has, so the line asks for a report, not a diagnosis.
+      {
+        when: ['during'],
+        needs: { scale: 'S', from: 3 },
+        say: 'At this level NOAA expects single event upsets in satellite electronics, and avionics at cruise see the same particles, so treat an unexplained avionics fault as possibly radiation and report it.',
+        sources: [SRC.noaa],
+      },
       {
         when: ['during'],
         needs: { scale: 'S', from: 1 },
         say: 'Radiation is raised at high latitudes. Keep flights off polar routes and lower where you can.',
         sources: [SRC.noaa, SRC.ual990],
+      },
+      // The May 2024 replay (evals/may2024.mjs) found this only said a day ahead. United set UAL 990's route at
+      // 15 UTC on 10 May, seven hours before departure and with the storm already running, for fear of losing
+      // communications at high latitude. Flights keep leaving through a storm that lasts days.
+      {
+        when: ['during'],
+        needs: { scale: 'G', from: 4 },
+        say: 'For flights leaving while it runs, plan the lower latitude, lower altitude track too. United set UAL 990 south of 51 degrees seven hours before departure in May 2024, with the storm already under way, because high latitude routes risked losing communications.',
+        sources: [SRC.ual990],
       },
       {
         when: ['during'],
@@ -882,9 +927,12 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
         when: ['watch', 'imminent', 'during'],
         say: ({ expected }) => {
           const level = Math.max(1, Math.min(5, expected.g));
-          return `At G${level} NOAA says aurora has been seen as far south as ${AURORA_REACH[level]}. Get away from city lights after dark and look north.`;
+          // The storm replays (evals/storms.mjs) found NOAA's G4 line short of what was seen: at Kp 9 minus in
+          // November 2025 auroral precipitation reached Florida. NOAA's line is kept, and what happened follows it.
+          const seen = level >= 4 ? ' At the top of the G4 in November 2025 it reached Florida.' : '';
+          return `At G${level} NOAA says aurora has been seen as far south as ${AURORA_REACH[level]}.${seen} Get away from city lights after dark and look north.`;
         },
-        sources: [SRC.noaa],
+        sources: [SRC.noaa, SRC.yizengaw2026],
       },
     ],
     quiet: 'Nothing strong enough for aurora outside the far north.',
@@ -901,6 +949,11 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
           'Quebec in 1989, and the G5 in May 2024 passed over North America with the lights on, so this is not a ' +
           'prediction about your street. Charging phones and finding a torch costs you nothing though.',
         sources: [SRC.noaa, SRC.nercMay2024],
+      },
+      {
+        when: ['during'],
+        say: 'If you are on satellite internet, expect it to be slower for a while. Starlink reported degraded service during the May 2024 storm.',
+        sources: [SRC.starlinkMay2024],
       },
     ],
     quiet: "Nothing in NOAA's forecast should affect your home. Storms like this do not damage phones, cars or anything in the house.",
@@ -989,6 +1042,89 @@ export const PLAYBOOKS: Record<Role, Playbook> = {
       say: 'Nobody has published a robot losing its way in a storm. This is the farm evidence applied to the same receivers.',
       sources: [SRC.danishRtk],
     },
+  },
+
+  /*
+   * A ship, not a vessel holding station: the bridge navigating by GNSS, with HF and satellite for its radio. The Coast
+   * Guard's 2016 alert came from ships whose radar, gyro and ECDIS lost their GPS input and carried on safely on radar,
+   * the magnetic compass and terrestrial fixes. NOAA puts intermittent satellite navigation problems at G3.
+   */
+  shipping: {
+    label: 'navigating a ship',
+    drivers: [
+      { scale: 'G', from: at(3) },
+      { scale: 'R', from: at(2) },
+    ],
+    actions: [
+      {
+        when: ['watch', 'imminent'],
+        say: 'Brief the watch that satellite position can be degraded for hours, and check now that radar, the compass and terrestrial fixes are working and that the crew is current on them.',
+        sources: [SRC.noaa, SRC.uscgTrustVerify],
+      },
+      {
+        when: ['during'],
+        needs: { scale: 'G', from: 3 },
+        say: 'Cross-check the GNSS position against radar and visual fixes. If they disagree, navigate on radar, the compass and terrestrial fixes, and record where, when and for how long, then report it to the Coast Guard Navigation Center.',
+        sources: [SRC.uscgTrustVerify],
+      },
+      {
+        when: ['during'],
+        needs: { scale: 'R', from: 2 },
+        say: 'HF on the sunlit side is fading or out with this flare, so keep another way to reach shore and other ships for anything that matters.',
+        sources: [SRC.noaa],
+      },
+    ],
+    quiet: "Nothing in NOAA's forecast should upset satellite navigation or HF at sea.",
+  },
+
+  /*
+   * An undersea cable's repeaters are powered down a copper conductor at constant current, so the ground voltage a
+   * storm induces along the route adds to or fights the power feed. In March 1989 TAT-8 saw Earth potential swings of
+   * 700 V peak to peak across the Atlantic and its power feed, conservatively designed, rode through. Boteler and
+   * others (2024) reproduce those numbers and find exposure depends on each route, and the Google study the data
+   * centre role cites found margin for a once in a century storm, so this says to check headroom, not to expect a
+   * failure.
+   */
+  subsea_cable: {
+    label: 'an undersea cable',
+    drivers: [{ scale: 'G', from: at(4) }],
+    actions: [
+      {
+        when: ['watch', 'imminent'],
+        say: "Check each power feed's voltage headroom against the induced voltage modelled for its route. In March 1989 TAT-8 saw Earth potential swings of 700 volts across the Atlantic and rode through, and a Google study found cables have margin even for a once in a century storm, with the risk in the grids at the landing ends.",
+        sources: [SRC.medford1989, SRC.boteler2024, SRC.cablesGoogle],
+      },
+      {
+        when: ['during'],
+        say: 'Watch power feed voltage and current at both landing stations, and treat fast swings as the storm rather than a cable fault before dispatching anyone.',
+        sources: [SRC.medford1989, SRC.boteler2024],
+      },
+    ],
+    quiet: "No storm in NOAA's forecast is strong enough to matter to a cable's power feed.",
+  },
+
+  /*
+   * People who rely on what satellites send down: satellite TV, satellite weather imagery, a satellite data feed.
+   * DLR names satellite communications and broadcasting, and meteorological forecasting, among the sectors space
+   * weather reaches. The worked case is GOES-16, which stopped sending all data from 00:19 to about 02:00 UTC on
+   * 13 May 2024, a day after the peak of the storm, so this speaks in the day after a strong storm too.
+   */
+  satellite_services: {
+    label: 'relying on satellite services',
+    drivers: [{ scale: 'G', from: at(3) }],
+    actions: [
+      {
+        when: ['watch', 'imminent'],
+        say: 'If you rely on satellite TV, satellite weather imagery or a satellite data feed, line up a fallback for a few hours.',
+        sources: [SRC.dlrSectors],
+      },
+      {
+        when: ['during', 'after'],
+        say: 'Short outages can come during the storm and in the day after it: GOES-16 stopped sending all its data for nearly two hours on 13 May 2024, a day after the peak. Wait it out before calling it a fault on your side.',
+        sources: [SRC.goes16May2024, SRC.dlrSectors],
+      },
+    ],
+    quiet: "Nothing in NOAA's forecast should interrupt satellite services.",
   },
 };
 

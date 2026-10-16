@@ -143,7 +143,9 @@ console.log('\nA machine asking about its position');
   const robot = await run('Can I trust my position?', { orbita, model: new ChainModel({ from: 'position_trust', args: { lat: 46.88, lon: -96.79, needMeters: 5, correction: 'rtk' } }), steps: 2 });
   check('in a severe storm an RTK receiver is told not to trust it', /^Do not trust it\./.test(robot.trace[0]?.say ?? ''), robot.trace[0]?.say);
   check('...and the same call is named to make again', robot.trace[0]?.nextAction?.tool === 'position_trust' && robot.trace[0].nextAction.arguments.lat === 46.88);
-  check('the cap on steps stops it asking for ever', robot.trace.filter((t) => !t.refused).length === 2 && robot.trace.at(-1).refused === 'limit', JSON.stringify(robot.trace.map((t) => [t.tool, t.refused])));
+  check('...then, told not to trust it, it asks when it clears, and the chain ends there by itself', robot.trace[1]?.tool === 'position_trust' && robot.trace.filter((t) => !t.refused).length === 2 && !robot.trace.some((t) => t.refused), JSON.stringify(robot.trace.map((t) => [t.tool, t.refused])));
+  const capped = await run('Can I trust my position?', { orbita, model: new ChainModel({ from: 'position_trust', args: { lat: 46.88, lon: -96.79, needMeters: 5, correction: 'rtk' } }), steps: 1 });
+  check('the cap on steps still stops it at the limit', capped.trace.filter((t) => !t.refused).length === 1 && capped.trace.at(-1).refused === 'limit', JSON.stringify(capped.trace.map((t) => [t.tool, t.refused])));
 }
 
 console.log('\nClaude is only reached when asked for');

@@ -23,6 +23,8 @@ const check = (label, cond, detail = '') => {
 mkdirSync('./data', { recursive: true });
 rmSync('./data/test-geomag.json', { force: true });
 process.env.ORBITA_DATA = './data/test-geomag.json';
+// The cases below were written for the USGS list; the INTERMAGNET observatories have their own section at the end.
+process.env.ORBITA_INTERMAGNET = 'off';
 
 const geomag = await import('./dist/geomag.js');
 
@@ -154,6 +156,36 @@ console.log('\nA failing fetch keeps the last good reading rather than inventing
   await geomag.refresh();
   check('no reading is manufactured from a failure', geomag.reading(...GRAND_ISLAND) === null);
   check('and the site still answers, silently', geomag.corroboration(...GRAND_ISLAND, 6) === '');
+}
+
+console.log('\nOutside the United States, through INTERMAGNET');
+{
+  process.env.ORBITA_INTERMAGNET = 'on';
+  geomag.resetForTest();
+  const near = (lat, lon) => geomag.nearest(lat, lon);
+  check('Munich is read from Fuerstenfeldbruck, next door', near(48.14, 11.58).observatory.id === 'FUR' && near(48.14, 11.58).km < 50);
+  check('Leeds, with no live UK observatory, from Dourbes, inside the local limit', near(53.8, -1.55).observatory.id === 'DOU' && near(53.8, -1.55).km <= geomag.NEAR_KM, JSON.stringify(near(53.8, -1.55)));
+  check('Sydney from Canberra', near(-33.87, 151.21).observatory.id === 'CNB');
+  check('Paris from Dourbes, not Chambon-la-Foret, whose terms were not checked', near(48.86, 2.35).observatory.id === 'DOU' && !geomag.observatories().some((o) => o.id === 'CLF'));
+  check('the UK observatories that publish nothing recent are not listed', !geomag.observatories().some((o) => ['ESK', 'LER', 'HAD'].includes(o.id)));
+  check('Denver is still Boulder', near(39.74, -104.99).observatory.id === 'BOU');
+  process.env.ORBITA_INTERMAGNET = 'off';
+  check('switched off, for a commercial copy, Munich falls back to the USGS list', near(48.14, 11.58).observatory.source === undefined);
+  process.env.ORBITA_INTERMAGNET = 'on';
+
+  // IAGA-2002 as the BGS node sends it: header, column line, minutes, and 99999 for minutes not yet published.
+  const t0 = Date.parse('2026-10-16T02:00:00Z');
+  const rows = [];
+  for (let i = 0; i < 6; i += 1) {
+    const at = new Date(t0 + i * 60_000).toISOString().replace('T', ' ').replace('Z', '');
+    rows.push(`${at} 289     ${i < 4 ? '18162.06' : '99999.00'}   ${i < 4 ? '1312.58' : '99999.00'}  46673.36  50099.73 |`);
+  }
+  const text = [' Format                 IAGA-2002                                    |', 'DATE       TIME         DOY     WNGX      WNGY      WNGZ      WNGF   |', ...rows].join('\n');
+  const got = geomag.parseIaga(text, t0, t0 + 10 * 60_000);
+  check('IAGA-2002 minutes are read as H from X and Y', got.length === 4 && Math.abs(got[0].h - Math.hypot(18162.06, 1312.58)) < 1e-6, JSON.stringify(got[0]));
+  check('...minutes not yet published are dropped, not read as a field of 99999', got.every((x) => x.h < 30000));
+  check('...minutes outside the window are dropped', geomag.parseIaga(text, t0 + 2 * 60_000, t0 + 10 * 60_000).length === 2);
+  check('...and a file not in X and Y is not misread', geomag.parseIaga(text.replace('WNGX      WNGY', 'WNGH      WNGD'), t0, t0 + 1e6).length === 0);
 }
 
 geomag.resetForTest();

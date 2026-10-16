@@ -1,0 +1,81 @@
+{
+  "title": "November 2025",
+  "about": "The 11 to 12 November 2025 storm: a G4 at Kp 9 minus, Dst about -217 nT. The sky at each moment is the archived Kp up to it and the G4 NOAA had classified the incoming storm as.",
+  "moments": {
+    "watch": {
+      "at": "2025-11-11T12:00:00Z",
+      "levels": {
+        "g": 0,
+        "s": 0,
+        "r": 0
+      },
+      "days": [
+        {
+          "date": "2025-11-12",
+          "g": 4
+        }
+      ],
+      "note": "NOAA SWPC had classified the incoming storm as G4"
+    },
+    "g4": {
+      "at": "2025-11-12T01:30:00Z",
+      "levels": {
+        "g": 4,
+        "s": 0,
+        "r": 0
+      },
+      "days": [],
+      "note": "Kp 8.67 in the 00 to 03 UTC block"
+    }
+  },
+  "records": [
+    {
+      "who": "grid_operator",
+      "moment": "watch",
+      "happened": "NOAA SWPC classified the incoming storm as G4 and warned grid operators ahead of it, across states north of the 45th parallel.",
+      "source": "https://ctif.org/news/severe-geomagnetic-storm-threatened-power-grids-and-communications-worldwide-nov-12-2025",
+      "expect": "black start|on notice|outage",
+      "means": "told the day before to get ready"
+    },
+    {
+      "who": "grid_operator",
+      "moment": "g4",
+      "happened": "USGS recorded a G4; storms of this intensity do not usually interrupt transmission, and no outage was reported.",
+      "source": "https://usgs.gov/programs/geomagnetism/science/severe-magnetic-storm-november-11-2025",
+      "expect": "reactive|harmonic|transformer|unload",
+      "forbid": "blackout is coming|will lose power",
+      "means": "pointed at the equipment to watch, without predicting a blackout"
+    },
+    {
+      "who": "field_crew",
+      "moment": "g4",
+      "job": {
+        "operation": "surveying",
+        "correction": "rtk",
+        "lat": 40.92,
+        "lon": -98.34
+      },
+      "happened": "Positioning errors ran over ten metres for hours across the continental United States.",
+      "source": "https://doi.org/10.1029/2026GL124645",
+      "expectHold": true,
+      "means": "a hold for RTK survey work"
+    },
+    {
+      "who": "aurora",
+      "moment": "g4",
+      "happened": "Auroral precipitation expanded across most of the continental United States, as far south as Florida, at Kp 9 minus.",
+      "source": "https://doi.org/10.1029/2026GL124645",
+      "expect": "Florida",
+      "means": "told how far south it has actually been seen at this level"
+    },
+    {
+      "who": "household",
+      "moment": "g4",
+      "happened": "No outage was reported at G4.",
+      "source": "https://usgs.gov/programs/geomagnetism/science/severe-magnetic-storm-november-11-2025",
+      "expectQuiet": true,
+      "means": "a household at G4 is not alarmed"
+    }
+  ],
+  "notCovered": []
+}

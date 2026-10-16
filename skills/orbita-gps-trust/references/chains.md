@@ -42,9 +42,14 @@ A day with no cause found names nothing. No record is invented.
 
 | After | When | Next |
 |---|---|---|
-| `position_trust` | the verdict is `verify` or `do_not_trust` | `position_trust` with the same arguments |
+| `position_trust` | the verdict is `verify` | `position_trust` with the same arguments |
+| `position_trust` | the verdict is `do_not_trust` | `position_trust` with the same arguments and `windowsHours` 72: when it clears |
+| `position_trust` with `windowsHours` | the first window opens within six hours | `position_trust` at that position with `inMinutes` set to when it opens |
+| `position_trust` with `points` | any position is short of `trust` | `position_trust` for the worst position with `windowsHours` 72 |
+| `what_should_i_do` | a robot, drone, mining or fleet role, a storm on, and a known place | `position_trust` there, with what that kind of machine relies on in `dependsOn` |
 
-A verdict of `trust` names nothing.
+A verdict of `trust` names nothing, and neither does a window that is already open. Past six hours, read
+`orbita://alerts` at its `checkAgainAt` instead of chaining.
 
 ## Reading `flow`
 

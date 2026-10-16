@@ -12,7 +12,7 @@ Go or no go for a GPS-guided field operation right now or at a given time, based
 
 | Argument | Values | Needed |
 |---|---|---|
-| `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, machine_control | yes |
+| `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, drone_show, machine_control | yes |
 | `field` | string | no |
 | `equipment` | string | no |
 | `place` | string | no |
@@ -62,7 +62,7 @@ Record a job that was actually run, with the space weather at the time, so it ca
 
 | Argument | Values | Needed |
 |---|---|---|
-| `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, machine_control | yes |
+| `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, drone_show, machine_control | yes |
 | `field` | string | no |
 | `equipment` | string | no |
 | `when` | string | no |
@@ -100,7 +100,7 @@ No arguments.
 
 Reads.
 
-For a software agent, robot, drone, autonomous machine or spacecraft about to act on its position: whether that position can be trusted right now, or a set number of minutes ahead (inMinutes, judged from the forecast), as one of three verdicts (trust it, verify it first, or do not trust it), with the reasons. On the ground it combines space weather, the measured sky, planned military GPS tests and aircraft-reported jamming; for a spacecraft, give its altitude and it judges drag, its own receiver and charging. Call this when an agent or machine asks whether to rely on its position or whether GPS is reliable somewhere. It is not for whether a farm or survey job can run (use can_i_run), nor for what went wrong earlier (use what_happened).
+For a software agent, robot, drone, autonomous machine or spacecraft about to act on its position: whether that position can be trusted right now, or a set number of minutes ahead (inMinutes, judged from the forecast), as one of three verdicts (trust it, verify it first, or do not trust it), with the reasons. On the ground it combines space weather, the measured sky, planned military GPS tests and aircraft-reported jamming; for a spacecraft, give its altitude and it judges drag, its own receiver and charging. Name what else it relies on in dependsOn, a satellite link, HF radio, grid power, electronics at altitude, a compass, GPS time or traffic awareness, and each is judged the same way. For a fleet or swarm, give every position in points; for a scheduler, give windowsHours for the clear windows ahead. Call this when an agent or machine asks whether to rely on its position or on anything else the sun can reach, or whether GPS is reliable somewhere. It is not for whether a farm or survey job can run (use can_i_run), nor for what went wrong earlier (use what_happened).
 
 | Argument | Values | Needed |
 |---|---|---|
@@ -112,6 +112,9 @@ For a software agent, robot, drone, autonomous machine or spacecraft about to ac
 | `inMinutes` | integer | no |
 | `hardened` | boolean | no |
 | `correction` | rtk, ppp, sbas, autonomous | no |
+| `dependsOn` | array | no |
+| `points` | array | no |
+| `windowsHours` | integer | no |
 
 ## `share_access`
 
@@ -149,7 +152,7 @@ Wait on a job that space weather is blocking. action start watches a job and say
 | Argument | Values | Needed |
 |---|---|---|
 | `action` | start, check, stop | yes |
-| `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, machine_control | no |
+| `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, drone_show, machine_control | no |
 | `field` | string | no |
 | `equipment` | string | no |
 
@@ -170,7 +173,7 @@ Look back at a past day, or a time on that day, and say whether space weather ex
 | Argument | Values | Needed |
 |---|---|---|
 | `when` | string | yes |
-| `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, machine_control | no |
+| `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, drone_show, machine_control | no |
 | `field` | string | no |
 | `equipment` | string | no |
 
@@ -178,11 +181,11 @@ Look back at a past day, or a time on that day, and say whether space weather ex
 
 Reads.
 
-Protective steps for somebody who looks after something a solar storm can reach: drones, satellites, the power grid, flights, HF radio, GPS timing, pipelines, directional drilling, railway signalling, a vessel holding position, automated mining, a vehicle fleet, aurora watching, a household, a small plane, a magnetic survey or robots. Timed to the NOAA forecast. Call this when someone asks what they should do, whether to postpone, or says what they operate and asks whether it will affect them. Read the answer aloud as given. It is not for whether a field job can run (use can_i_run) or for the current Kp (use storm_status).
+Protective steps for somebody who looks after something a solar storm can reach: drones, satellites, the power grid, flights, HF radio, GPS timing, pipelines, directional drilling, railway signalling, a vessel holding position, a ship, an undersea cable, satellite services, automated mining, a vehicle fleet, aurora watching, a household, a small plane, a magnetic survey or robots. Timed to the NOAA forecast. Call this when someone asks what they should do, whether to postpone, or says what they operate and asks whether it will affect them. Read the answer aloud as given. It is not for whether a field job can run (use can_i_run) or for the current Kp (use storm_status).
 
 | Argument | Values | Needed |
 |---|---|---|
-| `role` | field_crew, drone_pilot, satellite_operator, crewed_spaceflight, grid_operator, airline, hf_radio, timing, data_centre, pipeline, drilling, rail, maritime_dp, mining, fleet, aurora, household, general_aviation, magnetic_survey, robots | no |
+| `role` | field_crew, drone_pilot, satellite_operator, crewed_spaceflight, grid_operator, airline, hf_radio, timing, data_centre, pipeline, drilling, rail, maritime_dp, mining, fleet, aurora, household, general_aviation, magnetic_survey, robots, shipping, subsea_cable, satellite_services | no |
 | `orbit` | low, medium, high, beyond | no |
 | `step` | integer | no |
 | `place` | string | no |

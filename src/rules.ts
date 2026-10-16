@@ -15,7 +15,7 @@ import type { Chosen, ToolDef } from './agent.js';
 const JOBS: [RegExp, string][] = [
   [/\bplant/i, 'planting'], [/\bstrip.?till/i, 'strip_till'], [/\bcultivat/i, 'cultivating'], [/\bspray/i, 'spraying'],
   [/\bharvest|\bcombin/i, 'harvest'], [/\btill/i, 'tillage'], [/\bscout/i, 'scouting'], [/\bsurvey(?!.*drone)|\bstake|\bboundar/i, 'surveying'],
-  [/\bdrone|\buav\b|\bmapping flight/i, 'drone_survey'], [/\bgrad(e|ing)|\bdozer|\bmachine control|\bblade/i, 'machine_control'],
+  [/\bdrone (light )?show|\bswarm|\blight show/i, 'drone_show'], [/\bdrone|\buav\b|\bmapping flight/i, 'drone_survey'], [/\bgrad(e|ing)|\bdozer|\bmachine control|\bblade/i, 'machine_control'],
 ];
 const jobIn = (s: string): string | undefined => JOBS.find(([re]) => re.test(s))?.[1];
 const CORRECTION: [RegExp, string][] = [[/\brtk\b/i, 'rtk'], [/\bppp\b|starfire|centerpoint/i, 'ppp'], [/\bwaas\b|\bsbas\b|\begnos\b/i, 'sbas'], [/\bno correction|\bplain gps\b/i, 'autonomous']];

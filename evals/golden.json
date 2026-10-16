@@ -512,6 +512,56 @@
     {
       "say": "turn off the RTK on my tractor",
       "tool": null
+    },
+    {
+      "_comment": "Machines at the scale they come in, and the trades added in October 2026: fleets, windows ahead, what else a machine relies on, ships, cables, satellite services and drone shows."
+    },
+    {
+      "say": "I dispatch three delivery robots, at 40.92 -98.34, 41.26 -95.94 and 39.74 -104.99, can they all trust GPS right now",
+      "tool": "position_trust"
+    },
+    {
+      "say": "over the next three days, when are the clear windows for my RTK rover at 40.92, -98.34",
+      "tool": "position_trust",
+      "args": {
+        "windowsHours": 72
+      },
+      "alsoOk": [
+        "can_i_run"
+      ],
+      "why": "A rover asking for windows is a machine planning ahead; can_i_run also answers when a survey job clears."
+    },
+    {
+      "say": "my home robot runs on Starlink and grid power at 44.98, -93.27, is it safe to leave it running in this storm",
+      "tool": "position_trust"
+    },
+    {
+      "say": "I'm on the bridge of a container ship, does this storm matter to us",
+      "tool": "what_should_i_do",
+      "args": {
+        "role": "shipping"
+      }
+    },
+    {
+      "say": "we run an undersea cable landing station, should we worry about the storm",
+      "tool": "what_should_i_do",
+      "args": {
+        "role": "subsea_cable"
+      }
+    },
+    {
+      "say": "we rely on satellite weather imagery at the station, what should we do about this storm",
+      "tool": "what_should_i_do",
+      "args": {
+        "role": "satellite_services"
+      }
+    },
+    {
+      "say": "can we fly the drone light show over Victoria Harbour in Hong Kong tonight",
+      "tool": "can_i_run",
+      "args": {
+        "operation": "drone_show"
+      }
     }
   ]
 }

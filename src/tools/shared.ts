@@ -73,7 +73,7 @@ export const namesOf = (items: { name: string }[]): string =>
 
 export const OPERATIONS = [
   'planting', 'strip_till', 'cultivating', 'spraying', 'harvest', 'tillage', 'scouting',
-  'surveying', 'drone_survey', 'machine_control',
+  'surveying', 'drone_survey', 'drone_show', 'machine_control',
 ] as const;
 
 /**
@@ -104,6 +104,7 @@ export const OPERATION_HINT =
   'scouting, also walking the field or crop checks. ' +
   'surveying for cadastral, boundary, topo, staking or setting out. ' +
   'drone_survey for UAV, UAS, photogrammetry or a mapping flight. ' +
+  'drone_show for a drone light show, a swarm or a formation flight. ' +
   'machine_control for grade control, earthworks, cut and fill, or a dozer, grader or excavator on design grade.';
 export const CORRECTIONS = ['rtk', 'ppp', 'sbas', 'autonomous'] as const;
 

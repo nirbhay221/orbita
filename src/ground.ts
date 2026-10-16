@@ -16,7 +16,7 @@
  * lines, pipelines, rails. NOAA gives no line for when it matters and asks for caution in using the maps for
  * operational mitigation, so this never calls a number dangerous. It says the number, and next to it the one
  * published reference point there is: NERC TPL-007's once in a hundred years benchmark, 8 volts per kilometre at
- * its reference site.
+ * its reference site, with the 12 volts per kilometre supplemental case TPL-007-2 added for local peaks.
  *   https://www.spaceweather.gov/products/geoelectric-field-models-1-minute
  *
  * Like every feed here, a timer reads them and a tool call never does, and every accessor returns null rather than a
@@ -219,7 +219,8 @@ const fieldWords = (mv: number) =>
 export function sayEfield(e: Efield): string {
   return (
     `NOAA's model puts the ground electric field near you at ${fieldWords(e.mvPerKm)} right now. ` +
-    "NERC's once in a hundred years planning case is 8 volts per kilometre at its reference site. It is a model, " +
+    "NERC's once in a hundred years planning case is 8 volts per kilometre at its reference site, and 12 for a local " +
+    'peak. It is a model, ' +
     'and NOAA asks for caution in acting on it alone.'
   );
 }

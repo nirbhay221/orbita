@@ -50,6 +50,8 @@ export type Observatory = {
   name: string;
   lat: number;
   lon: number;
+  /** Who serves its data. Left out, the USGS. */
+  source?: 'intermagnet';
 };
 
 /**
@@ -76,9 +78,10 @@ export type Observatory = {
  * the Winnipeg case in the README gets the forecast and no corroboration. The
  * distance gate below turns that into silence rather than a wrong answer.
  *
- * INTERMAGNET's global node at imag-data.bgs.ac.uk would cover Canada and
- * Europe, and was tested: it answers, but it failed two of four requests with a
- * dropped connection. That is not something to put behind a customer question.
+ * INTERMAGNET's global node at imag-data.bgs.ac.uk was tried first and dropped,
+ * after two of four requests failed. Tested again on 16 October 2026 it answered
+ * every request in under a second, so the observatories below it that publish
+ * within half an hour now sit alongside these. See INTERMAGNET_OBSERVATORIES.
  */
 const OBSERVATORIES: Observatory[] = [
   { id: 'BOU', name: 'Boulder', lat: 40.137, lon: -105.237 },
@@ -99,7 +102,40 @@ const OBSERVATORIES: Observatory[] = [
   { id: 'TUC', name: 'Tucson', lat: 32.174, lon: -110.733 },
 ];
 
+/**
+ * Observatories outside the United States, read through INTERMAGNET's node at the British Geological Survey.
+ *
+ * Only the ones that were publishing within half an hour when this was built: Germany, Belgium, Poland, Sweden,
+ * Spain and Australia. Left out, and why: the three UK observatories (Eskdalemuir, Lerwick, Hartland) return no
+ * recent minutes in any publication state, so a UK site is read from Dourbes or Wingst across the North Sea when
+ * one is close enough; the Canadian ones were a day behind, which the staleness gate would turn into silence
+ * anyway; and Chambon-la-Foret in France is run under BCMT's own terms, which were not checked, so France is read
+ * from Dourbes and Fuerstenfeldbruck instead.
+ *
+ * INTERMAGNET data is CC BY-NC 4.0: free for non-commercial use, with an acknowledgement, which the README gives.
+ * Orbita sells nothing, so it uses it on those terms. Anyone running a commercial copy sets ORBITA_INTERMAGNET=off,
+ * and these drop out, leaving the USGS list, which is public domain.
+ *   https://intermagnet.org/data_conditions.html
+ */
+const INTERMAGNET_OBSERVATORIES: Observatory[] = [
+  { id: 'WNG', name: 'Wingst', lat: 53.725, lon: 9.053, source: 'intermagnet' },
+  { id: 'NGK', name: 'Niemegk', lat: 52.072, lon: 12.675, source: 'intermagnet' },
+  { id: 'FUR', name: 'Fuerstenfeldbruck', lat: 48.165, lon: 11.277, source: 'intermagnet' },
+  { id: 'DOU', name: 'Dourbes', lat: 50.1, lon: 4.6, source: 'intermagnet' },
+  { id: 'BEL', name: 'Belsk', lat: 51.836, lon: 20.789, source: 'intermagnet' },
+  { id: 'HLP', name: 'Hel', lat: 54.603, lon: 18.811, source: 'intermagnet' },
+  { id: 'ABK', name: 'Abisko', lat: 68.4, lon: 18.8, source: 'intermagnet' },
+  { id: 'SPT', name: 'San Pablo, Toledo', lat: 39.55, lon: -4.35, source: 'intermagnet' },
+  { id: 'LRM', name: 'Learmonth', lat: -22.222, lon: 114.101, source: 'intermagnet' },
+  { id: 'CNB', name: 'Canberra', lat: -35.314, lon: 149.363, source: 'intermagnet' },
+  { id: 'KDU', name: 'Kakadu', lat: -12.686, lon: 132.472, source: 'intermagnet' },
+];
+
+const intermagnetOn = () => process.env.ORBITA_INTERMAGNET !== 'off';
+const reporting = (): Observatory[] => (intermagnetOn() ? [...OBSERVATORIES, ...INTERMAGNET_OBSERVATORIES] : OBSERVATORIES);
+
 const BASE = 'https://geomag.usgs.gov/ws/data/';
+const GIN = 'https://imag-data.bgs.ac.uk/GIN_V1/GINServices';
 
 /** Three hours gives a quiet reference and a present, without a large download. */
 const WINDOW_MINUTES = 180;
@@ -184,7 +220,9 @@ const held = new Map<string, Cached>();
 let timer: ReturnType<typeof setInterval> | null = null;
 
 /** Test seam, so tests never reach the USGS. */
-let fetchWindow: (id: string) => Promise<Sample[] | null> = fetchFromUsgs;
+const fetchFromSource = (id: string): Promise<Sample[] | null> =>
+  INTERMAGNET_OBSERVATORIES.some((o) => o.id === id) ? fetchFromIntermagnet(id) : fetchFromUsgs(id);
+let fetchWindow: (id: string) => Promise<Sample[] | null> = fetchFromSource;
 
 type Sample = { at: string; h: number };
 
@@ -206,9 +244,10 @@ function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): nu
  * longitude is where local time lives.
  */
 export function nearest(lat: number, lon: number): { observatory: Observatory; km: number } {
-  let best = OBSERVATORIES[0];
+  const list = reporting();
+  let best = list[0];
   let bestKm = Infinity;
-  for (const o of OBSERVATORIES) {
+  for (const o of list) {
     const km = haversineKm(lat, lon, o.lat, o.lon);
     if (km < bestKm) {
       best = o;
@@ -220,7 +259,7 @@ export function nearest(lat: number, lon: number): { observatory: Observatory; k
 
 /** The list, for anything that wants to show its working. */
 export function observatories(): readonly Observatory[] {
-  return OBSERVATORIES;
+  return reporting();
 }
 
 function median(xs: number[]): number {
@@ -304,6 +343,49 @@ async function fetchFromUsgs(id: string): Promise<Sample[] | null> {
       samples.push({ at: times[i], h: Math.hypot(xi, yi) });
     }
     return samples;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * The same window from INTERMAGNET, as IAGA-2002 text.
+ *
+ * A day is asked for from the window's start date, two when the window crosses midnight. Minutes not yet published
+ * come back as 99999 and minutes not observed as 88888; both are dropped, as a gap is for the USGS. Every
+ * observatory listed reports X, Y, Z and F, so H is X and Y together, as above.
+ */
+export function parseIaga(text: string, fromMs: number, toMs: number): Sample[] {
+  const samples: Sample[] = [];
+  const head = /^DATE\s+TIME\s+DOY\s+(\S+)\s+(\S+)/m.exec(text);
+  if (!head || !/X$/.test(head[1]) || !/Y$/.test(head[2])) return samples;
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}\.\d{3})\s+\d+\s+(-?[\d.]+)\s+(-?[\d.]+)/.exec(line);
+    if (!m) continue;
+    const at = `${m[1]}T${m[2]}Z`;
+    const t = Date.parse(at);
+    const x = Number(m[3]);
+    const y = Number(m[4]);
+    if (!(t >= fromMs && t <= toMs) || x >= 88888 || y >= 88888) continue;
+    samples.push({ at, h: Math.hypot(x, y) });
+  }
+  return samples;
+}
+
+async function fetchFromIntermagnet(id: string): Promise<Sample[] | null> {
+  const end = new Date();
+  const start = new Date(end.getTime() - WINDOW_MINUTES * 60_000);
+  const days = start.toISOString().slice(0, 10) === end.toISOString().slice(0, 10) ? 1 : 2;
+  const url =
+    `${GIN}?Request=GetData&observatoryIagaCode=${encodeURIComponent(id)}&samplesPerDay=minute` +
+    `&dataStartDate=${start.toISOString().slice(0, 10)}&dataDuration=${days}&publicationState=adj-or-rep&format=iaga2002`;
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 10_000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`${id} ${res.status}`);
+    const samples = parseIaga(await res.text(), start.getTime(), end.getTime());
+    return samples.length ? samples : null;
   } finally {
     clearTimeout(timeout);
   }
@@ -473,5 +555,5 @@ export function seedForTest(next: {
 export function resetForTest(): void {
   gate.reset();
   held.clear();
-  fetchWindow = fetchFromUsgs;
+  fetchWindow = fetchFromSource;
 }

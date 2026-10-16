@@ -1,6 +1,6 @@
 # Orbita
 
-**Will GPS-guided work hold its accuracy today? Space weather, turned into a go or a hold.**
+**What the sun is about to do to the things you rely on, and what to do about it. GPS-guided work is the deepest case: a go or a hold for this field, this machine, this job.**
 
 > **You:** Alexa, can I run the planter this morning?<br>
 > **Alexa:** Hold off planting. Kp 7.0 (G3 strong) puts expected drift near 3 inches against the 2 inches
@@ -12,10 +12,16 @@
 MCP endpoint `https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/mcp` (account linking) ·
 [health](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/health)
 
-Storms on the sun disturb the sky, and the satellite positioning that steers tractors, survey rovers, mapping
-drones and dozers drifts or drops its fix. The May 2024 storm alone is estimated to have cost Midwest farmers
-$500 million or more in the middle of planting. Orbita is an Alexa+ add-on that remembers a farm's or a crew's
-fields, machines and correction type, and answers for that job:
+A storm on the sun reaches a lot more than the sky. It moves satellite positioning off its line, blacks out HF
+radio on the daylit side, drives current into power lines, pipelines and rails, raises radiation on polar flights
+and in orbit, and takes away the vertical guidance small planes land on. NOAA publishes all of it, live and free,
+in a form written for scientists. Orbita is an Alexa+ add-on that reads it and tells each person what it means for
+the thing they look after, where it is, and when to act.
+
+GPS-guided work is where it goes deepest, because that is where the loss is measured. The May 2024 storm alone is
+put by Kansas State University at an assumed $565 million in losses for Midwest crop producers, in the middle of
+planting ([K-State, 2025](https://www.ksre.k-state.edu/news-and-publications/news/stories/2025/04/agriculture-solar-weather-gps-outage.html)). For a farm or a crew,
+Orbita remembers the fields, machines and correction type, and answers for that job:
 
 | Ask | What happens |
 |---|---|
@@ -30,8 +36,8 @@ fields, machines and correction type, and answers for that job:
 
 It works anywhere: exposure is computed from geomagnetic latitude, so a field in Punjab, Bavaria or Patagonia is
 judged where it actually sits. Satellite teams, grid rooms, airlines, HF radio, timing, pipelines, drilling, rail,
-vessel positioning, mining, fleets, robots, magnetic surveys, small plane pilots, aurora watchers and households get
-advice for their work from the same data.
+vessel positioning, ships, undersea cables, mining, fleets, robots, magnetic surveys, small plane pilots, satellite
+services, aurora watchers and households get advice for their work from the same data.
 
 The Latin `orbita` meant a track cut into the ground by a wheel. Built for the
 [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com), Alexa+ track, plus the Open
@@ -44,7 +50,7 @@ Orbita turns NOAA space weather into decisions: whether a farm job, a machine or
 position right now, and what a satellite operator, a grid room, an airline or a household should do about a storm.
 
 On 10 May 2024 a G5 storm hit in the middle of planting. "All the tractors were sitting at the ends of the field," a
-Nebraska farmer said; in South Dakota the screen showed the tractor "going in circles" and auto-steer would not
+Nebraska farmer [told 404 Media](https://www.404media.co/solar-storm-knocks-out-tractor-gps-systems-during-peak-planting-season); in South Dakota the screen showed the tractor "going in circles" and auto-steer would not
 engage. In March 2026 a military GPS exercise on the North Carolina coast did the same to farms that had no
 warning at all. Nobody told them either was coming, or when it would clear.
 
@@ -70,7 +76,10 @@ turn against the real tools, got 32 of 33 turns right on Opus (`conversations.mj
 `evals/conversations-last-run.json`). The miss was a delivery robot asking "and in ten minutes?", which the model
 rightly said the position check could not answer ahead of time. That was a gap, so the check now takes `inMinutes`
 and judges that time from the forecast, and the same conversation then went 2 for 2
-(`evals/conversations-rerun-machine.json`).
+(`evals/conversations-rerun-machine.json`). Two more conversations (a delivery robot going on to when its fix clears,
+and a ferry) and seven more golden sentences (a fleet, windows ahead, a robot's other dependencies, a ship, a cable
+landing station, satellite imagery, a drone show) were added for what was built in October 2026 and have not been
+run on a model yet; the results above are for the sets as they stood.
 
 ## What is real, and what is not
 
@@ -78,12 +87,12 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,004 automated checks, run on every push |
+| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,138 automated checks, run on every push |
 | Agent Skill | **Real**: `skills/orbita-gps-trust`, to the open Agent Skills format, passing the format's own validator. Installable as a folder, and readable from the server as `skill://` resources |
 | Strands agent | **Real**: `strands/agent.mjs`, on AWS's Strands Agents SDK. It reads the skill from the server and follows each next step. The chain, the yes before a write and the step cap are checked with a scripted model at no cost; the path through Claude needs a key and is not in the automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
 | The sky over the field, measured | **Real, live**: the German Aerospace Center's one-minute disturbance readings (ROTI) from about 4,000 satellite links worldwide, read within 400 km of the field. Free for scientific use. Orbita is free and open source and sells nothing, so it uses the data on those terms. Commercial use would need the IMPC's written permission, so anyone who runs a copy commercially can set `ORBITA_ROTI=off` and the forecast then decides alone. We thank DLR who is maintaining the IMPC services |
-| Ground magnetometers | **Real** (USGS), **United States only** |
+| Ground magnetometers | **Real, live**: 16 USGS observatories (the United States, plus Guam, Honolulu, San Juan, Kakioka and Hermanus) and 11 more through INTERMAGNET in Germany, Belgium, Poland, Sweden, Spain and Australia. INTERMAGNET data is CC BY-NC 4.0, free for non-commercial use, which is how Orbita uses it; a commercial copy sets `ORBITA_INTERMAGNET=off` |
 | Ground electric field, HF absorption | **Real, live**: NOAA's geoelectric field model (lower 48 and Canada) and D-RAP (worldwide), read at the place an operator names |
 | What is not the sun: GPS tests, satellite outages, spoofing regions, aircraft-reported interference | **Real, live**: the Coast Guard's GPS testing schedule and satellite outage file, which cover the United States. Elsewhere a quiet schedule is never said as "no test": the answer says that planned tests there are announced to pilots by NOTAM, which the UK CAA and Australia's Defence publish in a form that cannot be read automatically. **Real, from the regulators**: the regions the FAA (March 2026) and EASA (July 2026) list for routine jamming and spoofing, drawn as boxes around the regions they name. GPSJAM's daily aircraft reports publish no licence, so they are **off unless switched on** |
 | The past: "what happened at 3 pm on May 10 2024" | **Real**, from the archived Kp record, by the hour |
@@ -107,7 +116,7 @@ This file is long because the reasoning is the work. If you are evaluating the p
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
 Free NOAA, USGS and DLR products, no API keys for the data. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 2,004 checks.
+external is called inside a turn. `npm test` runs 2,138 checks.
 
 ## The problem
 
@@ -117,8 +126,9 @@ In May 2024 a solar storm knocked GPS accuracy out across the Midwest at the pea
 * Position errors reached about 33 feet, ten metres, against an RTK spec of two centimetres
 * Growers described tractors as "acting possessed", and John Deere dealerships sent warnings
   that accuracy was "extremely compromised"
-* Losses to American farmers are put above 500 million dollars
-* 70 percent of US planted acres run GPS guidance, and modern equipment is too wide to run without it
+* Kansas State University puts the losses to Midwest crop producers at an assumed $565 million ([K-State](https://www.ksre.k-state.edu/news-and-publications/news/stories/2025/04/agriculture-solar-weather-gps-outage.html))
+* Auto-steer and guidance ran on more than half the US acres planted to corn, soybeans, winter wheat and cotton by
+  2019 ([USDA ERS](https://ers.usda.gov/data-products/charts-of-note/106187)), and modern equipment is too wide to run without it
 
 It was not a one-off. In November 2025 another superstorm pushed GPS error past ten metres
 again, coast to coast, and this time the auroral oval reached Florida. Yizengaw et al. measured
@@ -216,12 +226,19 @@ documented symptoms in agriculture are missed lines, weaker repeatability, and t
 spent reacquiring position. An unattended machine accumulates all three before
 anybody reads a report.
 
-**The low altitude drone economy.** There is a 2026 paper in *Space Weather* on
-exactly this: drones operating below 3,000 m for logistics, inspection, precision
-agriculture and urban air mobility, where space weather can cause "temporary loss of
-control, positioning errors, or reduced awareness of surrounding air traffic". That
-is a wider audience than the drone pilot this add-on already answers, and a more
-consequential one, because the failure is a flight rather than a pass across a field.
+**The low altitude drone economy.** That is the name now given to drones and air taxis working below 3,000 m on
+logistics, inspection, public safety and urban air mobility
+([JEIT, 2026](https://jeit.ac.cn/article/doi/10.11999/JEIT251246)). It has already met space weather. On 30
+September and 1 October 2024 Hong Kong called off its National Day drone shows over Victoria Harbour minutes
+before they started: the drones could not hold a strong satellite fix, and the organisers and the government put
+it down to ionospheric scintillation. Kp was 1. Shenzhen's shows across the border went ahead, because they could
+be moved to when it was safe
+([SCMP](https://www.scmp.com/news/hong-kong/society/article/3280850/why-did-shenzhens-national-day-drone-show-go-ahead-not-hong-kongs),
+[HKBU](https://tyr-jour.hkbu.edu.hk/2024/10/03/national-day-fireworks-light-up-victoria-harbour-but-drone-show-cancelled-again/)).
+That is the case a Kp-only answer gets wrong, since it says go on a quiet night. Victoria Harbour is 13 degrees from
+the magnetic equator in equinox season, and Orbita, given those evenings and RTK drones, says hold off for both and
+clear at midday and after midnight, which is the Shenzhen answer (`test-hongkong.mjs`). An earlier version of this
+paragraph quoted a 2026 *Space Weather* paper on drones that could not be found again, so the quote is gone.
 
 **Everything else that surveys from the air.** Drone mapping is routine in
 construction, mining, energy and utilities, forestry, archaeology, real estate,
@@ -238,6 +255,7 @@ between them: same Kp, same geomagnetic latitude, same baseline penalty. Only th
 |---|---|---|
 | Cadastral and engineering survey | 3 cm | 2 to 3 cm horizontal is what RTK or PPK with placed control reports; a boundary is a legal record |
 | Drone survey | 5 cm | sub-5 cm on a disciplined workflow, and the aircraft is moving, so there is no second pass |
+| Drone show | 10 cm | hundreds of drones a few metres apart on RTK, which [Geoscan reports](https://insidegnss.com/two-thousand-simultaneous-drones-position-themselves-with-gps-and-glonass-rtk/) holding to about 1 cm; 10 cm, ten times that, is this project's line, since no published tolerance was found |
 | Machine control on grade | 5 cm | dozers, graders and excavators plan around 20 to 50 mm horizontal; past that you move dirt twice |
 | Planting, strip-till | 5 cm | rows must be findable again at cultivation and harvest |
 | Spraying, harvest | 50 cm | boom section control absorbs more |
@@ -252,7 +270,7 @@ from the source that describes the effect, and its own steps for each phase of a
 |---|---|---|---|
 | Satellite operator | G2, or S2 | Orbit predictions degrade; defer ground maintenance and decide on launches a day ahead; treat conjunctions as low confidence for about three days; choose safe mode or service deliberately; fresh orbit determination and a propellant budget afterwards | NOAA scales; Parker and Linares (2024); Knipp, National Academies (2025); LaNeve et al. (2025) |
 | Grid control room | G3, or G2 at high magnetic latitude | A day ahead: black start readiness, crews on notice, return outaged equipment and delay planned outages if studies support it. Hours ahead: watch reactive reserves, MVAR swings, harmonics, transformer heating; 10 A of GIC per phase is the starting point for concern. During: hold reserves, unload susceptible equipment, act on two indicators | NERC GMD Operating Procedure Template; NERC May 2024 event review |
-| Airline dispatch and crews | S1, R3 or G4 | Advisory in the flight packet; delay what can wait; otherwise a lower latitude, lower altitude track, with United's UAL 990 as the worked example; extra fuel; no reliance on HF alone; an approach that does not depend on WAAS | LaNeve et al.; Frontiers (2025); NOAA scales |
+| Airline dispatch and crews | S1, R3 or G4 | Advisory in the flight packet; delay what can wait; otherwise a lower latitude, lower altitude track, with United's UAL 990 as the worked example; extra fuel; no reliance on HF alone; an approach that does not depend on WAAS; from S3, an unexplained avionics fault treated as possibly radiation and reported | LaNeve et al.; Frontiers (2025); NOAA scales |
 | HF radio | R1, S1, or G2 at high latitude | A non-HF fallback; how long an R2 or R3 blackout lasts; route around the poles in a radiation storm | NOAA scales |
 | GPS timing | G3 | A backup timing source; how long you can run without GPS time; check systems re-acquired cleanly | CISA ICSA-11-084-01; NOAA scales |
 | Drone pilot | G1 | Check Kp before launch; practise attitude mode; keep the aircraft close; postpone mapping at G3 | Drone Academy; NOAA scales |
@@ -263,10 +281,13 @@ from the source that describes the effect, and its own steps for each phase of a
 | Automated mining | G1 | Centimetre corrections drop out and autonomous haulage stops rather than guesses; move survey and blast hole setting out away from the worst hours; run on inertial or manual; re-check anything positioned during the storm before drilling on it | Scientific Reports, unmanned mine trucks under weak GNSS; RTI for NIST (2019) |
 | Vehicle fleets | G3 | Ordinary tracking rides through most storms, so it stays quiet until the strong end: satellite messaging in remote areas, yard equipment that needs centimetres, and rough geofences and arrival times at G4 | RTI for NIST (2019); NOAA scales |
 | Aurora watchers | G1 | How far south NOAA says aurora has been seen at that level | NOAA scales |
-| Households | G5 | Charge phones and keep a torch ready; storms do not damage phones, cars or anything in the house | NOAA scales |
+| Households | G5 | Charge phones and keep a torch ready; storms do not damage phones, cars or anything in the house; satellite internet can be slow, as Starlink reported in May 2024 | NOAA scales; The Register (May 2024) |
 | Small plane pilots | G4 | Plan as if LPV is not there, with an alternate on LNAV minimums or an ILS; check WAAS NOTAMs; fly LNAV minimums if that is all the box gives. In May 2024 WAAS lost LPV and LP over the lower 48 and Alaska for about fifteen hours while LNAV kept working | FAA WAAS Discrepancy Report 158; FAA SatNavNews (2024) |
 | Magnetic surveys | G1 | Plan flying days around the storm, since specifications call 5 nT in 5 minutes or 10 in 10 unfit and lines outside tolerance are flown again; stop during storms of any size and check the base station before the next line | Australian Bureau of Meteorology; USGS Open-File Report 02-98 |
 | Robots | G3 | Wire free mowers and yard robots use the same RTK fix tractors lost in May 2024: no unattended runs over storm nights, and a stopped robot stays parked; at G5 a safe stop for anything that needs the cloud. It says no robot case is on record | Ingenioren (May 2024); NOAA scales; this project's receiver study |
+| Ships | G3, or R2 | Brief the watch and check radar, compass and terrestrial fixes before it; during it cross-check GNSS against radar and visual fixes, navigate on them if they disagree, and report to the Coast Guard Navigation Center; keep another way to reach shore when HF fades | US Coast Guard, GNSS: Trust, But Verify (2016); NOAA scales |
+| Undersea cables | G4 | Check each power feed's voltage headroom against its route; TAT-8 saw 700 V Earth potential swings in March 1989 and rode through, and Google's study found margin for a once in a century storm; during it, read fast power feed swings as the storm before dispatching anyone | Medford et al. (1989); Boteler et al. (2024); Castellanos et al. (Google) |
+| Satellite services | G3 | A fallback for satellite TV, satellite imagery or a data feed before it; during it and in the day after, short outages are the storm: GOES-16 stopped sending all data for nearly two hours on 13 May 2024, a day after the peak | DLR; May 2024 storm record |
 | Field crews | G1, or R3 | Hands over to the go or no go for their own field and rig. While a strong flare runs, a rare solar radio burst can drown GPS on the daylit side for minutes, as in December 2006 | this project; Cerruti et al. (2008) |
 
 **It is timed.** Each answer is in one of five phases: quiet, a watch one to three days out,
@@ -277,7 +298,7 @@ run on.
 **It reads the ground where they are.** Tell it the place once ("our substation near Fargo") and it is
 remembered. A grid room, a pipeline or a railway then hears NOAA's modelled ground electric field at that
 spot, next to the one published reference point, NERC TPL-007's once in a hundred years case of 8 volts
-per kilometre. NOAA gives no line for when the field matters and asks for caution in acting on its maps,
+per kilometre, and the 12 it added for local peaks. NOAA gives no line for when the field matters and asks for caution in acting on its maps,
 so Orbita never calls a number dangerous. An HF station or a dispatcher hears which frequencies are
 being absorbed over them and NOAA's recovery estimate. A magnetic survey or a drilling crew within 600 km
 of an observatory hears what that magnetometer is doing. What each reading will not do matters as much:
@@ -329,7 +350,8 @@ What was measured rather than predicted:
 
 * **GloTEC**, a global map of total electron content on a 5 by 2.5 degree grid every ten minutes.
   This is the physical quantity that actually delays a GNSS signal. See the next section
-* **USGS INTERMAGNET observatories**, the ground magnetic field at one sample a minute
+* **INTERMAGNET observatories**, the ground magnetic field at one sample a minute: the USGS's own, and
+  eleven in Europe and Australia through INTERMAGNET's node at the British Geological Survey
 * **Dst** once a minute, the ring current index, which is the global companion to those observatories
 * **OVATION Prime**, an aurora probability for every one degree cell on Earth
 
@@ -445,11 +467,18 @@ permission.
 
 The honest limit here is coverage. Thirteen of the observatories in the USGS directory are partners it
 names but does not serve; every Canadian one answers the data endpoint with 422, which was found by
-checking all of them rather than trusting the list. So ground truth is the United States plus single
-stations at Guam, Honolulu, San Juan, Kakioka and Hermanus. Winnipeg, the worked example earlier in
-this file, gets the forecast and no corroboration, and the distance gate turns that into silence
+checking all of them rather than trusting the list. Eleven more come through INTERMAGNET's node at the
+British Geological Survey: Wingst, Niemegk and Fuerstenfeldbruck in Germany, Dourbes in Belgium, Belsk
+and Hel in Poland, Abisko in Sweden, San Pablo in Spain, and Learmonth, Canberra and Kakadu in Australia.
+Those are the ones publishing within half an hour when this was built. The three UK observatories return
+nothing recent in any publication state, so Leeds is read from Dourbes, 589 km across the North Sea, just
+inside the local limit; the Canadian ones run a day behind; and Chambon-la-Foret in France is run under its
+own terms, which were not checked, so Paris is read from Dourbes too. Winnipeg, the worked example earlier
+in this file, still gets the forecast and no corroboration, and the distance gate turns that into silence
 rather than a wrong answer: inside 600 km the reading speaks fully, out to 2,000 km only about the
-slow regional part, and beyond that not at all.
+slow regional part, and beyond that not at all. The results rely on data collected at magnetic
+observatories; we thank the national institutes that support them and INTERMAGNET for promoting high
+standards of magnetic observatory practice (www.intermagnet.org).
 
 ## Near the magnetic equator, and in the monsoon
 
@@ -463,6 +492,14 @@ season is a hold, whatever Kp says, and a clear window closes before that evenin
 (`equatorialEvening` in `src/domain.ts`). It is a nightly pattern, not a storm, so the crew is never emailed
 about it as one, and the measured sky in `src/roti.ts` decides instead wherever enough links are overhead. GAGAN,
 India's SBAS, counts as SBAS; NavIC alone counts as no correction.
+
+The bubbles follow the solar cycle as well as the season. Over Hong Kong, GPS-detected bubbles from 2001 to 2012
+tracked the 10.7 cm solar flux with a correlation of about 0.92
+([PolyU](https://research.polyu.edu.hk/en/publications/effects-of-solar-and-geomagnetic-activity-on-the-occurrence-of-eq/)),
+and over Brazil the fall from F10.7 210 to 70 brought a large drop in how often they formed
+([Abdu et al. 2020](https://bv.fapesp.br/en/publicacao/231042)). So the evening hold is lifted only below F10.7 75,
+the deepest solar minimum, read from NOAA's 45 day forecast; above it, every year since 2011 and 125 today, nothing
+changes, and until the flux has been read the rule stands (`quietSun` in `src/domain.ts`).
 
 The season depends on longitude, because bubbles grow most when the sunset line lies along the magnetic field
 lines. Over South America, where the field tilts west, they peak around the December solstice: October to March,
@@ -553,9 +590,56 @@ position_trust { lat: 46.88, lon: -96.79 }
  published says otherwise."
 ```
 
+**Anything else it relies on.** A machine depends on more than its fix, and naming every kind of machine as a role
+would never finish, so `position_trust` also goes by dependency. Name them in `dependsOn` and each is judged from
+data Orbita already reads, with its source (`src/dependencies.ts`):
+
+| Dependency | What it reads | Its ceiling |
+|---|---|---|
+| `satellite_link` | The geomagnetic level; Starlink reported degraded service at G5 in May 2024 | verify |
+| `hf_radio` | NOAA's absorption map over the point, the R level, the high latitude fade | do not trust, when the band in use is being absorbed |
+| `grid_power` | The G level as NOAA describes it, and the modelled ground field | verify: North America kept its lights on through the G5 of May 2024 |
+| `electronics_at_altitude` | The S level and the protons GOES measures, at the altitude given | verify |
+| `compass` | The nearest magnetometer, then the G level | verify: there is no published storm line for small machines, and no drone maker's guidance on storms was found |
+| `gps_time` | The G level and planned GPS tests nearby, with how long a clock holds time without GPS (about 16.5 hours for a standard oven quartz clock, 4 days for rubidium, by Microchip's table) | verify |
+| `traffic_awareness` | What other aircraft see by ADS-B or Remote ID: the position check at the 92.6 metres 14 CFR 91.227 asks of ADS-B | do not trust, when the broadcast position may be in the wrong place |
+
+So a home robot on a remote operator, an air taxi or a machine nobody has built yet gets an answer without a new
+role. The answer is the worst of them, said first in one sentence, then the reasons, worst first. Live on 16 October:
+
+```
+position_trust { lat: 44.98, lon: -93.27, needMeters: 0.05, correction: "rtk",
+                 dependsOn: ["satellite_position", "satellite_link", "grid_power", "compass"] }
+
+"Check before acting. position: verify; satellite link: fine; grid power: fine; compass: fine.
+ Position: I could not check the GPS testing schedule or the satellite outage list."
+```
+
+That day the Coast Guard's site refused the request, and an unread source is never counted as clear. Without
+`dependsOn` the tool answers exactly as before (`test-dependencies.mjs`).
+
+**At the scale machines come in.** A drone show is about a thousand drones, and a robot fleet or a co-op is dozens of
+sites, so the same tool takes them at once and plans ahead (`test-fleet.mjs`):
+
+* `points`: up to 1,000 positions in one call, each judged exactly as a single call would judge it. The answer is
+  the counts, the worst verdict, and the ones not trusted, by name and worst first.
+* `windowsHours`: every clear window over up to 72 hours at a position, for its own accuracy, searched over NOAA's
+  three hour Kp forecast with the evening bubble hours near the magnetic equator closing a window as surely as a
+  storm. It says it is a forecast and to check again just before acting.
+* `orbita://alerts`: a resource a scheduler polls. For each saved site and machine it gives `imminent` (out of
+  tolerance within a day), `watch` (within three) or `clear`, the blocked hours, and the clear windows, with an
+  `etag` that changes only when an alert does, and `checkAgainAt`: fifteen minutes when a storm is within a day, an
+  hour within three, up to three hours when clear (`src/machinealerts.ts`). It is a feed to poll rather than a push
+  on purpose: pushing would mean this server calling addresses its users give it, and the deployed server answers
+  each request on its own rather than holding a stream open per client.
+* `drone_show` is a job of its own, at a decimetre, for hundreds of drones flying a few metres apart on RTK. Shows
+  fly at about a centimetre by Geoscan's account; the decimetre is this project's line, since no published
+  tolerance was found. Asked about the Hong Kong evenings of October 2024, it holds and
+  points to the clear hours, as Shenzhen did.
+
 ## Data centres and AI infrastructure
 
-One of twenty roles `what_should_i_do` answers: somebody who runs a data centre, a cloud region or a GPU cluster.
+One of twenty-three roles `what_should_i_do` answers: somebody who runs a data centre, a cloud region or a GPU cluster.
 A storm does not reach servers on the ground, and nothing here claims it does: nobody has documented a
 geomagnetic storm damaging computing hardware at ground level. It reaches what the building depends on, and each
 line of advice names which and where it comes from (`data_centre` in `src/playbook.ts`):
@@ -657,10 +741,10 @@ grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are liste
   one sentence; or takes one off, or everything, only when asked a second time
 
 **Everyone else a storm reaches**
-* `what_should_i_do` is one tool for twenty kinds of operator: satellites (by orbit), crewed spaceflight, the
+* `what_should_i_do` is one tool for twenty-three kinds of operator: satellites (by orbit), crewed spaceflight, the
   power grid, data centres and AI infrastructure, flights, HF radio, GPS timing, pipelines, drilling, rail, a
-  vessel holding position, mining, fleets, drones, robots, magnetic surveys, small planes, aurora watchers and
-  households. It was published only with
+  vessel holding position, ships, undersea cables, mining, fleets, drones, robots, magnetic surveys, small
+  planes, satellite services, aurora watchers and households. It was published only with
   `ORBITA_SCOPE=all` until it was noticed that this left every one of them unanswerable on the deployed server
 
 **Published only with `ORBITA_SCOPE=all`:** `what_else_is_affected`.
@@ -762,7 +846,7 @@ ANTHROPIC_API_KEY=... node agent.mjs "Can I plant the North 40?" --url https://h
 `--plan` swaps Claude for a scripted model that starts at one tool and calls whatever `nextAction` each answer
 names. It runs through the same Strands agent loop, the same wrapped tools and the same guard, which is how the
 chain is tested for nothing: `node strands/test.mjs` runs the real tools in process on a seeded severe storm and checks
-that one request runs from the storm, to the farm, to the job it is hurting, and stops to ask before it starts a watch, that nothing is saved without a yes, and that the cap holds. 27 checks, no key, no network.
+that one request runs from the storm, to the farm, to the job it is hurting, and stops to ask before it starts a watch, that a machine told not to trust its position goes on to when it clears and stops there, that nothing is saved without a yes, and that the cap holds. 28 checks, no key, no network.
 
 The path through Claude uses Strands' Anthropic provider and needs a key. It costs a few cents a run, so it is
 not part of the automated checks.
@@ -810,11 +894,11 @@ Or without installing Node at all:
 docker build -t orbita . && docker run -p 8788:8788 orbita
 ```
 
-`npm test` runs everything, 2,004 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 2,138 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 1,750 checks, no live data
+npm run test:unit           # 1,884 checks, no live data
 npm run test:live           # 254 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines
@@ -917,7 +1001,7 @@ most of the continental United States, as far south as Florida, and positioning 
 metres for hours in places that no fixed-band model would have flagged
 ([Yizengaw et al. 2026, *Geophysical Research Letters*](https://doi.org/10.1029/2026GL124645)). A
 comparable storm in May 2024 landed in planting season and is estimated to have cost American
-farmers around half a billion dollars. Orbita adds the storm's own reach to a site's climatological
+farmers an assumed $565 million, by Kansas State University's estimate. Orbita adds the storm's own reach to a site's climatological
 exposure, so the same field is judged differently in a G1 and in a G5.
 
 **The straight line is now the fallback, not the method.** That approximation is a straight line
@@ -1188,6 +1272,9 @@ matters most: 79 percent of outdoor workers who died of heat were in their first
   | "What happened yesterday?" with a cause found | logging the job with the cause written in: space weather, a military GPS test, or interference aircraft reported |
   | "What is the sun doing?" in a storm | which of the farm's jobs it is hurting, then that job |
   | a machine told to verify its position | the same call again, when the answer says to |
+  | a machine told not to trust it | when it clears: the windows over 72 hours, then a fresh check timed for when the first one opens |
+  | a fleet with some positions short of trust | the windows for the worst of them |
+  | someone who runs robots, drones, a mine or a fleet, in a storm, at a known place | the machine check there, with what that kind of machine relies on: link and power for a robot, compass and traffic awareness for a drone |
 
   A day with no cause found points at nothing and invents no record.
 * **A card that fits the task.** The chart (`ui/window.html`) is for a verdict. A watch list, a job report, a contact
@@ -1201,6 +1288,29 @@ matters most: 79 percent of outdoor workers who died of heat were in their first
 the server runs, for RTK planting at four real places. The answer would have been "not now" in 1 to 5 percent of
 three-hour blocks, on the days that had real storms, including 10 and 11 May 2024. The first run of this replay is what
 showed the earlier model was wrong and led to it being rebuilt. `node evals/backtest.mjs` regenerates it.
+
+That scores the GPS verdict. The advice to everyone else is scored against the same storm in
+`evals/may2024.mjs`: each record in `evals/may2024.json` is something an operator did or a user saw, with its
+source and its hour, and the sky at that hour is built only from what was known then (the archived Kp up to it,
+NOAA's G4 watch, a flare that had already gone off). The grid room told a day ahead to ready black start units,
+as NERC records operators putting procedures into effect on SWPC's notice; the small plane pilot told to fly LNAV
+in the hours the FAA records WAAS without LPV; the household at G4 left alone. 11 of 11 records match now. Once each
+pattern was tied to the specific action in the record, the first run matched 9 of 10, and the miss was real: United set UAL 990's lower latitude route seven hours before
+departure with the storm already running, and Orbita only gave that advice a day ahead. It now gives it during a
+storm too. GOES-16 dropping its data on 13 May, a day after the peak, was listed as not covered; a satellite
+services role now speaks in the day after a strong storm and matches it. What is still not covered is listed in
+the file, not hidden: a New Zealand utility's own emergency procedure. It is a check written by the same project it checks, so it says
+where the advice and the record part company; it is not an independent score.
+
+Two more storms are replayed the same way, by `evals/storms.mjs`. **November 2025** (Kp 9 minus, a G4): the grid told
+the day before, RTK survey held, a household left alone, and aurora. That last one was a miss: Orbita said NOAA's G4
+line, Alabama and northern California, while auroral precipitation actually reached Florida
+([Yizengaw et al. 2026](https://doi.org/10.1029/2026GL124645)). It now says both. **January 2026** (S4, the strongest
+radiation storm since 2003): flights off polar routes, spacewalks held, charging for geostationary satellites, HF
+routed around the poles, and an unexplained avionics fault treated as possibly radiation, since NOAA's S3 and above
+includes single event upsets. What operators actually did that month is not published yet, so those five records are
+NOAA's own warnings, which checks the advice against what NOAA said mattered rather than against an outcome. Across
+the three storms, 22 of 22 records match now.
 
 ## Evaluating tool selection
 
@@ -1300,7 +1410,8 @@ Named deliberately, because it exists.
 * **A measurement can only add a no.** For a question about now, on RTK with a known baseline, the slope NOAA's
   ionosphere map measures across that baseline blocks a job the forecast would clear. The map is too coarse to see
   the small structure that does much of the damage, so a calm map never clears a job the forecast has blocked.
-* Ground truth from magnetometers is United States only. Everywhere else the answer rests on the forecast alone.
+* Ground truth from magnetometers covers the United States, Germany, Belgium, Poland, Sweden, Spain and Australia,
+  and places within 600 km of them. Everywhere else the answer rests on the forecast alone.
 * No email is sent from the deployed server until a sending address is set, and a crew contact has to agree before
   they are sent anything but the invitation.
 * The playbook is decision support, not an operating procedure. It cannot see a control room's GIC
@@ -1340,8 +1451,12 @@ Named deliberately, because it exists.
   latitude, so the TEC gradient it yields is a regional slope, not the small-scale structure that
   causes cycle slips. Scintillation is below this resolution and invisible to it. Treat the residual
   as a floor on the error and not a ceiling.
-* Ground truth is the United States. Thirteen observatories the USGS directory lists are partners it
-  does not serve, including every Canadian one, so Winnipeg gets the forecast and no corroboration.
+* Ground truth is the United States, parts of Europe and Australia. The UK's and Canada's observatories reach
+  INTERMAGNET about a day late (its own lag report says 86,000 seconds for Eskdalemuir), and NRCan ended its own
+  real-time feed in 2023, so Winnipeg gets the forecast and no corroboration and the UK is read from across the
+  North Sea.
+* The ground electric field is the United States and Canada only. Ireland's MagIE models one live, but publishes
+  it as pictures with no terms of use stated, and no open live European feed was found.
   Beyond 2,000 km from a reporting observatory the module says nothing rather than something weaker.
 * The 45 day outlook is a statistical Ap forecast, not a prediction of individual storms. It is for
   choosing between weeks, not for committing to a morning.

@@ -98,8 +98,9 @@ export function register(server: McpServer, farmOf: () => string): void {
       description:
         'Protective steps for somebody who looks after something a solar storm can reach: drones, satellites, the ' +
         'power grid, flights, HF radio, GPS timing, pipelines, directional drilling, railway signalling, a vessel ' +
-        'holding position, automated mining, a vehicle fleet, aurora watching, a household, a small plane, a ' +
-        'magnetic survey or robots. Timed to the NOAA ' +
+        'holding position, a ship, an undersea cable, satellite services, automated mining, a vehicle fleet, aurora ' +
+        'watching, a household, ' +
+        'a small plane, a magnetic survey or robots. Timed to the NOAA ' +
         'forecast. Call this when someone asks what they should do, whether to postpone, or says what they operate ' +
         'and asks whether it will affect them. Read the answer aloud as given. It is not for whether a field job can ' +
         'run (use can_i_run) or for the current Kp (use storm_status).',
@@ -183,6 +184,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         ...(measured && live ? { measuredNow: live, mustSay: [measured.split('. ')[0] + '.'] } : {}),
         ...(Object.keys(local.data).length ? { measuredHere: local.data } : {}),
         ...(site ? { place: 'name' in site ? site.name : null } : {}),
+        ...(site ? { position: { lat: site.lat, lon: site.lon } } : {}),
         geomagneticLatitude: gmLat,
         dataAgeMinutes: swpc.ageMinutes(),
       });

@@ -1,0 +1,185 @@
+{
+  "about": "What operators and users actually did or saw in the May 2024 storm, each with its source, and the advice Orbita should have given them at that hour. The sky at each moment is built only from what was known then: the archived Kp up to that hour, NOAA's G4 watch for the watch moment, and the R level of a flare that had already happened. Nothing later leaks in.",
+  "moments": {
+    "watch": {
+      "at": "2024-05-09T18:00:00Z",
+      "levels": {
+        "g": 0,
+        "s": 0,
+        "r": 0
+      },
+      "days": [
+        {
+          "date": "2024-05-10",
+          "g": 4
+        },
+        {
+          "date": "2024-05-11",
+          "g": 4
+        }
+      ],
+      "note": "NOAA SWPC issued its first G4 watch since 2005 on 9 May for 10 to 12 May"
+    },
+    "g4": {
+      "at": "2024-05-10T20:00:00Z",
+      "levels": {
+        "g": 4,
+        "s": 0,
+        "r": 0
+      },
+      "days": [],
+      "note": "Kp 8.67 in the 18 to 21 UTC block"
+    },
+    "g5": {
+      "at": "2024-05-11T01:30:00Z",
+      "levels": {
+        "g": 5,
+        "s": 0,
+        "r": 3
+      },
+      "days": [],
+      "note": "Kp 9 in the 00 to 03 UTC block, eight minutes after an X5.8 flare at 01:23 UTC"
+    },
+    "decision": {
+      "at": "2024-05-10T15:00:00Z",
+      "levels": {
+        "g": 3,
+        "s": 0,
+        "r": 0
+      },
+      "days": [
+        {
+          "date": "2024-05-10",
+          "g": 4
+        },
+        {
+          "date": "2024-05-11",
+          "g": 4
+        }
+      ],
+      "note": "Kp 7.67 (G3) in the 15 to 18 UTC block, with NOAA's G4 watch still in effect"
+    },
+    "after": {
+      "at": "2024-05-13T00:30:00Z",
+      "levels": {
+        "g": 1,
+        "s": 0,
+        "r": 0
+      },
+      "days": [],
+      "note": "Kp 5.33 in the 00 to 03 UTC block, the day after the peak"
+    }
+  },
+  "records": [
+    {
+      "who": "grid_operator",
+      "moment": "watch",
+      "happened": "Operators received early notice from NOAA SWPC and put GMD operating procedures into effect before the storm arrived.",
+      "source": "https://www.nerc.com/globalassets/programs/rapa/gmd/reference-documents/may-2024-gmd-event-review.pdf",
+      "expect": "black start|crews on notice|return outaged",
+      "means": "told a day ahead to get ready, not only once it hit"
+    },
+    {
+      "who": "grid_operator",
+      "moment": "g5",
+      "happened": "The grid stayed stable through G3 to G5, with isolated effects on transformers, voltage support equipment, breakers and harmonic filters.",
+      "source": "https://www.nerc.com/globalassets/programs/rapa/gmd/reference-documents/may-2024-gmd-event-review.pdf",
+      "expect": "reactive reserves|harmonic|transformer heating|unload",
+      "means": "pointed at the equipment that was actually affected"
+    },
+    {
+      "who": "general_aviation",
+      "moment": "g4",
+      "happened": "WAAS lost LPV and LP service over the lower 48 and Alaska from about 19:12 UTC on 10 May to 10:25 UTC on 11 May, while LNAV kept working.",
+      "source": "https://www.nstb.tc.faa.gov/Discrepancy%20Reports%20PDF/DR%20158%20Iono%20Activity%20May%2010%20-%2012%202024.pdf",
+      "expect": "fly the LNAV minimums",
+      "means": "told to fly LNAV during the hours LPV was gone"
+    },
+    {
+      "who": "airline",
+      "moment": "decision",
+      "happened": "At 15 UTC on 10 May, about seven hours before UAL 990 left San Francisco for Paris, United told the crew to fly a lower latitude, lower altitude route because of the risk of losing communications on high latitude routes. It peaked at 51 degrees north instead of about 65, and the crew took a lower dose than on a quiet day.",
+      "source": "https://www.frontiersin.org/journals/astronomy-and-space-sciences/articles/10.3389/fspas.2025.1657731/full",
+      "expect": "lower latitude|polar routes",
+      "means": "told, with the storm under way, to plan the lower latitude track"
+    },
+    {
+      "who": "airline",
+      "moment": "g5",
+      "happened": "Flights kept leaving through the G5 night. The routing United chose for UAL 990 was for any flight crossing high latitudes while the storm ran.",
+      "source": "https://www.frontiersin.org/journals/astronomy-and-space-sciences/articles/10.3389/fspas.2025.1657731/full",
+      "expect": "lower latitude",
+      "means": "a flight leaving at the height of the storm still hears the reroute"
+    },
+    {
+      "who": "satellite_operator",
+      "moment": "g4",
+      "happened": "About half of the roughly 10,000 satellites in low orbit manoeuvred, the largest migration on record, as drag rose and orbit predictions went wrong.",
+      "source": "https://arc.aiaa.org/doi/10.2514/1.A36164",
+      "expect": "orbit predictions|conjunction",
+      "means": "warned that orbit predictions and conjunctions would be off"
+    },
+    {
+      "who": "drone_pilot",
+      "moment": "g4",
+      "happened": "Drone users reported unstable hover, GPS loss and crashes.",
+      "source": "https://en.wikipedia.org/wiki/May_2024_solar_storms",
+      "expect": "attitude mode|keep the aircraft close|postpone",
+      "means": "told to keep it close, be ready to fly without GPS, or stay down"
+    },
+    {
+      "who": "hf_radio",
+      "moment": "g5",
+      "happened": "NOAA reported HF degradation through the storm, and an X5.8 flare at 01:23 UTC on 11 May blacked out HF on the sunlit side.",
+      "source": "https://en.wikipedia.org/wiki/May_2024_solar_storms",
+      "expect": "sunlit side",
+      "means": "told HF was out on the sunlit side and fading at high latitude"
+    },
+    {
+      "who": "household",
+      "moment": "g5",
+      "happened": "FEMA and the Department of Energy reported no significant impact on people, and the North American grid stayed up.",
+      "source": "https://www.nerc.com/globalassets/programs/rapa/gmd/reference-documents/may-2024-gmd-event-review.pdf",
+      "expect": "not a prediction about your street",
+      "forbid": "will lose power|blackout is coming",
+      "means": "not frightened, told what actually happened before"
+    },
+    {
+      "who": "field_crew",
+      "moment": "g4",
+      "job": {
+        "operation": "planting",
+        "correction": "rtk",
+        "lat": 40.92,
+        "lon": -98.34
+      },
+      "happened": "Farmers on RTK in Nebraska stopped planting: tractors sat at the ends of the field and auto-steer would not engage.",
+      "source": "https://www.404media.co/solar-storm-knocks-out-tractor-gps-systems-during-peak-planting-season",
+      "expectHold": true,
+      "means": "a hold for RTK planting, not a go"
+    },
+    {
+      "who": "household",
+      "moment": "g4",
+      "happened": "Nothing happened to homes at G4.",
+      "source": "https://www.nerc.com/globalassets/programs/rapa/gmd/reference-documents/may-2024-gmd-event-review.pdf",
+      "expectQuiet": true,
+      "means": "a household at G4 is not alarmed"
+    },
+    {
+      "who": "satellite_services",
+      "moment": "after",
+      "happened": "GOES-16 stopped transmitting all data from 00:19 to about 02:00 UTC on 13 May, a day after the peak of the storm.",
+      "source": "https://en.wikipedia.org/wiki/May_2024_solar_storms",
+      "expect": "GOES-16|outage",
+      "means": "told outages can come in the day after the storm"
+    }
+  ],
+  "notCovered": [
+    {
+      "what": "Transpower in New Zealand declared a grid emergency and took lines out as a precaution.",
+      "why": "Orbita's grid advice is the NERC template; it does not know a given utility's own procedure."
+    }
+  ],
+  "title": "May 2024"
+}

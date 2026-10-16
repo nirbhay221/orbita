@@ -46,6 +46,7 @@
  */
 
 import { backoff } from './backoff.js';
+import { setSolarFlux } from './domain.js';
 
 const BASE = 'https://services.swpc.noaa.gov';
 
@@ -405,6 +406,8 @@ export async function refresh(): Promise<void> {
   };
   if (errors.length === 8) gate.fail();
   else gate.ok();
+  // The solar flux decides how often the equatorial bubbles come at all. See domain.quietSun.
+  setSolarFlux(state.outlook[0]?.f107 ?? null);
 }
 
 const fresh = () => state.fetchedAt > 0 && Date.now() - state.fetchedAt < STALE_MS;

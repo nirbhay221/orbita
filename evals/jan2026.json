@@ -1,0 +1,66 @@
+{
+  "title": "January 2026",
+  "about": "The 19 to 21 January 2026 storm: an S4 solar radiation storm, the strongest since October 2003, with a G4 geomagnetic storm. NOAA's own warnings are the records here; what operators did is not yet published.",
+  "moments": {
+    "s4": {
+      "at": "2026-01-19T19:30:00Z",
+      "levels": {
+        "g": 4,
+        "s": 4,
+        "r": 0
+      },
+      "days": [],
+      "note": "S4 measured by GOES-19 and Kp 8.33 in the 18 to 21 UTC block"
+    }
+  },
+  "records": [
+    {
+      "who": "airline",
+      "moment": "s4",
+      "happened": "NOAA warned of higher radiation on polar routes and notified airlines and the FAA.",
+      "source": "https://www.spaceweather.gov/news/s4-severe-solar-radiation-storm-progress-january-19th-2026",
+      "expect": "polar routes",
+      "means": "told to keep flights off polar routes and lower"
+    },
+    {
+      "who": "crewed_spaceflight",
+      "moment": "s4",
+      "orbit": "low",
+      "happened": "NOAA warned of higher radiation exposure for astronauts and notified NASA.",
+      "source": "https://www.spaceweather.gov/news/s4-severe-solar-radiation-storm-progress-january-19th-2026",
+      "expect": "spacewalk|outside",
+      "means": "told to bring anyone outside back in"
+    },
+    {
+      "who": "satellite_operator",
+      "moment": "s4",
+      "orbit": "high",
+      "happened": "NOAA flagged enhanced risk to satellites, especially in geostationary orbit.",
+      "source": "https://www.spaceweather.gov/news/s4-severe-solar-radiation-storm-progress-january-19th-2026",
+      "expect": "charging|geostationary",
+      "means": "told what threatens a geostationary satellite"
+    },
+    {
+      "who": "hf_radio",
+      "moment": "s4",
+      "happened": "NOAA warned of loss of HF communications over the horizon in polar regions.",
+      "source": "https://www.spaceweather.gov/news/s4-severe-solar-radiation-storm-progress-january-19th-2026",
+      "expect": "polar|poles",
+      "means": "told to route around the poles"
+    },
+    {
+      "who": "airline",
+      "moment": "s4",
+      "happened": "NOAA's S4 description includes single event upsets in satellite electronics, and it notified airlines and the FAA.",
+      "source": "https://www.spaceweather.gov/news/s4-severe-solar-radiation-storm-progress-january-19th-2026",
+      "expect": "avionics",
+      "means": "told an unexplained avionics fault may be radiation"
+    }
+  ],
+  "notCovered": [
+    {
+      "what": "What airlines and satellite operators actually did in January 2026 is not yet published.",
+      "why": "These records are NOAA's warnings, so they check the advice against what NOAA said mattered, not against an outcome."
+    }
+  ]
+}

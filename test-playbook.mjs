@@ -157,6 +157,19 @@ const flare = advise('field_crew', sky({ levels: { g: 0, s: 0, r: 3 } }), null);
 check('a strong flare running warns a field crew about a radio burst', flare.phase === 'during' && says(flare, /December 2006/), flare.spoken);
 check('...and an R1 does not', !says(advise('field_crew', sky({ levels: { g: 0, s: 0, r: 1 } }), null), /radio burst/));
 
+console.log('\nShips, undersea cables and satellite internet at home');
+const shipG3 = advise('shipping', sky({ levels: { g: 3, s: 0, r: 0 } }), null);
+check('a ship in a G3 cross-checks GNSS against radar and reports to the Coast Guard', shipG3.phase === 'during' && says(shipG3, /radar/) && says(shipG3, /Navigation Center/), shipG3.spoken);
+check('...and is not told about HF with no flare running', !says(shipG3, /HF/), shipG3.spoken);
+check('a flare at R2 tells the bridge HF is fading on the sunlit side', says(advise('shipping', sky({ levels: { g: 0, s: 0, r: 2 } }), null), /sunlit side/));
+const cableG3 = advise('subsea_cable', sky({ levels: { g: 3, s: 0, r: 0 } }), null);
+check('a cable operator is left alone at G3', cableG3.phase === 'quiet', cableG3.phase);
+const cableSoon = advise('subsea_cable', sky({ slots: slots({ 21: 8.7 }) }), null);
+check('...and before a G4 is told to check headroom, with 1989 and the Google study, not told to expect failure',
+  says(cableSoon, /headroom/) && says(cableSoon, /1989/) && says(cableSoon, /once in a century/) && !says(cableSoon, /will fail|expect a failure/), cableSoon.spoken);
+const homeStorm = advise('household', sky({ levels: { g: 5, s: 0, r: 0 } }), null);
+check('a household at G5 hears that satellite internet may be slow', homeStorm.actions.some((a) => /satellite internet/.test(a.say)), JSON.stringify(homeStorm.actions.map((a) => a.say)));
+
 console.log('\nVoice rules: at most three steps at a time, and a way to hear the rest');
 const long = advise('satellite_operator', sky({ levels: { g: 3, s: 2, r: 0 } }), null);
 check('never more than three steps read aloud', long.spokenSteps <= 3, String(long.spokenSteps));

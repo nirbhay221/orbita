@@ -12,117 +12,291 @@
       "name": "a blocked job, carried through",
       "pattern": "one request leading to the next",
       "turns": [
-        { "say": "can I plant the North 40", "tool": "can_i_run", "args": { "operation": "planting" } },
-        { "say": "ok so when does it clear", "tool": "can_i_run" },
-        { "say": "alright watch it for me", "tool": "watch_jobs", "args": { "action": "start" } },
-        { "say": "and let Dale know, dale@example.com", "tool": "crew_contact", "args": { "action": "add" } }
+        {
+          "say": "can I plant the North 40",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "planting"
+          }
+        },
+        {
+          "say": "ok so when does it clear",
+          "tool": "can_i_run"
+        },
+        {
+          "say": "alright watch it for me",
+          "tool": "watch_jobs",
+          "args": {
+            "action": "start"
+          }
+        },
+        {
+          "say": "and let Dale know, dale@example.com",
+          "tool": "crew_contact",
+          "args": {
+            "action": "add"
+          }
+        }
       ]
     },
     {
       "name": "the tractors stop, in the farmer's own words",
       "pattern": "May 2024: 'the tractors were sitting at the ends of the field', 'auto steer wouldn't engage'",
       "turns": [
-        { "say": "all my tractors are sitting at the ends of the field, auto steer won't engage, is it the sun", "anyOf": ["storm_status", "can_i_run", "farm_status"] },
-        { "say": "the dealer says turn off RTK, should I", "anyOf": ["can_i_run", "what_should_i_do"] },
-        { "say": "how long is this going to last", "anyOf": ["storm_status", "can_i_run"] }
+        {
+          "say": "all my tractors are sitting at the ends of the field, auto steer won't engage, is it the sun",
+          "anyOf": [
+            "storm_status",
+            "can_i_run",
+            "farm_status"
+          ]
+        },
+        {
+          "say": "the dealer says turn off RTK, should I",
+          "anyOf": [
+            "can_i_run",
+            "what_should_i_do"
+          ]
+        },
+        {
+          "say": "how long is this going to last",
+          "anyOf": [
+            "storm_status",
+            "can_i_run"
+          ]
+        }
       ]
     },
     {
       "name": "looking back at a bad afternoon",
       "pattern": "'the GPS showed the tractor going in circles'",
       "turns": [
-        { "say": "yesterday afternoon the tractor was going in circles on the GPS while we were planting, what happened", "tool": "what_happened" },
-        { "say": "ok put that in the log", "tool": "log_job" }
+        {
+          "say": "yesterday afternoon the tractor was going in circles on the GPS while we were planting, what happened",
+          "tool": "what_happened"
+        },
+        {
+          "say": "ok put that in the log",
+          "tool": "log_job"
+        }
       ]
     },
     {
       "name": "and tomorrow?",
       "pattern": "a follow-up that only means something after the answer before it",
       "turns": [
-        { "say": "could I spray South Cut this afternoon", "tool": "can_i_run", "args": { "operation": "spraying" } },
-        { "say": "what about tomorrow morning though", "tool": "can_i_run", "args": { "operation": "spraying" } }
+        {
+          "say": "could I spray South Cut this afternoon",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "spraying"
+          }
+        },
+        {
+          "say": "what about tomorrow morning though",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "spraying"
+          }
+        }
       ]
     },
     {
       "name": "the same thing twice, then giving up",
       "pattern": "repeating was the commonest repair, and 'never mind' ended many",
       "turns": [
-        { "say": "what's the kp", "tool": "storm_status" },
-        { "say": "what's the kp", "tool": "storm_status" },
-        { "say": "never mind", "tool": null }
+        {
+          "say": "what's the kp",
+          "tool": "storm_status"
+        },
+        {
+          "say": "what's the kp",
+          "tool": "storm_status"
+        },
+        {
+          "say": "never mind",
+          "tool": null
+        }
       ]
     },
     {
       "name": "asking why",
       "pattern": "'why are you asking me now?': explanations were a third of breakdowns",
       "turns": [
-        { "say": "can I plant the North 40 right now", "tool": "can_i_run" },
-        { "say": "why not", "anyOf": ["tell_me_more", "can_i_run"] }
+        {
+          "say": "can I plant the North 40 right now",
+          "tool": "can_i_run"
+        },
+        {
+          "say": "why not",
+          "anyOf": [
+            "tell_me_more",
+            "can_i_run"
+          ]
+        }
       ]
     },
     {
       "name": "a correction",
       "pattern": "rephrasing after being misunderstood",
       "turns": [
-        { "say": "can I plant the North 40", "tool": "can_i_run", "args": { "operation": "planting" } },
-        { "say": "no sorry I meant spraying", "tool": "can_i_run", "args": { "operation": "spraying" } }
+        {
+          "say": "can I plant the North 40",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "planting"
+          }
+        },
+        {
+          "say": "no sorry I meant spraying",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "spraying"
+          }
+        }
       ]
     },
     {
       "name": "setting up in passing",
       "pattern": "telling it things in the order they come to mind",
       "turns": [
-        { "say": "I've got a new field, the Home Quarter, it's near Grand Island Nebraska", "tool": "my_farm" },
-        { "say": "the sprayer runs RTK", "tool": "my_farm" },
-        { "say": "so can I go", "tool": "can_i_run" }
+        {
+          "say": "I've got a new field, the Home Quarter, it's near Grand Island Nebraska",
+          "tool": "my_farm"
+        },
+        {
+          "say": "the sprayer runs RTK",
+          "tool": "my_farm"
+        },
+        {
+          "say": "so can I go",
+          "tool": "can_i_run"
+        }
       ]
     },
     {
       "name": "a drone survey",
       "pattern": "a job that is not farming",
       "turns": [
-        { "say": "I've got a drone mapping job this afternoon, is the GPS going to behave", "anyOf": ["can_i_run", "what_should_i_do"] },
-        { "say": "how long have I got", "tool": "can_i_run" }
+        {
+          "say": "I've got a drone mapping job this afternoon, is the GPS going to behave",
+          "anyOf": [
+            "can_i_run",
+            "what_should_i_do"
+          ]
+        },
+        {
+          "say": "how long have I got",
+          "tool": "can_i_run"
+        }
       ]
     },
     {
       "name": "the day's work, then the record",
       "pattern": "reporting in passing",
       "turns": [
-        { "say": "we got eighty acres of planting done today", "tool": "log_job" },
-        { "say": "send the week's report to the office", "tool": "job_report" }
+        {
+          "say": "we got eighty acres of planting done today",
+          "tool": "log_job"
+        },
+        {
+          "say": "send the week's report to the office",
+          "tool": "job_report"
+        }
       ]
     },
     {
       "name": "a machine asks",
       "pattern": "an agent, not a person",
       "turns": [
-        { "say": "I'm a delivery robot in Fargo, can I trust my GPS position right now", "tool": "position_trust" },
-        { "say": "and in ten minutes", "tool": "position_trust", "args": { "inMinutes": 10 } }
+        {
+          "say": "I'm a delivery robot in Fargo, can I trust my GPS position right now",
+          "tool": "position_trust"
+        },
+        {
+          "say": "and in ten minutes",
+          "tool": "position_trust",
+          "args": {
+            "inMinutes": 10
+          }
+        }
       ]
     },
     {
       "name": "off the subject, then back",
       "pattern": "a question it cannot answer, then one it can",
       "turns": [
-        { "say": "what's corn at today", "tool": null },
-        { "say": "ok well is the GPS any good today", "anyOf": ["can_i_run", "storm_status", "farm_status"] }
+        {
+          "say": "what's corn at today",
+          "tool": null
+        },
+        {
+          "say": "ok well is the GPS any good today",
+          "anyOf": [
+            "can_i_run",
+            "storm_status",
+            "farm_status"
+          ]
+        }
       ]
     },
     {
       "name": "weeks, then this weekend",
       "pattern": "a longer view, then the near one",
       "turns": [
-        { "say": "which weeks are worth booking the custom planter for", "tool": "plan_season" },
-        { "say": "and this weekend", "anyOf": ["can_i_run", "plan_season"] }
+        {
+          "say": "which weeks are worth booking the custom planter for",
+          "tool": "plan_season"
+        },
+        {
+          "say": "and this weekend",
+          "anyOf": [
+            "can_i_run",
+            "plan_season"
+          ]
+        }
       ]
     },
     {
       "name": "thanks, that's all",
       "pattern": "'thank you' and 'I got it' used to end",
       "turns": [
-        { "say": "what's the sun doing", "tool": "storm_status" },
-        { "say": "thanks, that's all I needed", "tool": null }
+        {
+          "say": "what's the sun doing",
+          "tool": "storm_status"
+        },
+        {
+          "say": "thanks, that's all I needed",
+          "tool": null
+        }
+      ]
+    },
+    {
+      "name": "a delivery robot, then when",
+      "pattern": "Built from the machine chain added in October 2026, not from recorded speech: a do-not-trust leads to the windows ahead.",
+      "turns": [
+        {
+          "say": "I'm a delivery robot at 40.92, -98.34 on RTK, can I trust my position right now",
+          "tool": "position_trust"
+        },
+        {
+          "say": "okay then when will it be clear, over the next three days",
+          "tool": "position_trust"
+        }
+      ]
+    },
+    {
+      "name": "a ferry tonight",
+      "pattern": "Built for the shipping role added in October 2026, not from recorded speech.",
+      "turns": [
+        {
+          "say": "I'm the officer of the watch on a ferry crossing tonight, does this storm matter",
+          "tool": "what_should_i_do"
+        },
+        {
+          "say": "and what else should I do",
+          "tool": "what_should_i_do"
+        }
       ]
     }
   ]

@@ -25,6 +25,7 @@ export type Operation =
   // different number in the tolerance column.
   | 'surveying'
   | 'drone_survey'
+  | 'drone_show'
   | 'machine_control';
 
 export type Correction = 'rtk' | 'ppp' | 'sbas' | 'autonomous';
@@ -90,6 +91,12 @@ export const TOLERANCE_M: Record<Operation, number> = {
   // Drone photogrammetry lands under 5 cm with a disciplined workflow, and the
   // aircraft is moving, so there is no second chance on a pass.
   drone_survey: 0.05,
+  // A light show flies hundreds of drones a few metres apart on RTK. Geoscan's 2,198 drone show reports each drone
+  // within about a centimetre of where it should be (the company's figure), and the Hong Kong shows of October 2024
+  // were called off when that fix would not hold. A decimetre, ten times what the shows fly at, is this project's
+  // line for when the formation stops being the picture; no published tolerance was found.
+  //   https://insidegnss.com/two-thousand-simultaneous-drones-position-themselves-with-gps-and-glonass-rtk/
+  drone_show: 0.10,
   // Dozers, graders and excavators cutting to design grade plan around 20 to
   // 50 mm horizontal. Past that you are moving dirt you have to move back.
   machine_control: 0.05,
@@ -105,6 +112,7 @@ const OPERATION_LABEL: Record<Operation, string> = {
   scouting: 'scouting',
   surveying: 'survey work',
   drone_survey: 'the drone survey',
+  drone_show: 'the drone show',
   machine_control: 'grade work',
 };
 
@@ -317,8 +325,28 @@ export function bubbleSeason(lon: number): BubbleSeason {
   return { months: [2, 3, 4, 5, 6, 7, 8, 9, 10], words: 'most of all from the March equinox through the September one over the Pacific' };
 }
 
+/**
+ * How active the sun is, which decides how often the bubbles come at all.
+ *
+ * Bubble occurrence follows the solar cycle. Over Hong Kong, GPS-detected bubbles from 2001 to 2012 tracked the
+ * 10.7 cm solar flux with a correlation of about 0.92, strongest at the equinoxes; over Brazil, going from F10.7 210
+ * in October 2001 to 70 in October 2008 brought a large fall in how often and how strongly they formed. So near the
+ * bottom of the cycle the evening hours stop being a hold on their own. The line is F10.7 75, below which only the
+ * deepest solar minimum sits; above it, which is every year from 2011 to now, nothing changes. The value is NOAA's,
+ * from the 45 day forecast swpcplus.ts already reads, and until it has been read the rule stands as it always did.
+ *   https://research.polyu.edu.hk/en/publications/effects-of-solar-and-geomagnetic-activity-on-the-occurrence-of-eq/
+ *   https://bv.fapesp.br/en/publicacao/231042 (Abdu and others, 2020)
+ */
+export const QUIET_SUN_F107 = 75;
+let solarFlux: number | null = null;
+export function setSolarFlux(f107: number | null): void {
+  solarFlux = f107 != null && Number.isFinite(f107) && f107 > 0 ? f107 : null;
+}
+export const quietSun = (): boolean => solarFlux != null && solarFlux < QUIET_SUN_F107;
+
 export function equatorialEvening(field: Field, at: Date | undefined): boolean {
   if (!at || Number.isNaN(at.getTime())) return false;
+  if (quietSun()) return false;
   if (Math.abs(geomagneticLatitude(field.lat, field.lon)) > 20) return false;
   const solarHour = (((at.getUTCHours() + at.getUTCMinutes() / 60 + field.lon / 15) % 24) + 24) % 24;
   const evening = solarHour >= 19 || solarHour < 1;
@@ -459,6 +487,49 @@ export function nextWindow(
   const from = new Date(start).getTime() < now.getTime() ? now.toISOString() : start;
   const hours = (new Date(end).getTime() - new Date(from).getTime()) / 3_600_000;
   return { start: from, end, hours };
+}
+
+/**
+ * Every clear window over the forecast, for a machine with its own accuracy need rather than a farm job.
+ *
+ * nextWindow answers a person: the first window, for a job with a fixed tolerance. A scheduler planning a fleet, or a
+ * drone show with a fixed date, needs all of them across the forecast, for whatever accuracy it said. The test for
+ * each block is the same one nextWindow uses: the expected error for that Kp at that place against the need, and
+ * for carrier-phase work tighter than 30 cm on an unhardened receiver, the evening bubble hours near the magnetic
+ * equator checked at both ends of the block.
+ */
+export function clearWindows(
+  slots: Slot[],
+  eq: Equipment,
+  field: Field,
+  needM: number,
+  now: Date,
+  hours = 72,
+): { start: string; end: string; hours: number }[] {
+  const until = now.getTime() + hours * 3_600_000;
+  const blocks = slots.filter((s) => {
+    const t = new Date(s.time).getTime();
+    return t + 3 * 3_600_000 > now.getTime() && t < until;
+  });
+  const carrier = (eq.correction === 'rtk' || eq.correction === 'ppp') && needM < 0.3 && !eq.hardened;
+  const out: { start: string; end: string; hours: number }[] = [];
+  let open: number | null = null;
+  let close = 0;
+  for (const s of blocks) {
+    const begins = new Date(s.time).getTime();
+    const when = begins <= now.getTime() ? now : new Date(begins + 90 * 60_000);
+    const bubbles = carrier && [begins + 30 * 60_000, begins + 150 * 60_000].some((t) => equatorialEvening(field, new Date(Math.max(t, now.getTime()))));
+    const ok = expectedErrorM(s.kp, eq, field, when) <= needM && !bubbles;
+    if (ok) {
+      if (open == null) open = Math.max(begins, now.getTime());
+      close = Math.min(begins + 3 * 3_600_000, until);
+    } else if (open != null) {
+      out.push({ start: new Date(open).toISOString(), end: new Date(close).toISOString(), hours: (close - open) / 3_600_000 });
+      open = null;
+    }
+  }
+  if (open != null) out.push({ start: new Date(open).toISOString(), end: new Date(close).toISOString(), hours: (close - open) / 3_600_000 });
+  return out.map((w) => ({ ...w, hours: Math.round(w.hours * 10) / 10 }));
 }
 
 /* ------------------------------------------------------------------ *

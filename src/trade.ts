@@ -14,7 +14,7 @@
 import type { Operation } from './domain.js';
 
 const SURVEY: Operation[] = ['surveying'];
-const FLIGHT: Operation[] = ['drone_survey'];
+const FLIGHT: Operation[] = ['drone_survey', 'drone_show'];
 const GRADE: Operation[] = ['machine_control'];
 const ROWS: Operation[] = ['planting', 'strip_till', 'cultivating'];
 
