@@ -17,7 +17,7 @@ import { z } from 'zod';
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { shorten, more, inScope, sentences } from './brief.js';
+import { shorten, more, morePage, inScope, sentences } from './brief.js';
 import * as store from './store.js';
 import * as setup from './tools/setup.js';
 import * as decide from './tools/decide.js';
@@ -193,6 +193,9 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
     },
     async () => {
       const next = more(farmOf());
+      // Advice that reads its own steps leaves its next page rather than held sentences.
+      const page = next ? null : await morePage(farmOf());
+      if (page) return say(page, { left: /more step/.test(page) ? 1 : 0 });
       if (!next) return say('There is nothing more on that. Ask me about a job, a field or the forecast.', { left: 0 });
       return say(next.left > 0 ? `${next.spoken} There is a little more if you want it.` : next.spoken, { left: next.left });
     },

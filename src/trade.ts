@@ -22,6 +22,7 @@ const ROWS: Operation[] = ['planting', 'strip_till', 'cultivating'];
 export function adviceNow(operation: Operation, go: boolean, kp: number, limitedBy: string, equatorial = false): string {
   if (limitedBy === 'equipment') return '';
   // The evening plasma bubbles are not a storm, so the compass is not part of it.
+  if (equatorial && operation === 'drone_show') return 'Drones that lose their fix mid-show fall out of the formation in front of the crowd, so a show that cannot move past midnight is better called off than flown.';
   if (equatorial && FLIGHT.includes(operation)) return 'Do not fly a mapping mission tonight: a lost fix mid-flight cannot be repaired afterwards.';
   if (SURVEY.includes(operation)) {
     if (!go) return 'Anything you shoot now should be re-observed once it clears, and check in to a known control point before you trust the session.';

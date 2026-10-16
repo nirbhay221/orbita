@@ -214,6 +214,33 @@ console.log('\nThe add-on tells a host what this person has saved, never what it
   check('a farm in Brazil: the host is told to answer in Portuguese, keeping numbers and RTK as given', /Portuguese/.test(told) && /RTK, PPP, SBAS/.test(told), told.slice(-260));
 }
 
+console.log('\nThe satellite outage file, from the Coast Guard or its mirror');
+{
+  // The Coast Guard refuses automated reads from cloud servers, so the deployed server reads CelesTrak's copy.
+  const { mirrorName } = await import('./dist/interference.js');
+  const pointer = await fetch('https://celestrak.org/GPS/sof/current_sof.txt').then((r) => r.text()).catch(() => '');
+  const name = mirrorName(pointer);
+  const xml = name ? await fetch(`https://celestrak.org/GPS/sof/${name}`).then((r) => r.text()).catch(() => '') : '';
+  check('CelesTrak names the newest outage file and serves it as the control segment wrote it', /<GPSISFILE[^>]*FILEID="SOF"/.test(xml), name ?? pointer.slice(0, 60));
+}
+
+console.log('\nThe GPS test schedule, from the FAA when the Coast Guard refuses');
+{
+  const i = await import('./dist/interference.js');
+  const { extractText } = await import('unpdf');
+  const list = await fetch('https://www.faasafety.gov/SPANS/notices_public.aspx').then((r) => r.text()).catch(() => '');
+  const ids = i.noticeIds(list);
+  let windows = [];
+  for (const nid of ids.slice(0, 3)) {
+    const path = i.advisoryPath(await fetch(`https://www.faasafety.gov/SPANS/noticeView.aspx?nid=${nid}`).then((r) => r.text()).catch(() => ''));
+    if (!path) continue;
+    const bytes = new Uint8Array(await fetch(`https://www.faasafety.gov${path}`).then((r) => r.arrayBuffer()));
+    windows = i.parseAdvisory((await extractText(bytes, { mergePages: true })).text);
+    if (windows.length) break;
+  }
+  check('the FAA lists GPS interference notices, and a current advisory reads as dated windows with a ground radius', ids.length > 0 && windows.length > 0 && windows[0].groundNm > 0 && /^\d{4}-/.test(windows[0].start), `${ids.length} notices, ${windows.length} windows`);
+}
+
 stop();
 rmSync(DATA, { force: true });
 console.log(`\n${pass} passed, ${fail} failed\n`);

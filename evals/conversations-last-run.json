@@ -1,13 +1,13 @@
 {
-  "at": "2026-10-15T02:13:51.179Z",
+  "at": "2026-10-16T15:43:39.719Z",
   "model": "claude-opus-5-5",
   "summary": {
-    "conversations": 14,
-    "conversationsAllRight": 13,
-    "turns": 33,
-    "turnsRight": 32,
-    "laterTurns": 32,
-    "costUsd": 0.23
+    "conversations": 16,
+    "conversationsAllRight": 15,
+    "turns": 37,
+    "turnsRight": 36,
+    "laterTurns": 36,
+    "costUsd": 0.28
   },
   "results": [
     {
@@ -157,7 +157,8 @@
           "args": {
             "operation": "planting",
             "when": "yesterday afternoon",
-            "note": "tractor was going in circles on the GPS while planting"
+            "equipment": "tractor",
+            "note": "the tractor was going in circles on the GPS while we were planting"
           },
           "ok": true,
           "toolOk": true,
@@ -244,7 +245,7 @@
           "ok": true,
           "toolOk": true,
           "argsOk": true,
-          "said": "No problem. Just ask whenever you want the Kp again or need to know if a job can run."
+          "said": "No problem. Just ask if you want the Kp again or need to know whether a job can run."
         }
       ],
       "allRight": true
@@ -401,8 +402,7 @@
           ],
           "got": "can_i_run",
           "args": {
-            "operation": "drone_survey",
-            "when": "this afternoon"
+            "operation": "drone_survey"
           },
           "ok": true,
           "toolOk": true,
@@ -440,7 +440,7 @@
           "got": "job_report",
           "args": {
             "days": 7,
-            "emailTo": "office"
+            "emailTo": "the office"
           },
           "ok": true,
           "toolOk": true,
@@ -461,7 +461,7 @@
           ],
           "got": "position_trust",
           "args": {
-            "lat": 46.877,
+            "lat": 46.88,
             "lon": -96.79
           },
           "ok": true,
@@ -474,15 +474,19 @@
           "want": [
             "position_trust"
           ],
-          "got": null,
-          "args": {},
-          "ok": false,
-          "toolOk": false,
+          "got": "position_trust",
+          "args": {
+            "lat": 46.877,
+            "lon": -96.79,
+            "inMinutes": 10
+          },
+          "ok": true,
+          "toolOk": true,
           "argsOk": true,
-          "said": "I can't tell you that ahead of time. Orbita's position check only covers right now, and none of its tools can forecast your position error for a later time. Since you're a robot and not a field job, t"
+          "said": ""
         }
       ],
-      "allRight": false
+      "allRight": true
     },
     {
       "name": "off the subject, then back",
@@ -498,7 +502,7 @@
           "ok": true,
           "toolOk": true,
           "argsOk": true,
-          "said": "Orbita can't help with that. It doesn't have grain prices or market quotes. It only covers space weather and whether your GPS-guided jobs will stay accurate. For today's corn price, try your elevator,"
+          "said": "Orbita can't give you corn prices. It only covers space weather and whether your GPS will hold the accuracy a job needs. Your grain elevator, the CME futures quote or a markets app will have today's c"
         },
         {
           "say": "ok well is the GPS any good today",
@@ -578,10 +582,83 @@
           "ok": true,
           "toolOk": true,
           "argsOk": true,
-          "said": "You're welcome. If you need to know whether a job can run while this storm is going on, just ask."
+          "said": "You're welcome. One thing to keep in mind: a G3 storm can throw off GPS-guided work, so check before you run anything."
         }
       ],
       "allRight": true
+    },
+    {
+      "name": "a delivery robot, then when",
+      "pattern": "Built from the machine chain added in October 2026, not from recorded speech: a do-not-trust leads to the windows ahead.",
+      "turns": [
+        {
+          "say": "I'm a delivery robot at 40.92, -98.34 on RTK, can I trust my position right now",
+          "want": [
+            "position_trust"
+          ],
+          "got": "position_trust",
+          "args": {
+            "lat": 40.92,
+            "lon": -98.34,
+            "correction": "rtk"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "okay then when will it be clear, over the next three days",
+          "want": [
+            "position_trust"
+          ],
+          "got": "position_trust",
+          "args": {
+            "lat": 40.92,
+            "lon": -98.34,
+            "correction": "rtk",
+            "windowsHours": 72
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": true
+    },
+    {
+      "name": "a ferry tonight",
+      "pattern": "Built for the shipping role added in October 2026, not from recorded speech.",
+      "turns": [
+        {
+          "say": "I'm the officer of the watch on a ferry crossing tonight, does this storm matter",
+          "want": [
+            "what_should_i_do"
+          ],
+          "got": "what_should_i_do",
+          "args": {
+            "role": "shipping"
+          },
+          "ok": true,
+          "toolOk": true,
+          "argsOk": true,
+          "said": ""
+        },
+        {
+          "say": "and what else should I do",
+          "want": [
+            "what_should_i_do"
+          ],
+          "got": "tell_me_more",
+          "args": {},
+          "ok": false,
+          "toolOk": false,
+          "argsOk": true,
+          "said": ""
+        }
+      ],
+      "allRight": false
     }
   ]
 }

@@ -198,8 +198,9 @@ export function register(server: McpServer, farmOf: () => string): void {
       const dayLabel = at.toLocaleDateString('en-US', {
         weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC',
       });
+      // The peak in the field's own time, like the passes named after it; it was said in UTC beside local hours.
       const peakTime = new Date(peak.time).toLocaleString('en-US', {
-        hour: 'numeric', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short',
+        hour: 'numeric', minute: '2-digit', timeZone: tz, timeZoneName: 'short',
       });
 
       const otherFound = await interference.nearThen(f.lat, f.lon, at);

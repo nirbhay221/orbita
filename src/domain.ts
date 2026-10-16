@@ -189,6 +189,9 @@ function baselineFactor(km: number | undefined, correction: Correction): number 
  *   - In an extreme storm, nowhere in the middle latitudes is far from it. In May 2024 (Kp 9) positioning
  *     errors of metres were measured across the central United States (Remote Sensing 2025,
  *     doi:10.3390/rs17091492). That is the floor of 25 times from Kp 8 and 50 from Kp 9.
+ *   - Checked after it was set: in the storm of 1 June 2025 (Kp 7.67) network RTK in southern China lost its
+ *     integer fix as large travelling disturbances passed and held only 5 to 10 cm horizontal (Liu and others,
+ *     Space Weather 2026, doi:10.1029/2026SW005101). The Kp 7 floor gives 8 cm at Hong Kong that afternoon.
  *
  * Between those points the steps are this project's interpolation, not a measurement, and the numbers it
  * produces are an estimate of scale: "inches" or "feet", never a promise of a figure.
@@ -354,6 +357,21 @@ export function equatorialEvening(field: Field, at: Date | undefined): boolean {
   return evening && bubbleSeason(field.lon).months.includes(month);
 }
 
+/**
+ * A strong storm takes the fix away in bursts, not as a steady drift.
+ *
+ * At Kp 7 the estimate for RTK far from the oval is about 8 cm, and an average can sit just inside a job's tolerance.
+ * What was measured is not an average: on 1 June 2025 (Kp 7.67) network RTK in southern China kept losing its integer
+ * fix as large travelling disturbances passed, with interpolation residuals past 10 cm and accuracy falling to 5 to
+ * 10 cm (Liu and others, Space Weather 2026, doi:10.1029/2026SW005101). So from Kp 7 an RTK job counts as clear only
+ * when its tolerance is at least twice the expected error. Twice is this project's line, not a measured one; it is
+ * what keeps a 10 cm drone show from being called clear on an 8 cm estimate.
+ */
+export const STORM_HEADROOM = 2;
+export function stormMargin(kp: number, correction: Correction, errM: number, needM: number): boolean {
+  return correction === 'rtk' && kp >= 7 && errM <= needM && errM * STORM_HEADROOM > needM;
+}
+
 export function assess(
   operation: Operation,
   kp: number,
@@ -371,7 +389,8 @@ export function assess(
   const bubbleHours = (eq.correction === 'rtk' || eq.correction === 'ppp') && tol < 0.3 && equatorialEvening(field, at);
   // A receiver built for scintillation is not held by it. See Equipment.hardened.
   const bubbles = bubbleHours && !eq.hardened;
-  const go = err <= tol && !bubbles;
+  const thin = stormMargin(kp, eq.correction, err, tol);
+  const go = err <= tol && !bubbles && !thin;
   const g = G_SCALE(kp);
   const label = OPERATION_LABEL[operation];
 
@@ -384,6 +403,12 @@ export function assess(
       `Hold off ${label} until after midnight or the morning. Near the magnetic equator the hours after sunset bring plasma bubbles ` +
       `that break up satellite signals, ${bubbleSeason(field.lon).words}, and ${eq.correction.toUpperCase()} loses its fix first. ` +
       `That happens on quiet days too, so Kp ${kp.toFixed(1)} does not rule it out.`;
+  } else if (thin) {
+    limitedBy = 'space_weather';
+    reason =
+      `Hold off ${label}. Expected drift is about ${inches(err)} against the ${inches(tol)} it needs, but at Kp ${kp.toFixed(1)} (${g}) ` +
+      `RTK drops its fix in bursts as storm waves pass rather than drifting steadily, as it did across southern China in June 2025, ` +
+      `and that leaves too little room.`;
   } else if (go) {
     limitedBy = 'clear';
     // The verdict, then the one number that backs it, in the job's own terms; Kp last, for whoever tracks it.
@@ -439,7 +464,8 @@ export function thresholdKp(
   if (expectedErrorM(0, eq, field) > tol) return null; // never runnable
   if (expectedErrorM(9, eq, field) <= tol) return null; // always runnable
   for (let kp = 0; kp <= 9; kp += 0.1) {
-    if (expectedErrorM(kp, eq, field) > tol) return Number(kp.toFixed(1));
+    const err = expectedErrorM(kp, eq, field);
+    if (err > tol || stormMargin(kp, eq.correction, err, tol)) return Number(kp.toFixed(1));
   }
   return null;
 }
@@ -472,7 +498,8 @@ export function nextWindow(
     // ends of the block, because a three-hour block can straddle sunset.
     const carrier = (eq.correction === 'rtk' || eq.correction === 'ppp') && tol < 0.3 && !eq.hardened;
     const bubbles = carrier && [begins + 30 * 60_000, begins + 150 * 60_000].some((t) => equatorialEvening(field, new Date(Math.max(t, now.getTime()))));
-    const ok = expectedErrorM(s.kp, eq, field, when) <= tol && !bubbles;
+    const err = expectedErrorM(s.kp, eq, field, when);
+    const ok = err <= tol && !bubbles && !stormMargin(s.kp, eq.correction, err, tol);
     if (ok) {
       if (!start) start = s.time;
       last = s.time;
@@ -519,7 +546,8 @@ export function clearWindows(
     const begins = new Date(s.time).getTime();
     const when = begins <= now.getTime() ? now : new Date(begins + 90 * 60_000);
     const bubbles = carrier && [begins + 30 * 60_000, begins + 150 * 60_000].some((t) => equatorialEvening(field, new Date(Math.max(t, now.getTime()))));
-    const ok = expectedErrorM(s.kp, eq, field, when) <= needM && !bubbles;
+    const err = expectedErrorM(s.kp, eq, field, when);
+    const ok = err <= needM && !bubbles && !stormMargin(s.kp, eq.correction, err, needM);
     if (ok) {
       if (open == null) open = Math.max(begins, now.getTime());
       close = Math.min(begins + 3 * 3_600_000, until);
@@ -566,7 +594,10 @@ export function degradedOptions(
   // rather than the loosest. Capped when spoken: certification asks for at most
   // five options read aloud, and nobody holds nine in their head anyway.
   const stillRunnable = (Object.keys(TOLERANCE_M) as Operation[])
-    .filter((op) => op !== blocked && expectedErrorM(kp, eq, field) <= TOLERANCE_M[op])
+    .filter((op) => {
+      const err = expectedErrorM(kp, eq, field);
+      return op !== blocked && err <= TOLERANCE_M[op] && !stormMargin(kp, eq.correction, err, TOLERANCE_M[op]);
+    })
     .sort((a, b) => TOLERANCE_M[a] - TOLERANCE_M[b]);
 
   const spoken = stillRunnable.length

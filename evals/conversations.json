@@ -295,7 +295,11 @@
         },
         {
           "say": "and what else should I do",
-          "tool": "what_should_i_do"
+          "anyOf": [
+            "what_should_i_do",
+            "tell_me_more"
+          ],
+          "why": "tell_me_more says to take \"what else\" straight after an answer, and since 16 October it reads the next page of advice that pages itself, so both give the same answer"
         }
       ]
     }

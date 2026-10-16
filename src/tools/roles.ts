@@ -9,7 +9,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
   assess, nextWindow, thresholdKp, TOLERANCE_M, degradedOptions, deadlinePressure, geomagneticLatitude,
-  auroralBoundaryDeg,
+  auroralBoundaryDeg, equatorialEvening, bubbleSeason,
   type Correction, type Operation,
 } from '../domain.js';
 import { activeImpacts, speakImpacts } from '../impacts.js';
@@ -29,6 +29,7 @@ import { sendEmail, emailConfigured } from '../notify.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import { geocode, spoken as spokenPlace } from '../geocode.js';
 import * as ground from '../ground.js';
+import { nextPage } from '../brief.js';
 import {
   NOAA_DOWN,
   clean,
@@ -38,6 +39,9 @@ import {
 
 /** Roles with a long conductor in the ground or on poles, which the geoelectric field drives current into. */
 const CONDUCTORS: readonly Role[] = ['grid_operator', 'pipeline', 'rail'];
+
+/** Roles that steer by a precise satellite fix, which the evening plasma bubbles near the magnetic equator break. */
+const FIX_ROLES: readonly Role[] = ['drone_pilot', 'robots', 'field_crew', 'mining', 'fleet', 'maritime_dp'];
 
 /**
  * What is measured where they are, for the roles a map or a magnetometer speaks to. Nothing when there is no
@@ -58,6 +62,15 @@ function measuredHere(role: Role, site: { lat: number; lon: number } | undefined
   if ((CONDUCTORS.includes(role) || role === 'drilling') && site) {
     const c = geomag.corroboration(site.lat, site.lon, kp);
     if (c) { said.push(c); data.magnetometer = geomag.reading(site.lat, site.lon); }
+  }
+  // Kp says nothing about these. Asked from Hong Kong at ten at night in October, a drone pilot was told positioning
+  // should behave, in the hours that called off the 2024 National Day shows there. See equatorialEvening.
+  if (FIX_ROLES.includes(role) && site && equatorialEvening({ id: 'site', name: 'site', ...site }, new Date())) {
+    said.push(
+      `But here it is the evening plasma bubble hours near the magnetic equator, ${bubbleSeason(site.lon).words}, when ` +
+        'precise satellite fixes drop out even with Kp low. Hold work that needs RTK until after midnight or the morning.',
+    );
+    data.equatorialEvening = true;
   }
   if (role === 'magnetic_survey' && site) {
     const r = geomag.reading(site.lat, site.lon);
@@ -151,19 +164,24 @@ export function register(server: McpServer, farmOf: () => string): void {
       }
       const site = store.get(id).rolePlace ?? farm.fields[0];
       const gmLat = site ? geomagneticLatitude(site.lat, site.lon) : null;
-      const advice = advise(
-        chosen,
-        {
-          now: new Date(),
-          levels: { g: snap.scales.g, s: snap.scales.s, r: snap.scales.r },
-          yesterday: snap.scales.yesterday,
-          days: snap.scales.days,
-          slots: snap.slots,
-        },
-        gmLat,
-        step ?? 0,
-        orbit,
-      );
+      const context = {
+        now: new Date(),
+        levels: { g: snap.scales.g, s: snap.scales.s, r: snap.scales.r },
+        yesterday: snap.scales.yesterday,
+        days: snap.scales.days,
+        slots: snap.slots,
+      };
+      const advice = advise(chosen, context, gmLat, step ?? 0, orbit);
+      // "Go on" or "what else" reaches tell_me_more, so the next page is left there to read. See brief.nextPage.
+      const leave = (from: number | null): void => {
+        if (from == null) return;
+        nextPage(id, async () => {
+          const page = advise(chosen, context, gmLat, from, orbit);
+          leave(page.nextStep);
+          return page.spoken;
+        });
+      };
+      leave(advice.nextStep);
       // What the GOES satellites measure this minute, for the two roles in orbit. Said on the first page only,
       // after the advice, and never when the reading is missing or old. See particles.ts.
       const live = particles.now();

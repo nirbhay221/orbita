@@ -446,6 +446,30 @@ console.log('\nWhen it is not the sun: GPS tests, satellites out, and what aircr
   const outs = i.parseSof(sof, now);
   check('the satellite outage file: the 1998 outage is dropped, last week\'s and tomorrow\'s are kept', outs.length === 2 && outs.map((o) => o.prn).join() === '5,31', JSON.stringify(outs));
   check('...day 286 of 2026 at 15:00 is 13 October, and it is marked as scheduled', outs[1].start === '2026-10-13T15:00:00.000Z' && outs[1].scheduled === true);
+  check('the mirror pointer names the newest file, and nothing else is taken for a name',
+    i.mirrorName('2026_288_202325_v01.sof\n') === '2026_288_202325_v01.sof' && i.mirrorName('<html>Access denied</html>') === null && i.mirrorName('../../etc/passwd.sof') === null);
+
+  // The FAA's flight advisories, for when the Coast Guard refuses. Texts as unpdf reads the real October 2026 PDFs.
+  const irwin = 'FEDERAL AVIATION ADMINISTRATION\nFLIGHT ADVISORY\nGPS INTERFERENCE TESTING\nFTIRCA GPS 26-66 REV 2\n20 OCTOBER – 1 NOVEMBER\nFORT IRWIN, CA\n' +
+    'GPS testing is scheduled as follows and may result in unreliable or unavailable GPS signal.\nA. Centered at 352146N1163221W or the DAG VOR 350-degree radial at 24 NM.\n' +
+    'B. Dates and times (Dates and times are based on GMT (Z).):\n20 OCT 26 1630Z - 2229Z\n21 OCT 26 1630Z - 1959Z\n23 OCT 26 1630Z - 1959Z\n24 - 31 OCT 26 DLY 0600Z - 1259Z\n24 - 31 OCT 26 DLY 1630Z - 2229Z\n01 NOV 26 0700Z - 1359Z\n01 NOV 26 1700Z - 2229Z\n' +
+    'C. Duration: Each event may last the entire requested period.\nD. NOTAM INFO: NAV GPS (FTIRCA GPS 26-66 REV 2) (INCLUDING WAAS, GBAS, AND ADS-B) MAY NOT BE AVBL\nWI A:\n299NM RADIUS CENTERED AT 352146N1163221W (DAG350024) FL400-UNL\n253NM RADIUS AT FL250\n178NM RADIUS AT 10000FT\n149NM RADIUS AT 4000FT AGL\n133NM RADIUS AT 50FT AGL\n';
+  const w = i.parseAdvisory(irwin);
+  check('an FAA advisory: name, place, centre and the radius at 50 feet', w[0]?.name === 'FTIRCA' && w[0].id === 'GPS 26-66' && w[0].place === 'Fort Irwin, CA' && Math.abs(w[0].lat - 35.3628) < 0.001 && Math.abs(w[0].lon + 116.5392) < 0.001 && w[0].groundNm === 133, JSON.stringify(w[0]));
+  check('...one window per line, and per day where it says DLY: 3 + 8 + 8 + 2', w.length === 21, String(w.length));
+  check('...each in its own hours, so 20 October runs 16:30 to 22:29 UTC', w[0].start === '2026-10-20T16:30:00.000Z' && w[0].end === '2026-10-20T22:29:59.000Z');
+  check('...and the last is 1 November', w.at(-1).start === '2026-11-01T17:00:00.000Z');
+  const poinsett = i.parseAdvisory('PECRSC GPS 26-01\n28 SEPTEMBER – 17 OCTOBER\nPOINSETT ELECTRONIC COMBAT RANGE, SC\nA. Centered at 335001N0802928W or the CAE VOR.\nB. Dates and times (Dates and times are based on GMT (Z).):\n28 SEP - 05 OCT 26 DLY 1100Z - 1600Z\nC. Duration: x\n31NM RADIUS AT 50FT AGL');
+  check('...a run of days across a month end', poinsett.length === 8 && poinsett[0].start === '2026-09-28T11:00:00.000Z' && poinsett.at(-1).start === '2026-10-05T11:00:00.000Z' && poinsett[0].place === 'Poinsett Electronic Combat Range, SC', JSON.stringify(poinsett.map((x) => x.start)));
+  const night = i.parseAdvisory('XAMPLE GPS 26-02\nSOMEWHERE, TX\nA. Centered at 300000N0970000W.\nB. Dates and times (Z):\n05 NOV 26 2200Z - 0200Z\nC. Duration: x\n40NM RADIUS AT 50FT AGL');
+  check('...hours past midnight end the next day', night[0]?.end === '2026-11-06T02:00:59.000Z', JSON.stringify(night));
+  check('...a page that is not an advisory gives nothing', i.parseAdvisory('Access denied').length === 0);
+  check('the FAA list: only GPS interference notices, by id', JSON.stringify(i.noticeIds('<a href="noticeView.aspx?nid=15274">GPS Interference Testing Glamis</a><a href="noticeView.aspx?nid=15000">Fly-in breakfast</a>')) === '["15274"]');
+  check('...and an advisory whose file name is misspelled is still found', i.advisoryPath('<a href="http://www.faasafety.gov/files/notices/2026/Oct/WSMRNM_26-45_GPS_Flighy_Advisory.pdf">x</a>') === '/files/notices/2026/Oct/WSMRNM_26-45_GPS_Flighy_Advisory.pdf');
+  i.seedForTest({ tests: w, satellites: [] });
+  const barstow = { lat: 34.9, lon: -117.02 };
+  check('a point inside the radius hears of the test during its hours', i.near(barstow.lat, barstow.lon, new Date('2026-10-20T18:00:00Z')).tests.length === 1);
+  check('...and not between them, when GPS there is fine', i.near(barstow.lat, barstow.lon, new Date('2026-10-20T23:30:00Z')).tests.length === 0);
 
   const fargo = { lat: 46.88, lon: -96.79 };
   const columbia = { lat: 34.0, lon: -81.03 };

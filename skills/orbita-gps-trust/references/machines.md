@@ -18,6 +18,7 @@ forecast for that time, says so, and carries `forecastOnly: true`, because the s
 |---|---|
 | The expected error is outside `needMeters` at the current Kp | `do_not_trust` |
 | An RTK receiver, in a storm strong enough that RTK loses its fix there | `do_not_trust` |
+| An RTK receiver from Kp 7 with less than twice the expected error to spare inside `needMeters` (the fix drops in bursts, Space Weather 2026) | `do_not_trust` |
 | The measured sky over the point is disturbed, for RTK or PPP, needing better than 0.3 metres | `do_not_trust` |
 | The measured sky over the point is disturbed, for RTK or PPP, needing 0.3 metres or looser | `verify` |
 | Evening near the magnetic equator in that longitude's season, for RTK or PPP | `verify`, or `do_not_trust` under 0.3 metres |

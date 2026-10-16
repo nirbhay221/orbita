@@ -10,11 +10,17 @@
  *   above the ground, which is where a tractor is. In March 2026 exercises on the North Carolina coast took
  *   auto-steer down on farms that had no idea why. The schedule is a two-page PDF, read here every few hours.
  *     https://www.navcen.uscg.gov/sites/default/files/pdf/gps/gpsnotices/GPS_Interference.pdf
+ *   When the Coast Guard refuses the read, as it does from cloud servers, the same tests come from the FAA's flight
+ *   advisories on FAASafety.gov (see readFaaTests below).
  *
  *   GPS satellites out of service. The GPS control segment publishes every outage, past, current and scheduled,
  *   as the Satellite Outage File. One satellite out of about thirty rarely breaks a fix on a receiver that also
  *   tracks Galileo and GLONASS, so it is said as that: something to rule out, not something to stop for.
  *     https://www.navcen.uscg.gov/sites/default/files/gps/sof/current_sof.sof
+ *   The Coast Guard's site answers automated reads from cloud servers, the deployed one included, with a 403, so
+ *   when it does the same file is read from CelesTrak (T.S. Kelso), which has mirrored it for years: its
+ *   current_sof.txt names the newest file, and that file is the control segment's own, byte for byte.
+ *     https://celestrak.org/GPS/sof/current_sof.txt
  *
  *   Interference that aircraft reported. Every airliner broadcasts how much it trusts its own GPS. GPSJAM
  *   (John Wiseman) counts, for each day and each hexagon of the map, how many aircraft reported good and bad
@@ -136,14 +142,114 @@ async function get(url: string, timeoutMs = 15_000): Promise<Response> {
   }
 }
 
+/*
+ * The same tests, from the FAA, when the Coast Guard refuses.
+ *
+ * The Coast Guard's site answers automated reads from cloud servers with a 403, the deployed one included, and the
+ * schedule has no mirror. The FAA announces every one of these tests to pilots as a flight advisory on FAASafety.gov,
+ * whose public notice list a server can read: each "GPS Interference Testing" notice links a one-page PDF with the
+ * test's name, its centre, the radius it reaches at 50 feet above the ground, and its dates in UTC.
+ *   https://www.faasafety.gov/SPANS/notices_public.aspx
+ */
+const FAA = 'https://www.faasafety.gov';
+const advisories = new Map<string, GpsTest[]>();
+
+/**
+ * One FAA flight advisory for a GPS interference test, read from its text: one entry per window the test is
+ * scheduled in, so a test counts only during its own hours. Empty when the text is not such an advisory.
+ *
+ *   B. Dates and times (Dates and times are based on GMT (Z).):
+ *   20 OCT 26 1630Z - 2229Z                 one window
+ *   24 - 31 OCT 26 DLY 0600Z - 1259Z        the same hours on each day
+ *   28 SEP - 05 OCT 26 DLY 1100Z - 1600Z    across a month end
+ *   13 - 16 OCT 26 0600Z - 1200Z            without DLY, one window from the first time to the last
+ */
+export function parseAdvisory(text: string): GpsTest[] {
+  const flat = text.replace(/[–—]/g, '-').replace(/\s+/g, ' ');
+  const id = /\b([A-Z][A-Z0-9_]{1,15}) GPS (\d{2}-\d{2,3})\b/.exec(flat);
+  const centre = /Centered at (\d{2})(\d{2})(\d{2})([NS])(\d{3})(\d{2})(\d{2})([EW])/i.exec(flat);
+  const ground = /(\d+)\s*NM RADIUS AT 50\s*FT AGL/i.exec(flat);
+  const section = /Dates and times(.*?)\bC\.\s*Duration/i.exec(flat)?.[1] ?? '';
+  if (!id || !centre || !ground || !section) return [];
+  const lat = (Number(centre[1]) + Number(centre[2]) / 60 + Number(centre[3]) / 3600) * (centre[4].toUpperCase() === 'S' ? -1 : 1);
+  const lon = (Number(centre[5]) + Number(centre[6]) / 60 + Number(centre[7]) / 3600) * (centre[8].toUpperCase() === 'W' ? -1 : 1);
+  // The place is the line under the title's dates: "FORT IRWIN, CA", "POINSETT ELECTRONIC COMBAT RANGE, SC".
+  const line = text.replace(/[–—]/g, '-').split(/\r?\n/).map((l) => l.trim()).find((l) => /^[A-Z][A-Z .'()/-]+,\s*[A-Z]{2}$/.test(l)) ?? '';
+  const place = line.replace(/\b([A-Z])([A-Z]+)\b/g, (_, a: string, b: string) => a + b.toLowerCase()).replace(/, ([A-Za-z]{2})$/, (_, s: string) => `, ${s.toUpperCase()}`);
+  const base = { name: id[1], id: `GPS ${id[2]}`, place, lat, lon, groundNm: Number(ground[1]) };
+  const at = (y: number, m: number, d: number, hhmm: string) => Date.UTC(y, m, d, Number(hhmm.slice(0, 2)), Number(hhmm.slice(2)), 0);
+  const out: GpsTest[] = [];
+  const row = /(\d{1,2})(?:\s+([A-Z]{3}))?(?:\s*-\s*(\d{1,2})\s+([A-Z]{3}))?\s+(\d{2})\s+(DLY\s+)?(\d{4})Z\s*-\s*(\d{4})Z/gi;
+  for (const m of section.matchAll(row)) {
+    const year = 2000 + Number(m[5]);
+    const lastM = MONTHS[(m[4] ?? m[2] ?? '').toLowerCase()];
+    const firstM = m[2] && m[4] ? MONTHS[m[2].toLowerCase()] : lastM;
+    if (lastM == null || firstM == null) continue;
+    const firstY = firstM > lastM ? year - 1 : year;
+    const first = Date.UTC(firstY, firstM, Number(m[1]));
+    const last = Date.UTC(year, lastM, Number(m[3] ?? m[1]));
+    // Hours that run past midnight end the next day.
+    const overnight = Number(m[8]) <= Number(m[7]) ? 86_400_000 : 0;
+    const window = (dayStart: number, dayEnd: number) => {
+      const d0 = new Date(dayStart), d1 = new Date(dayEnd);
+      out.push({ ...base, start: new Date(at(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate(), m[7])).toISOString(), end: new Date(at(d1.getUTCFullYear(), d1.getUTCMonth(), d1.getUTCDate(), m[8]) + overnight - 1000 + 60_000).toISOString() });
+    };
+    if (m[6] || first === last) {
+      for (let d = first; d <= last && out.length < 500; d += 86_400_000) window(d, d);
+    } else window(first, last);
+  }
+  return out;
+}
+
+/** The GPS test notices on the FAA's public list: their ids, newest first. */
+export function noticeIds(html: string): string[] {
+  return [...new Set([...html.matchAll(/noticeView\.aspx\?nid=(\d+)["'][^>]*>\s*GPS Interference Testing/gi)].map((m) => m[1]))];
+}
+
+/** The advisory PDF a notice page links, as a path on FAASafety.gov. Its file name is not always spelled the same. */
+export function advisoryPath(html: string): string | null {
+  return /href="(?:https?:\/\/www\.faasafety\.gov)?(\/files\/notices\/[^"]+\.pdf)"/i.exec(html)?.[1] ?? null;
+}
+
+async function readFaaTests(): Promise<{ list: GpsTest[]; updated: string | null }> {
+  const ids = noticeIds(await (await get(`${FAA}/SPANS/notices_public.aspx`)).text()).slice(0, 25);
+  if (!ids.length) throw new Error('no GPS notices on the FAA list');
+  const { extractText } = await import('unpdf');
+  const list: GpsTest[] = [];
+  for (const nid of ids) {
+    if (!advisories.has(nid)) {
+      try {
+        const path = advisoryPath(await (await get(`${FAA}/SPANS/noticeView.aspx?nid=${nid}`)).text());
+        if (!path) { advisories.set(nid, []); continue; }
+        const { text } = await extractText(new Uint8Array(await (await get(`${FAA}${path}`)).arrayBuffer()), { mergePages: true });
+        advisories.set(nid, parseAdvisory(text));
+      } catch {
+        continue; // tried again on the next read
+      }
+    }
+    list.push(...(advisories.get(nid) ?? []));
+  }
+  if (!list.length) throw new Error('no FAA advisory could be read');
+  return { list, updated: null };
+}
+
 async function readTests(): Promise<void> {
   try {
-    const bytes = new Uint8Array(await (await get(TESTS_URL)).arrayBuffer());
-    const { extractText } = await import('unpdf');
-    const { text } = await extractText(bytes, { mergePages: true });
-    const parsed = parseTests(text);
-    // A PDF that parsed to nothing has changed its layout: that is "could not read", not "no tests".
-    if (!parsed.list.length && !/GPS TESTING/i.test(text)) throw new Error('unrecognised schedule');
+    let parsed: { list: GpsTest[]; updated: string | null };
+    try {
+      const bytes = new Uint8Array(await (await get(TESTS_URL)).arrayBuffer());
+      const { extractText } = await import('unpdf');
+      const { text } = await extractText(bytes, { mergePages: true });
+      parsed = parseTests(text);
+      // A PDF that parsed to nothing has changed its layout: that is "could not read", not "no tests".
+      if (!parsed.list.length && !/GPS TESTING/i.test(text)) throw new Error('unrecognised schedule');
+    } catch (first) {
+      try {
+        parsed = await readFaaTests();
+      } catch (second) {
+        throw new Error(`Coast Guard: ${first instanceof Error ? first.message : first}; FAA: ${second instanceof Error ? second.message : second}`);
+      }
+    }
     tests = { ...parsed, at: Date.now() };
   } catch (err) {
     console.error('[interference] could not read the GPS testing schedule:', err instanceof Error ? err.message : err);
@@ -151,11 +257,31 @@ async function readTests(): Promise<void> {
   }
 }
 
+const MIRROR = 'https://celestrak.org/GPS/sof';
+
+/** The newest outage file's name, as CelesTrak's pointer gives it: "2026_288_202325_v01.sof". */
+export function mirrorName(pointer: string): string | null {
+  const name = pointer.trim().split(/\s+/)[0] ?? '';
+  return /^\d{4}_\d{3}_\d{6}_v\d{2}\.sof$/.test(name) ? name : null;
+}
+
+async function sofXml(): Promise<string> {
+  const valid = (xml: string): string => {
+    if (!/<GPSISFILE/.test(xml)) throw new Error('not a satellite outage file');
+    return xml;
+  };
+  try {
+    return valid(await (await get(SOF_URL)).text());
+  } catch (first) {
+    const name = mirrorName(await (await get(`${MIRROR}/current_sof.txt`)).text());
+    if (!name) throw new Error(`Coast Guard: ${first instanceof Error ? first.message : first}; mirror: no file named`);
+    return valid(await (await get(`${MIRROR}/${name}`)).text());
+  }
+}
+
 async function readSats(): Promise<void> {
   try {
-    const xml = await (await get(SOF_URL)).text();
-    if (!/<GPSISFILE/.test(xml)) throw new Error('not a satellite outage file');
-    sats = { list: parseSof(xml), at: Date.now() };
+    sats = { list: parseSof(await sofXml()), at: Date.now() };
   } catch (err) {
     console.error('[interference] could not read the satellite outage file:', err instanceof Error ? err.message : err);
     if (sats && Date.now() - sats.at > STALE_MS) sats = null;

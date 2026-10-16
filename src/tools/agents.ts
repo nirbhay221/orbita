@@ -25,7 +25,7 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { expectedErrorM, equatorialEvening, bubbleSeason, G_SCALE, rtkMultiplier, clearWindows, type Correction, type Field } from '../domain.js';
+import { expectedErrorM, equatorialEvening, bubbleSeason, G_SCALE, rtkMultiplier, clearWindows, stormMargin, type Correction, type Field } from '../domain.js';
 import { spokenTime } from '../timezone.js';
 import * as swpc from '../swpc.js';
 import * as roti from '../roti.js';
@@ -304,6 +304,8 @@ export function groundTrust(
   const lost = corr === 'rtk' && rtkMultiplier(kp.kp, where.lat, where.lon, now) >= 25;
   if (lost) against.push(`Kp ${kp.kp.toFixed(1)} (${G_SCALE(kp.kp)}) is strong enough that RTK receivers there lose their fix altogether`);
   else if (err > need) against.push(`the expected error is about ${metres(err)} at Kp ${kp.kp.toFixed(1)}, outside the ${metres(need)} needed`);
+  // Inside, but with less than twice the room, in a storm that takes the fix away in bursts. See stormMargin.
+  else if (stormMargin(kp.kp, corr, err, need)) against.push(`at Kp ${kp.kp.toFixed(1)} (${G_SCALE(kp.kp)}) RTK drops its fix in bursts as storm waves pass, and an expected ${metres(err)} leaves too little room inside the ${metres(need)} needed`);
 
   // The sky measured over the point in the last few minutes, for receivers that hold a carrier-phase fix.
   const sky = carrier && !ahead ? roti.over(where.lat, where.lon) : null;

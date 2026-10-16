@@ -70,16 +70,18 @@ first is the story; the other two are the same data, asked differently.
 computed by code from NOAA and the other published sources, so no model can turn "hold off" into "probably fine". It
 never says trust when a reading could not be had.
 
-**Tested the way people talk.** Fourteen conversations in the patterns real users were recorded in (farmers' own
+**Tested the way people talk.** Sixteen conversations in the patterns real users were recorded in (farmers' own
 words from May 2024, repeats, "never mind", "what about tomorrow though", "why not", corrections), played turn by
-turn against the real tools, got 32 of 33 turns right on Opus (`conversations.mjs`,
-`evals/conversations-last-run.json`). The miss was a delivery robot asking "and in ten minutes?", which the model
+turn against the real tools, got 36 of 37 turns right on Opus on 16 October (`conversations.mjs`,
+`evals/conversations-last-run.json`). The first run, of fourteen, scored 32 of 33. Its miss was a delivery robot asking "and in ten minutes?", which the model
 rightly said the position check could not answer ahead of time. That was a gap, so the check now takes `inMinutes`
 and judges that time from the forecast, and the same conversation then went 2 for 2
-(`evals/conversations-rerun-machine.json`). Two more conversations (a delivery robot going on to when its fix clears,
-and a ferry) and seven more golden sentences (a fleet, windows ahead, a robot's other dependencies, a ship, a cable
-landing station, satellite imagery, a drone show) were added for what was built in October 2026 and have not been
-run on a model yet; the results above are for the sets as they stood.
+(`evals/conversations-rerun-machine.json`). The two added in October are a delivery robot going on to
+when its fix clears, and a ferry; the run with them cost $0.28. Its one miss was the
+ferry officer's "and what else should I do", which the model sent to `tell_me_more`, as that tool's description says
+to; but `tell_me_more` had nothing held for advice that reads its own steps, so it would have said there was nothing
+more while steps were waiting. It now reads the next page of that advice, the turn accepts either tool, and the
+recorded result is the run as it was.
 
 ## What is real, and what is not
 
@@ -87,14 +89,14 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,138 automated checks, run on every push |
+| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,169 automated checks, run on every push |
 | Agent Skill | **Real**: `skills/orbita-gps-trust`, to the open Agent Skills format, passing the format's own validator. Installable as a folder, and readable from the server as `skill://` resources |
 | Strands agent | **Real**: `strands/agent.mjs`, on AWS's Strands Agents SDK. It reads the skill from the server and follows each next step. The chain, the yes before a write and the step cap are checked with a scripted model at no cost; the path through Claude needs a key and is not in the automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
 | The sky over the field, measured | **Real, live**: the German Aerospace Center's one-minute disturbance readings (ROTI) from about 4,000 satellite links worldwide, read within 400 km of the field. Free for scientific use. Orbita is free and open source and sells nothing, so it uses the data on those terms. Commercial use would need the IMPC's written permission, so anyone who runs a copy commercially can set `ORBITA_ROTI=off` and the forecast then decides alone. We thank DLR who is maintaining the IMPC services |
 | Ground magnetometers | **Real, live**: 16 USGS observatories (the United States, plus Guam, Honolulu, San Juan, Kakioka and Hermanus) and 11 more through INTERMAGNET in Germany, Belgium, Poland, Sweden, Spain and Australia. INTERMAGNET data is CC BY-NC 4.0, free for non-commercial use, which is how Orbita uses it; a commercial copy sets `ORBITA_INTERMAGNET=off` |
 | Ground electric field, HF absorption | **Real, live**: NOAA's geoelectric field model (lower 48 and Canada) and D-RAP (worldwide), read at the place an operator names |
-| What is not the sun: GPS tests, satellite outages, spoofing regions, aircraft-reported interference | **Real, live**: the Coast Guard's GPS testing schedule and satellite outage file, which cover the United States. Elsewhere a quiet schedule is never said as "no test": the answer says that planned tests there are announced to pilots by NOTAM, which the UK CAA and Australia's Defence publish in a form that cannot be read automatically. **Real, from the regulators**: the regions the FAA (March 2026) and EASA (July 2026) list for routine jamming and spoofing, drawn as boxes around the regions they name. GPSJAM's daily aircraft reports publish no licence, so they are **off unless switched on** |
+| What is not the sun: GPS tests, satellite outages, spoofing regions, aircraft-reported interference | **Real, live**: the Coast Guard's GPS testing schedule and satellite outage file, which cover the United States. The Coast Guard's site refuses automated reads from cloud servers with a 403, the deployed one included, so the outage file is read from CelesTrak's mirror, and the testing schedule from the FAA's own flight advisories for the same tests on FAASafety.gov, which give each test's centre, its radius at 50 feet and its hours in UTC, so a test counts only while it is on. Elsewhere a quiet schedule is never said as "no test": the answer says that planned tests there are announced to pilots by NOTAM, which the UK CAA and Australia's Defence publish in a form that cannot be read automatically. **Real, from the regulators**: the regions the FAA (March 2026) and EASA (July 2026) list for routine jamming and spoofing, drawn as boxes around the regions they name. GPSJAM's daily aircraft reports publish no licence, so they are **off unless switched on** |
 | The past: "what happened at 3 pm on May 10 2024" | **Real**, from the archived Kp record, by the hour |
 | Crew heat | **Real**: Open-Meteo's hourly forecast over each field |
 | Kp to expected drift | **A model**, anchored to three published measurements and scored against real receivers at four sites for the 2024 season ([BACKTEST.md](BACKTEST.md)) |
@@ -116,7 +118,7 @@ This file is long because the reasoning is the work. If you are evaluating the p
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
 Free NOAA, USGS and DLR products, no API keys for the data. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 2,138 checks.
+external is called inside a turn. `npm test` runs 2,169 checks.
 
 ## The problem
 
@@ -522,7 +524,7 @@ quiet" then blames the forecast or the dealer. Three of those reasons are publis
 | Cause | Source | How it is used |
 |---|---|---|
 | **Planned military GPS interference tests** | US Coast Guard Navigation Center, GPS testing schedule (public domain) | Each test's centre, dates and reach at 50 feet above the ground. A field inside that reach while a test runs is told, with a yes or a no: in March 2026, exercises on the North Carolina coast took auto-steer down on farms that had no warning |
-| **GPS satellites out of service** | The GPS control segment's Satellite Outage File, via NAVCEN (public domain) | Past, current and scheduled outages. Said when somebody asks what went wrong, as something a multi-constellation receiver would not notice |
+| **GPS satellites out of service** | The GPS control segment's Satellite Outage File, via NAVCEN (public domain), or CelesTrak's copy of the same file when NAVCEN refuses the request, as it does to the deployed server | Past, current and scheduled outages. Said when somebody asks what went wrong, as something a multi-constellation receiver would not notice |
 | **Interference aircraft reported** | GPSJAM by John Wiseman, from airplanes.live and ADS-B Exchange | The share of aircraft over the area that reported low navigation accuracy, by day. Above ten percent is said as a sign of jamming or interference nearby. It is a day behind, measured at altitude, and does not say the cause, and the answer says it that way |
 
 ```
@@ -636,6 +638,23 @@ sites, so the same tool takes them at once and plans ahead (`test-fleet.mjs`):
   fly at about a centimetre by Geoscan's account; the decimetre is this project's line, since no published
   tolerance was found. Asked about the Hong Kong evenings of October 2024, it holds and
   points to the clear hours, as Shenzhen did.
+* In a strong storm RTK loses its fix in bursts rather than drifting steadily. On 1 June 2025, at Kp 7.67, network
+  RTK in southern China kept dropping its integer fix as large travelling disturbances passed, and held only 5 to
+  10 cm ([Liu and others, Space Weather 2026](https://doi.org/10.1029/2026SW005101)). Orbita's estimate for Hong
+  Kong that afternoon is 8 cm, inside the measured range, but that is close enough to a 10 cm show that it used to
+  say clear. From Kp 7 an RTK job or a machine now counts as clear only with at least twice the expected error to
+  spare. Twice is this project's line, not a measured one.
+
+**What testing on the deployed server found, 16 October 2026.** Running the tools against the server on AWS,
+rather than on a laptop, turned up four faults that every local test had passed. The Coast Guard's site refuses
+reads from cloud servers, so on AWS every position check said "verify"; the satellite outage file is now read from
+CelesTrak's copy when that happens, and the testing schedule from the FAA's flight advisory for each test, which the
+FAA posts on FAASafety.gov for pilots and which that site lets a server read. The advisories give the hours of each
+test, so a point near Fort Irwin hears of it from 16:30 to 22:29 UTC and not in between.
+"What happened on 2024-05-10" was read as midnight in London, the evening of 9 May in Iowa, and answered that space
+weather was not the problem on the biggest storm in twenty years. A farmer asking about a drone show in Hong Kong was
+answered for their field in Iowa. And a drone pilot in Hong Kong at ten at night in October was told positioning
+should behave, in the evening plasma bubble hours. All four are fixed and pinned in `test-aws-findings.mjs` and `test-fixes.mjs`.
 
 ## Data centres and AI infrastructure
 
@@ -894,12 +913,12 @@ Or without installing Node at all:
 docker build -t orbita . && docker run -p 8788:8788 orbita
 ```
 
-`npm test` runs everything, 2,138 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 2,169 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 1,884 checks, no live data
-npm run test:live           # 254 checks, against a running server and the real feed
+npm run test:unit           # 1,913 checks, no live data
+npm run test:live           # 256 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines
 node test-playbook.mjs      # roles, phases, triggers, odds, voice limits, sources, the grid base rate
@@ -908,6 +927,8 @@ node test-solarwind.mjs     # travel time from L1, what counts as incoming, one 
 node test-panel.mjs         # the MCP Apps handshake against a simulated host
 node test-skill.mjs         # the Agent Skill: its format, every tool and chain it names, and reading it over MCP
 node test-gaps.mjs          # spoofing regions, receivers built for scintillation, holdover, aircraft reports off by default
+node test-aws-findings.mjs  # what a session against the deployed server found: dates with no zone, a town asked about
+                            #       by somebody with a field, the bubble hours for drone pilots and robots
 node test-conversations.mjs # whole conversations in the patterns real users were recorded in, with a scripted host
 node test-readme.mjs        # every count, file, setting and result this README states, against the code
 node strands/test.mjs       # the Strands agent, with a scripted model: needs `npm install` in strands/ first
@@ -1346,7 +1367,9 @@ that is deliberately flaky, over-eager or sends bad arguments. Live runs on Opus
 every chosen read-only call answered ($0.96). On 14 October, after ten sentences for receivers built for
 scintillation, spoofing regions and holdover, 1 trial: tool choice 98.8% of 80, arguments 100% ($0.50). The one miss,
 a survey rover asking whether to trust its fix, chose the survey job check, and is accepted with the reason written
-in the golden file. Read that with care: the first live runs missed several sentences, and the
+in the golden file. On 16 October, with seven more sentences for what was built in October (a fleet, windows ahead,
+a robot's other dependencies, a ship, a cable landing station, satellite imagery, a drone show over Victoria
+Harbour), 1 trial: tool choice and arguments 100% of 87, no sentence that was right before went wrong ($0.60). Read that with care: the first live runs missed several sentences, and the
 fixes were tool descriptions plus a few golden sentences that were not fair single-turn tests (a required value only
 the customer knows, so asking back is correct), so 100% is a regression baseline and not a blind score. A golden set is also fixed, so it cannot notice a failure it does not contain, and cases should be
 added from real misses.

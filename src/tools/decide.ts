@@ -75,7 +75,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         operation: z.enum(OPERATIONS).describe(OPERATION_HINT),
         field: z.string().optional().describe('Field name as spoken, or the fieldId from an earlier answer; defaults to the only or first field'),
         equipment: z.string().optional().describe('Machine name as spoken, or the equipmentId from an earlier answer; defaults to the first registered'),
-        place: z.string().optional().describe('Only for somebody with no field registered yet: the nearest town, as spoken, so they can be answered straight away'),
+        place: z.string().optional().describe('The nearest town, as spoken: for somebody with no field registered yet, or for a job somewhere other than their saved fields. Judged there, and nothing is saved'),
         correction: z.enum(CORRECTIONS).optional().describe('Only for somebody with no machine registered yet: the correction they say they run. rtk, ppp, sbas (also WAAS or EGNOS) or autonomous for none'),
         when: z.string().optional().describe('When, if not now: ISO, or as spoken, such as "tomorrow morning", "Thursday" or "this afternoon". The forecast reaches about three days ahead.'),
         deadline: z
@@ -96,7 +96,13 @@ export function register(server: McpServer, farmOf: () => string): void {
       // anything being registered. Nothing is stored: the answer ends by offering to remember it.
       let farm = held;
       let trial = false;
-      if (!held.fields.length && place) {
+      // A town asked about by somebody who already has fields is a question about that town, unless it is one of
+      // their fields by name. It used to be dropped, and "a drone show in Hong Kong tonight" was answered for a
+      // field in Iowa.
+      const elsewhere = !!place && !field && held.fields.length > 0 &&
+        !held.fields.some((x) => x.name.toLowerCase() === clean(place, 80).toLowerCase());
+      if (place && !field && held.fields.length && !elsewhere) field = clean(place, 80);
+      if ((!held.fields.length || elsewhere) && place) {
         const found = await geocode(clean(place, 80));
         if (!found) return say(`I couldn't find ${clean(place, 80)}. Try the nearest town with its state or country.`, { unavailable: true });
         // The lookup that found the town also says what time zone it keeps. Without it a first answer gave

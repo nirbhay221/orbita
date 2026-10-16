@@ -54,6 +54,24 @@ const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
 
 const held = new Map<string, { rest: string[]; at: number }>();
 
+/**
+ * The next page of an answer that reads its own steps a few at a time, for "go on" and "what else".
+ *
+ * Role advice pages itself with `nextStep`, so nothing of it was held here, and "what else should I do" after it
+ * went to tell_me_more, as that tool's description says it should, and was told there was nothing more while steps
+ * were still waiting. The tool that pages itself leaves how to read its next page; tell_me_more reads it.
+ */
+const pages = new Map<string, { next: () => Promise<string>; at: number }>();
+export function nextPage(id: string, next: () => Promise<string>): void {
+  pages.set(id, { next, at: Date.now() });
+  if (pages.size > MAX_HELD) pages.delete(pages.keys().next().value as string);
+}
+export async function morePage(id: string, now = Date.now()): Promise<string | null> {
+  const p = pages.get(id);
+  pages.delete(id);
+  return p && now - p.at <= KEEP_MS ? p.next() : null;
+}
+
 function remember(id: string, rest: string[]): void {
   held.delete(id);
   if (rest.length) held.set(id, { rest, at: Date.now() });
@@ -99,6 +117,8 @@ export function shorten(result: Result, id: string, opts: { readOnly: boolean })
   const pagesItself = sc.nextStep !== undefined || sc.nextFrom !== undefined;
   const fits = parts.length <= MAX_SENTENCES && words(full) <= MAX_WORDS;
   // A checklist that is the whole point of the answer (what to do before the power goes) says so itself.
+  // Any other answer replaces a waiting page: "go on" is about the last thing said.
+  if (opts.readOnly && sc.nextStep == null) pages.delete(id);
   if (!opts.readOnly || pagesItself || fits || sc.fullAnswer === true || /\b911\b/.test(full)) {
     if (opts.readOnly) remember(id, []);
     return offer ? out(withOffer(full)) : result;
@@ -119,6 +139,7 @@ export function shorten(result: Result, id: string, opts: { readOnly: boolean })
 
 export function resetForTest(): void {
   held.clear();
+  pages.clear();
 }
 
 /**

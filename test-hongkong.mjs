@@ -48,5 +48,16 @@ check('at F10.7 70, the deepest solar minimum, the evening alone is not a hold',
 setSolarFlux(null);
 check('with no flux read, the rule stands as it always did', !quietSun() && judge('2024-10-01T12:00:00Z').go === false);
 
+console.log('\nThe storm of 1 June 2025, against what was measured');
+{
+  // Liu and others, Space Weather 2026, doi:10.1029/2026SW005101: network RTK in southern China lost its integer
+  // fix as the storm's travelling disturbances passed and held 5 to 10 cm horizontal. Kp was 7.67 from 06 UTC (GFZ).
+  const { expectedErrorM } = await import('./dist/domain.js');
+  const at = new Date('2025-06-01T08:00:00Z');
+  const cm = expectedErrorM(7.67, show, harbour, at) * 100;
+  check('Orbita\'s estimate for RTK in Hong Kong that afternoon is inside the measured 5 to 10 cm', cm >= 5 && cm <= 10, `${cm} cm`);
+  check('...and a drone show that day is a hold', assess('drone_show', 7.67, show, harbour, at).go === false);
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

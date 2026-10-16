@@ -120,11 +120,18 @@ export function parseWhen(
   opts: { prefer?: 'past' | 'future'; timeZone?: string | null } = {},
 ): Date | null {
   const prefer = opts.prefer ?? 'past';
-  const raw = spoken.trim();
+  let raw = spoken.trim();
+  // An ISO date with no zone is a day on the field's own calendar, the same as "10 May 2024". The built-in parser
+  // reads "2024-05-10" as midnight in London, which in Iowa is still the 9th: asked about the storm of 10 May 2024,
+  // the answer was about the quiet day before it.
+  const local = /^(\d{4})-(\d{2})-(\d{2})(?:[t ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?)?$/i.exec(raw);
+  if (local && Number(local[2]) >= 1 && Number(local[2]) <= 12) {
+    raw = `${MONTHS[Number(local[2]) - 1]} ${Number(local[3])} ${local[1]}${local[4] ? ` at ${local[4]}:${local[5]}` : ''}`;
+  }
   const s = raw.toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!s) return null;
 
-  // Unmistakably ISO, and nothing else, goes to the built-in parser.
+  // Unmistakably ISO with its zone, and nothing else, goes to the built-in parser.
   if (/^\d{4}-\d{2}-\d{2}([t ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(z|[+-]\d{2}:?\d{2})?)?$/i.test(raw)) {
     const iso = Date.parse(raw);
     return Number.isFinite(iso) ? new Date(iso) : null;
