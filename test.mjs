@@ -196,12 +196,13 @@ check('...and at Saskatoon', assess('spraying', 2, sbas, sask).go === true);
 check('walking a field with no correction is possible in Saskatchewan (the old model said never)', assess('scouting', 2, phone, sask).go === true);
 check('a harvest on WAAS survives an ordinary active day at Kp 4', assess('harvest', 4, sbas, fargoSite).go === true);
 check('...and not a severe storm', assess('harvest', 8, sbas, fargoSite).go === false);
-check('survey work on RTK is stricter than planting, so it stops earlier', assess('surveying', 5, rtk, sask).go === false && assess('planting', 5, rtk, sask).go === true);
+// At night Saskatoon now holds planting from Kp 4: the offset fitted on real receivers (CALIBRATION.md) puts the oval nearer.
+check('survey work on RTK is stricter than planting, so it stops earlier', assess('surveying', 3.5, rtk, sask).go === false && assess('planting', 3.5, rtk, sask).go === true);
 check('grade control and a drone flight are judged like planting, at two inches', assess('machine_control', 6, rtk, fargoSite).go === assess('planting', 6, rtk, fargoSite).go && assess('drone_survey', 6, rtk, fargoSite).go === assess('planting', 6, rtk, fargoSite).go);
 check('a survey on PPP is told it is the equipment, not the sky', assess('surveying', 2, { id: 'p', name: 'rover', correction: 'ppp' }, fargoSite).limitedBy === 'equipment');
 const severe = assess('planting', 8.7, rtk, fargoSite);
 check('in a severe storm the answer says the fix is lost, as real receivers showed, and gives no drift figure', severe.go === false && /lose their precise fix altogether, as they did in May 2024/.test(severe.reason) && !/expected drift near/.test(severe.reason), severe.reason);
-check('...a lesser storm still gives the figure', /expected drift near/.test(assess('planting', 7.2, rtk, fargoSite).reason));
+check('...a lesser storm still gives the figure', /expected drift near/.test(assess('planting', 7, rtk, fargoSite).reason));
 check('the further from RTK, the less a storm changes it', (() => { const k = 8; const q = (c) => expectedErrorM(k, { id: 'x', name: 'x', correction: c }, fargoSite) / expectedErrorM(0, { id: 'x', name: 'x', correction: c }, fargoSite); return q('rtk') > q('ppp') && q('ppp') > q('sbas') && q('sbas') > q('autonomous') && q('autonomous') > 1; })());
 // No correction at all in the same storm is metres out, past every tolerance there is.
 const none = { id: 'e9', name: 'the old rig', correction: 'autonomous' };

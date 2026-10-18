@@ -140,6 +140,22 @@ console.log('\nNo directory means silence, and a failure keeps the last one');
     JSON.stringify(ntrip.status()));
 }
 
+console.log('\nMore than one network, as each country has its own');
+{
+  const lyon = { mountpoint: 'VILLEUR', name: 'Villeurbanne', country: 'FRA', lat: 45.77, lon: 4.88, format: 'RTCM3', systems: 'GPS', open: false, fee: false, network: 'Centipede', signup: 'a free Centipede login' };
+  const paid = { mountpoint: 'WAGG', name: 'Wagga Wagga', country: 'AUS', lat: -35.11, lon: 147.36, format: 'RTCM 3.3', systems: 'GPS', open: false, fee: true, network: 'Geoscience Australia', signup: 'free registration with Geoscience Australia' };
+  ntrip.seedForTest({ stations: [lyon, paid] });
+  const fr = ntrip.explain(45.76, 4.84, undefined);
+  check('a field near Lyon is told its nearest base on the network that runs it, and what it takes', /Villeurbanne, on the Centipede network, about \d+ km/.test(fr) && /needs a free Centipede login/.test(fr), fr);
+  const au = ntrip.explain(-35.12, 147.37, undefined);
+  check('a stream marked as charged for is said as charged for, not as free', /charged for, through Geoscience Australia/.test(au), au);
+  let calls = 0;
+  ntrip.resetForTest();
+  ntrip.seedForTest({ load: async () => { calls += 1; return [lyon]; } });
+  await ntrip.refresh();
+  check('the merged directories load as one list', calls === 1 && ntrip.status().stations === 1);
+}
+
 ntrip.resetForTest();
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

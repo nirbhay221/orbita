@@ -4,3 +4,5 @@ data/
 .deploy/
 evals/last-run.json
 .receivers/
+cdk.out/
+cdk.context.json

@@ -15,8 +15,8 @@
 set -euxo pipefail
 
 dnf -y update
-dnf -y install nodejs20 nodejs20-npm tar gzip || dnf -y install nodejs npm tar gzip
-command -v node || ln -sf /usr/bin/node-20 /usr/bin/node
+dnf -y install nodejs22 nodejs22-npm tar gzip || dnf -y install nodejs npm tar gzip
+command -v node || ln -sf /usr/bin/node-22 /usr/bin/node
 
 useradd --system --create-home --shell /usr/sbin/nologin orbita || true
 install -d -o orbita -g orbita /opt/orbita /var/lib/orbita

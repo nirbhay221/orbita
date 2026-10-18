@@ -19,6 +19,18 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { shorten, more, morePage, inScope, sentences } from './brief.js';
 import * as store from './store.js';
+import { farmCountry, localiseUnits, metric } from './region.js';
+
+/** An answer, spoken and structured, in the units of the country its fields are in. */
+function localised<T>(r: T, country: string | null): T {
+  if (!r || !metric(country)) return r;
+  const x = r as unknown as { content?: { type?: string; text?: string }[]; structuredContent?: Record<string, unknown> };
+  return {
+    ...x,
+    ...(x.content ? { content: x.content.map((c) => (typeof c.text === 'string' ? { ...c, text: localiseUnits(c.text, country) } : c)) } : {}),
+    ...(x.structuredContent ? { structuredContent: JSON.parse(localiseUnits(JSON.stringify(x.structuredContent), country)) as Record<string, unknown> } : {}),
+  } as unknown as T;
+}
 import * as setup from './tools/setup.js';
 import * as decide from './tools/decide.js';
 import * as history from './tools/history.js';
@@ -32,7 +44,7 @@ import * as agents from './tools/agents.js';
 // Re-exported because alerts.ts and server.ts import them from here, and moving
 // them to shared.ts should not make every caller learn the new layout.
 export { statusOperations, resolveFieldTimeZone } from './tools/shared.js';
-import { SPOKEN_ANSWER, say } from './tools/shared.js';
+import { SPOKEN_ANSWER, say, ASK_FIRST_FIELD, ASK_CORRECTION, ASK_FIELD_FOR_MACHINE, OFFER_CHECK } from './tools/shared.js';
 import { finish } from './finish.js';
 import * as flow from './flow.js';
 
@@ -103,7 +115,9 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
     const readOnly = (config.annotations as { readOnlyHint?: boolean } | undefined)?.readOnlyHint === true;
     const wrapped = (...args: unknown[]) =>
       reading.run(readOnly, async () => {
-        const done = finish(name, args[0], shorten((await cb(...args)) as Parameters<typeof shorten>[0], farmOf(), { readOnly }));
+        const said = finish(name, args[0], shorten((await cb(...args)) as Parameters<typeof shorten>[0], farmOf(), { readOnly }));
+        // Centimetres and kilometres where the fields are not in the United States. See region.ts.
+        const done = localised(said, farmCountry(store.get(farmFor()).fields));
         // The chain this answer is on: what was just done, the next step, and the ones after. See flow.ts.
         const sc = done?.structuredContent;
         if (!sc || done.isError) return done;
@@ -144,13 +158,14 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
           baselineKm: z.number().positive().optional().describe('Distance to the RTK base station in kilometres, if they know it'),
           machineName: z.string().optional().describe('Name of the machine, e.g. "planter", "sprayer", "rover"'),
           correction: z.enum(['rtk', 'ppp', 'sbas', 'autonomous']).optional().describe('The correction that machine runs: rtk, ppp, sbas (also WAAS, EGNOS or GAGAN in India) or autonomous for none (NavIC or plain GPS alone)'),
+          notSure: z.boolean().optional().describe('true when they say they do not know or are not sure what correction the machine runs'),
           hardened: z.boolean().optional().describe('true only when they say the receiver has scintillation protection, such as Trimble IonoGuard or a scintillation-resistant PPP service'),
           removeWhat: z.enum(['field', 'machine', 'everything']).optional().describe('Only to take something off: a field, a machine, or everything when they say start over or delete my data'),
           removeName: z.string().optional().describe('The name of the field or machine to remove'),
         },
       },
       async (input: unknown) => {
-        const a = (input ?? {}) as { fieldName?: string; place?: string; crop?: string; acres?: number; baselineKm?: number; machineName?: string; correction?: string; hardened?: boolean; removeWhat?: string; removeName?: string };
+        const a = (input ?? {}) as { fieldName?: string; place?: string; crop?: string; acres?: number; baselineKm?: number; machineName?: string; correction?: string; notSure?: boolean; hardened?: boolean; removeWhat?: string; removeName?: string };
         const call = (tool: string, args: Record<string, unknown>) => impl.get(tool)!(args) as Promise<Part>;
         if (a.removeWhat) return call('remove', { what: a.removeWhat, ...(a.removeName ? { name: a.removeName } : {}) });
         const said: string[] = [];
@@ -165,13 +180,22 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
         if (a.fieldName) {
           await step('register_field', { name: a.fieldName, ...(a.place ? { place: a.place } : {}), ...(a.crop ? { crop: a.crop } : {}), ...(a.acres ? { acres: a.acres } : {}), ...(a.baselineKm ? { baselineKm: a.baselineKm } : {}) });
         }
-        if (a.machineName && a.correction) await step('register_equipment', { name: a.machineName, correction: a.correction, ...(typeof a.hardened === 'boolean' ? { hardened: a.hardened } : {}) });
-        if (a.machineName && !a.correction) said.push(`What correction does ${a.machineName} run: RTK, WAAS, PPP or none?`);
-        if (!said.length) return say('Tell me a field and its nearest town, or a machine and the correction it runs.', { needs: 'field_or_machine' });
-        // Each half ends by asking for the other. When both were given, neither question is left to ask.
-        const both = !!a.fieldName && !!a.machineName && !!a.correction;
-        const kept = said.filter(Boolean).flatMap((t) => sentences(t)).filter((x) => !both || !/^Now tell me\b/.test(x));
-        return say(kept.join(' '), { did, ...(did.length ? { nextAction: { tool: 'farm_status', arguments: {} } } : {}) });
+        if (a.machineName && (a.correction || a.notSure)) await step('register_equipment', { name: a.machineName, ...(a.correction ? { correction: a.correction } : { notSure: true }), ...(typeof a.hardened === 'boolean' ? { hardened: a.hardened } : {}) });
+        // A machine with no correction and no "not sure": asked, never guessed.
+        const askCorrection = !!a.machineName && !a.correction && !a.notSure;
+        if (!said.length && !askCorrection) return say(ASK_FIRST_FIELD, { needs: 'field_or_machine', asks: 'field' });
+        // Each step names its own next question. Only the last one still open is asked, and it is asked last.
+        const offers = did.map((d) => (typeof d.offer === 'string' ? d.offer : '')).filter(Boolean);
+        const added = said.filter(Boolean).join(' ');
+        const farm = store.get(farmFor());
+        const fieldMissing = !farm.fields.length;
+        const offer = askCorrection
+          ? ASK_CORRECTION(a.machineName, farmCountry(farm.fields))
+          : fieldMissing
+            ? ASK_FIELD_FOR_MACHINE
+            : farm.equipment.length ? OFFER_CHECK : (offers[offers.length - 1] ?? '');
+        const check = !askCorrection && !fieldMissing && farm.equipment.length > 0;
+        return say(added || '', { did, ...(offer ? { offer } : {}), ...(check ? { nextAction: { tool: 'can_i_run', arguments: a.fieldName ? { field: a.fieldName } : {} } } : did.length ? { nextAction: { tool: 'farm_status', arguments: {} } } : {}) });
       },
     );
     hideFromList(server, MERGED_AWAY);

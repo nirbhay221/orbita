@@ -22,14 +22,19 @@ import * as swpcplus from '../swpcplus.js';
 import * as aurora from '../aurora.js';
 import { chooseOne, canAsk } from '../elicit.js';
 import * as season from '../season.js';
-import { geocode, spoken as spokenPlace } from '../geocode.js';
+import { geocode, spoken as spokenPlace, GeocoderDown, lookupDown } from '../geocode.js';
 import * as store from '../store.js';
+import { farmCountry } from '../region.js';
 import * as history from '../history.js';
 import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
 import { sendEmail, emailConfigured } from '../notify.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
   CORRECTIONS,
+  ASK_CORRECTION,
+  ASK_FIELD_FOR_MACHINE,
+  ASSUMED_RTK,
+  OFFER_CHECK,
   clean,
   newId,
   resolveFieldTimeZone,
@@ -83,7 +88,13 @@ export function register(server: McpServer, farmOf: () => string): void {
         if (!/[a-z0-9]/i.test(place)) {
           return say(`Where is ${clean(given.name) || 'it'}? The nearest town will do.`, { added: false, reason: 'place' });
         }
-        const found = await geocode(place);
+        let found;
+        try {
+          found = await geocode(place);
+        } catch (err) {
+          if (err instanceof GeocoderDown) return say(lookupDown(place), { added: false, reason: 'lookup_down' });
+          throw err;
+        }
         if (!found) {
           return say(`I couldn't find ${place}. Try the nearest town with its state or country.`, { added: false, reason: 'not_found' });
         }
@@ -139,8 +150,9 @@ export function register(server: McpServer, farmOf: () => string): void {
       geomag.watch(field.lat, field.lon);
       glotec.watch(field.lat, field.lon);
       crewheat.watch(field.lat, field.lon);
-      const next = store.get(id).equipment.length ? '' : ' Now tell me what correction your machine runs: RTK, WAAS, PPP or none.';
-      return say(`Added ${field.name}${near}.${next}`, { fieldId: field.id, lat: field.lat, lon: field.lon });
+      // The one thing still missing, asked as one question, or the next step once both are known.
+      const machines = store.get(id).equipment.length;
+      return say(`Added ${field.name}${near}.`, { fieldId: field.id, lat: field.lat, lon: field.lon, ...(machines ? { offer: OFFER_CHECK, nextAction: { tool: 'can_i_run', arguments: { field: field.name } } } : { offer: ASK_CORRECTION(undefined, country), asks: 'correction' }) });
     },
   );
 
@@ -155,12 +167,13 @@ export function register(server: McpServer, farmOf: () => string): void {
         'is corrected: RTK, PPP, SBAS or WAAS, or nothing. It does not register a field; use register_field for that.',
       inputSchema: {
         name: z.string().describe('e.g. "the planter"'),
-        correction: z.enum(CORRECTIONS).describe(
+        correction: z.enum(CORRECTIONS).optional().describe(
           'The GNSS correction the machine runs. rtk, also called RTK, network RTK, VRS, a base station or centimetre correction. ' +
           'ppp, also PPP or precise point positioning, decimetre. ' +
           'sbas, also WAAS in North America, EGNOS in Europe, MSAS in Japan, GAGAN in India, sub-metre. ' +
-          'autonomous for no correction at all, plain GPS, metres.',
+          'autonomous for no correction at all, plain GPS, metres. Leave it out when they do not know, and set notSure.',
         ),
+        notSure: z.boolean().optional().describe('true when they say they do not know or are not sure what correction it runs'),
         hardened: z
           .boolean()
           .optional()
@@ -169,8 +182,11 @@ export function register(server: McpServer, farmOf: () => string): void {
     },
     async (args) => {
       const id = farmOf();
-      const { hardened, ...rest } = args as typeof args & { hardened?: boolean };
-      const eq = { ...rest, id: newId('eq'), name: clean(args.name), correction: args.correction as Correction, ...(hardened ? { hardened: true } : {}) };
+      const { hardened, notSure, ...rest } = args as typeof args & { hardened?: boolean; notSure?: boolean };
+      // Not knowing is an answer. Without a correction and without that, the question is asked rather than guessed.
+      if (!args.correction && !notSure) return say(ASK_CORRECTION(args.name, farmCountry(store.get(id).fields)), { added: false, reason: 'correction', asks: 'correction' });
+      const assumed = !args.correction;
+      const eq = { ...rest, id: newId('eq'), name: clean(args.name), correction: (args.correction ?? 'rtk') as Correction, ...(assumed ? { assumed: true } : {}), ...(hardened ? { hardened: true } : {}) };
       if (!/[a-z0-9]/i.test(eq.name)) {
         return say('I need a name for the machine that I can say back to you, like the planter or the sprayer. What do you call it?', { added: false, reason: 'name' });
       }
@@ -180,8 +196,9 @@ export function register(server: McpServer, farmOf: () => string): void {
           const hit = f.equipment.find((x) => x.id === known.id);
           if (hit) Object.assign(hit, eq, { id: known.id });
           if (hit && hardened === false) delete hit.hardened;
+          if (hit && !assumed) delete hit.assumed;
         });
-        return say(`You already have ${eq.name}, so I've set it to ${eq.correction.toUpperCase()} rather than adding a second one.`, {
+        return say(`You already have ${eq.name}, so I've set it to ${eq.correction.toUpperCase()} rather than adding a second one.${assumed ? ` ${ASSUMED_RTK}` : ''}`, {
           equipmentId: known.id,
           updated: true,
         });
@@ -193,8 +210,14 @@ export function register(server: McpServer, farmOf: () => string): void {
         });
       }
       store.update(id, (f) => void f.equipment.push(eq));
-      const next = store.get(id).fields.length ? ' Ask me whether you can run a job.' : ' Now tell me a field and the nearest town.';
-      return say(`Added ${eq.name} on ${eq.correction.toUpperCase()}${eq.hardened ? ', with scintillation protection' : ''}.${next}`, { equipmentId: eq.id, ...(eq.hardened ? { hardened: true } : {}) });
+      const fields = store.get(id).fields;
+      const added = assumed ? `Added ${eq.name}. ${ASSUMED_RTK}` : `Added ${eq.name} on ${eq.correction.toUpperCase()}${eq.hardened ? ', with scintillation protection' : ''}.`;
+      return say(added, {
+        equipmentId: eq.id,
+        ...(assumed ? { assumed: true } : {}),
+        ...(eq.hardened ? { hardened: true } : {}),
+        ...(fields.length ? { offer: OFFER_CHECK, nextAction: { tool: 'can_i_run', arguments: fields.length === 1 ? { field: fields[0].name } : {} } } : { offer: ASK_FIELD_FOR_MACHINE, asks: 'field' }),
+      });
     },
   );
 

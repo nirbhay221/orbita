@@ -1,9 +1,16 @@
-/** Farm state: fields, equipment, watches, crew and a job log. Memory-resident, flushed to disk on write. */
+/**
+ * Farm state: fields, equipment, watches, crew and a job log.
+ *
+ * Memory-resident. Written to a file by default, or to DynamoDB with
+ * ORBITA_STORE=dynamodb (see table.ts), where every write is checked against the
+ * version it read, so the server and the scheduled alert check can both write.
+ */
 
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Equipment, Field } from './domain.js';
 import * as vault from './vault.js';
+import { table, tableOn } from './table.js';
 import { createHash, randomInt } from 'node:crypto';
 
 export type NotifyReason = 'window_clear' | 'storm';
@@ -122,6 +129,12 @@ function quarantine(why: string): void {
 
 function load(): Record<string, Farm> {
   if (cache) return cache;
+  if (tableOn()) {
+    // The table is read once, by init(), because a read from DynamoDB cannot be synchronous.
+    // Starting empty instead would look like every farm had been deleted, so say so loudly.
+    console.error('[store] the DynamoDB store was used before init() finished; it is empty until then.');
+    return {};
+  }
   if (!existsSync(DATA_PATH)) {
     cache = {};
     return cache;
@@ -135,7 +148,7 @@ function load(): Record<string, Farm> {
     // under a key since rotated out: seal it under the current one now, not whenever
     // an unrelated write happens to come along.
     if (vault.encryptionOn() && (!opened.wasSealed || !vault.isCurrentKey(opened.keyId))) {
-      flush();
+      persist();
       console.error(opened.wasSealed ? '[store] re-sealed the farms file under the current key.' : '[store] the farms file was plaintext and is now sealed.');
     }
     return cache;
@@ -153,8 +166,12 @@ function load(): Record<string, Farm> {
   }
 }
 
-function flush(): void {
+function persist(): void {
   if (!cache) return;
+  if (tableOn()) {
+    void drain();
+    return;
+  }
   mkdirSync(dirname(DATA_PATH), { recursive: true, mode: 0o700 });
   // Written beside the file and renamed over it, which is atomic on one
   // filesystem. A crash partway through a direct write leaves a truncated file,
@@ -199,6 +216,7 @@ function evictOldestDemo(all: Record<string, Farm>): boolean {
   const oldest = demo.reduce((a, b) => (last(a) <= last(b) ? a : b));
   delete all[oldest];
   touched.delete(oldest);
+  markGone(oldest);
   return true;
 }
 
@@ -234,6 +252,10 @@ const DEMO_TTL_MS = Number(process.env.ORBITA_DEMO_TTL_DAYS ?? 7) * 24 * 60 * 60
 export function reloadForTest(): void {
   cache = null;
   touched.clear();
+  versions.clear();
+  pending.clear();
+  dirty.clear();
+  removed.clear();
 }
 
 export function expireDemoRecords(now = Date.now()): number {
@@ -254,9 +276,10 @@ export function expireDemoRecords(now = Date.now()): number {
     }
     delete all[id];
     touched.delete(id);
+    markGone(id);
     gone += 1;
   }
-  if (gone) flush();
+  if (gone) persist();
   return gone;
 }
 
@@ -284,7 +307,8 @@ export function forget(farmId: string): void {
   // Deleted, not blanked: an empty record with an id is still a record of somebody having been here.
   delete all[farmId];
   touched.delete(farmId);
-  flush();
+  markGone(farmId);
+  persist();
 }
 
 /**
@@ -302,7 +326,7 @@ const MAX_ALERTS_REMEMBERED = 400;
 /**
  * What one farm can hold, in two sizes.
  *
- * flush() rewrites the whole file, synchronously, on every update, so one record with
+ * persist() rewrites the whole file, synchronously, on every update, so one record with
  * a hundred thousand fields does not just sit there: it makes every write for every
  * other farm slow, and on a single threaded server slow means stopped. Nothing bounded
  * these.
@@ -343,8 +367,204 @@ export function update(farmId: string, fn: (f: Farm) => void): Farm {
   f.touchedAt = new Date().toISOString();
   fn(f);
   prune(f, farmId);
-  flush();
+  if (tableOn()) {
+    pending.set(farmId, [...(pending.get(farmId) ?? []), fn]);
+    dirty.add(farmId);
+    removed.delete(farmId);
+  }
+  persist();
   return f;
+}
+
+/* ------------------------------------------------------------------ *
+ * DynamoDB. See table.ts for the item and the version rule.
+ *
+ * update() stays synchronous: the change is made in memory, the tool answers, and
+ * the write follows a moment later. What is kept until that write lands is the
+ * change itself, not just its result, so that when somebody else wrote the same
+ * farm in between, their version can be read and this change made again on top
+ * of it. Nothing is lost either way: not their write, and not this one.
+ * ------------------------------------------------------------------ */
+const versions = new Map<string, number>();
+const pending = new Map<string, ((f: Farm) => void)[]>();
+const dirty = new Set<string>();
+const removed = new Set<string>();
+let draining: Promise<void> | null = null;
+
+/** Bound to the id as well as the purpose, so one farm's sealed record cannot be moved onto another. */
+const sealFor = (id: string) => `${PURPOSE}:${id}`;
+const seal = (id: string, f: Farm) => vault.sealIfConfigured(JSON.stringify(f), sealFor(id));
+function openItem(id: string, body: string): Farm {
+  const f = { ...empty(), ...(JSON.parse(vault.open(body, sealFor(id)).plain) as Farm) };
+  f.waiting = f.waiting.map((w, i) => ({ ...w, id: w.id ?? `watch-legacy-${i}`, notifiedAt: w.notifiedAt ?? null }));
+  return f;
+}
+
+/** Sandbox records carry their own deletion date, so DynamoDB removes them even if no server is running. */
+const ttlFor = (id: string, f: Farm): number | null =>
+  isDemo(id) ? Math.floor(((Date.parse(String(f.touchedAt ?? '')) || Date.now()) + DEMO_TTL_MS) / 1000) : null;
+
+function markGone(id: string): void {
+  if (!tableOn()) return;
+  removed.add(id);
+  dirty.delete(id);
+  pending.delete(id);
+}
+
+async function writeOne(id: string, applied: ((f: Farm) => void)[]): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const farm = cache?.[id];
+    if (!farm) return;
+    const expected = versions.get(id) ?? 0;
+    if (await table().put({ id, body: seal(id, farm), v: expected + 1 }, expected, ttlFor(id, farm))) {
+      versions.set(id, expected + 1);
+      return;
+    }
+    // Written by somebody else since it was read. Take theirs, and make this change again on top.
+    const fresh = await table().get(id);
+    if (!fresh) {
+      // Gone from the table, not changed on it: DynamoDB expired a sandbox this server still has in use.
+      // What memory holds already has this change on it, so that is what goes back, as a new item.
+      versions.set(id, 0);
+      continue;
+    }
+    const base = openItem(id, fresh.body);
+    versions.set(id, fresh.v);
+    for (const fn of [...applied, ...(pending.get(id) ?? [])]) fn(base);
+    base.touchedAt = new Date().toISOString();
+    prune(base, id);
+    if (cache) cache[id] = base;
+  }
+  // Marked again, so the next flush tries once more instead of the change quietly going.
+  dirty.add(id);
+  pending.set(id, [...applied, ...(pending.get(id) ?? [])]);
+  throw new Error('a record kept changing underneath this write, five times in a row');
+}
+
+async function drain(): Promise<void> {
+  if (draining) return draining;
+  if (!removed.size && !dirty.size) return;
+  let run: Promise<void> | null = null;
+  run = (async () => {
+    // Yield first, so `draining` is set before this pass can finish and clear it.
+    await Promise.resolve();
+    try {
+      while (removed.size || dirty.size) {
+        for (const id of [...removed]) {
+          await table().remove(id);
+          removed.delete(id);
+          versions.delete(id);
+        }
+        for (const id of [...dirty]) {
+          dirty.delete(id);
+          const applied = pending.get(id) ?? [];
+          pending.delete(id);
+          try {
+            await writeOne(id, applied);
+          } catch (err) {
+            // Kept, so it is written next time rather than lost.
+            if (!dirty.has(id)) {
+              dirty.add(id);
+              pending.set(id, [...applied, ...(pending.get(id) ?? [])]);
+            }
+            throw err;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[store] a DynamoDB write failed:', err instanceof Error ? err.message : err);
+    } finally {
+      if (draining === run) draining = null;
+    }
+  })();
+  draining = run;
+  return run as Promise<void>;
+}
+
+/**
+ * Read the table, once, before anything else touches the store. A no-op for the file.
+ *
+ * A record that will not open is left where it is and skipped, unlike the file, where one
+ * bad byte would otherwise take every farm with it. A missing or wrong key still stops the
+ * start, for the same reason as the file: that is a mistake in configuration, not data.
+ */
+export async function init(): Promise<void> {
+  if (!tableOn()) return;
+  // A warm Lambda calls this again. What a failed run left marked was never sent, so it starts clean.
+  versions.clear();
+  pending.clear();
+  dirty.clear();
+  removed.clear();
+  const all: Record<string, Farm> = {};
+  for (const item of await table().scan()) {
+    try {
+      all[item.id] = openItem(item.id, item.body);
+      versions.set(item.id, item.v);
+    } catch (err) {
+      if (err instanceof vault.VaultError && (err.code === 'no_key' || err.code === 'unknown_key')) throw err;
+      console.error(`[store] one record would not open (${err instanceof vault.VaultError ? err.code : 'parse'}) and was skipped.`);
+    }
+  }
+  cache = all;
+}
+
+/**
+ * Pick up a write made elsewhere, such as an alert the scheduled check marked as sent.
+ * Called at the start of a request for this farm. A no-op for the file, and for a
+ * record with a change of our own still on its way, which the version check covers.
+ */
+export async function refresh(id: string): Promise<void> {
+  if (!tableOn() || !cache || dirty.has(id) || pending.has(id) || removed.has(id)) return;
+  const fresh = await table().get(id);
+  if (!fresh) {
+    // Gone from the table, so gone: forgotten from another copy, or expired by DynamoDB.
+    if (versions.has(id)) {
+      delete cache[id];
+      versions.delete(id);
+    }
+    return;
+  }
+  if (fresh.v > (versions.get(id) ?? 0)) {
+    cache[id] = openItem(id, fresh.body);
+    versions.set(id, fresh.v);
+  }
+}
+
+/**
+ * Once, when moving a server from the file to the table: every record in the file, copied
+ * in, each sealed for its own id. A record already on the table is left alone and counted,
+ * so running it twice changes nothing. The file is only read. See scripts/copy-to-table.mjs.
+ */
+export async function copyFileToTable(): Promise<{ copied: number; already: number }> {
+  if (!tableOn()) throw new Error('set ORBITA_STORE=dynamodb to copy into the table');
+  // The file loader, on its own: the store's own cache is not touched.
+  const saved = cache;
+  process.env.ORBITA_STORE = 'file';
+  cache = null;
+  let all: Record<string, Farm>;
+  try {
+    all = load();
+  } finally {
+    process.env.ORBITA_STORE = 'dynamodb';
+    cache = saved;
+  }
+  let copied = 0;
+  let already = 0;
+  for (const [id, held] of Object.entries(all)) {
+    const f = { ...empty(), ...held };
+    if (await table().put({ id, body: seal(id, f), v: 1 }, 0, ttlFor(id, f))) copied += 1;
+    else already += 1;
+  }
+  return { copied, already };
+}
+
+/** Wait until every change made so far is on the table. Throws when one could not be written. */
+export async function flush(): Promise<void> {
+  if (!tableOn()) return;
+  await drain();
+  // A write that arrived while the last pass was finishing.
+  if (dirty.size || removed.size) await drain();
+  if (dirty.size || removed.size) throw new Error('[store] some changes could not be written to DynamoDB.');
 }
 
 /** Every farm, so the alert check can look at all of them. */

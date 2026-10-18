@@ -84,6 +84,7 @@ Describe the operation: add or correct a field or site by its name and nearest t
 | `baselineKm` | number | no |
 | `machineName` | string | no |
 | `correction` | rtk, ppp, sbas, autonomous | no |
+| `notSure` | boolean | no |
 | `hardened` | boolean | no |
 | `removeWhat` | field, machine, everything | no |
 | `removeName` | string | no |

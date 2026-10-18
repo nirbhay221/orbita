@@ -30,7 +30,7 @@ import { chooseOne, canAsk } from '../elicit.js';
 import * as season from '../season.js';
 import * as store from '../store.js';
 import { sentences } from '../brief.js';
-import { geocode, spoken as spokenPlace } from '../geocode.js';
+import { geocode, spoken as spokenPlace, GeocoderDown, lookupDown } from '../geocode.js';
 import * as history from '../history.js';
 import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
 import { sendEmail, emailConfigured } from '../notify.js';
@@ -103,7 +103,8 @@ export function register(server: McpServer, farmOf: () => string): void {
         !held.fields.some((x) => x.name.toLowerCase() === clean(place, 80).toLowerCase());
       if (place && !field && held.fields.length && !elsewhere) field = clean(place, 80);
       if ((!held.fields.length || elsewhere) && place) {
-        const found = await geocode(clean(place, 80));
+        const found = await geocode(clean(place, 80)).catch((err) => (err instanceof GeocoderDown ? 'down' as const : Promise.reject(err)));
+        if (found === 'down') return say(lookupDown(clean(place, 80)), { unavailable: true });
         if (!found) return say(`I couldn't find ${clean(place, 80)}. Try the nearest town with its state or country.`, { unavailable: true });
         // The lookup that found the town also says what time zone it keeps. Without it a first answer gave
         // "clear until Wed 3 AM UTC" to somebody in Arizona.

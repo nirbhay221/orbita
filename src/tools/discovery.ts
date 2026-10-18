@@ -29,6 +29,7 @@ import { lookupTimeZone, spokenTime } from '../timezone.js';
 import {
   NOAA_DOWN,
   UI,
+  ASK_FIRST_FIELD,
   say,
 } from './shared.js';
 
@@ -53,7 +54,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       const farm = store.get(farmOf());
       const setup =
         !farm.fields.length || !farm.equipment.length
-          ? ' To start, tell me a field and the nearest town.'
+          ? ` ${ASK_FIRST_FIELD}`
           : '';
       // Three sentences. It used to be 168 words, which nobody asking "what can you do" is waiting for.
       return say(

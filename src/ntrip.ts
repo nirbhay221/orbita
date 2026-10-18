@@ -45,11 +45,32 @@
  * and names the station, and never claims the correction works.
  *
  * Source: RTK2go community NTRIP caster, http://rtk2go.com:2101/
+ *
+ * One caster was one country's answer. RTK2go lists 767 streams, 142 of them in the US, and 9 in France, 8 in
+ * Italy, 28 in Australia; read on 18 October 2026, the national and community networks beside it list far more
+ * where Alexa+ is sold: Centipede 751 in France, Geoscience Australia 732 in Australia, EUREF 53 in Italy and 35 in
+ * Spain. A field near Lyon was told its nearest public base was a long way off when hundreds were closer, and the
+ * distance is what an RTK error scales with. So four directories are read, and the nearest station from any of them
+ * is named with the network it belongs to and what it takes to use it, from that network's own NET line: every one
+ * of them asks for a login, Geoscience Australia and EUREF by registration, and some Australian streams charge.
+ * Only the public directory is read; no stream is ever opened. Brazil's RBMC caster did not answer, and India has
+ * one or two public stations, which is said as it is.
+ *   http://caster.centipede.fr:2101/ (terms: https://www.centipede-rtk.org/terms-conditions)
+ *   https://ntrip.data.gnss.ga.gov.au/ (https://gnss.ga.gov.au/stream)
+ *   http://euref-ip.net:2101/ (http://register.rtcm-ntrip.org)
  */
 
 import { backoff } from './backoff.js';
 
-const CASTER = process.env.ORBITA_NTRIP_CASTER ?? 'http://rtk2go.com:2101/';
+type Caster = { url: string; network: string; signup: string };
+const CASTERS: Caster[] = process.env.ORBITA_NTRIP_CASTER
+  ? [{ url: process.env.ORBITA_NTRIP_CASTER, network: 'the community caster', signup: 'a login from whoever runs it' }]
+  : [
+      { url: 'http://rtk2go.com:2101/', network: 'RTK2go', signup: 'a free RTK2go login' },
+      { url: 'http://caster.centipede.fr:2101/', network: 'Centipede', signup: 'a free Centipede login' },
+      { url: 'https://ntrip.data.gnss.ga.gov.au/', network: 'Geoscience Australia', signup: 'free registration with Geoscience Australia' },
+      { url: 'http://euref-ip.net:2101/', network: 'EUREF', signup: 'free registration with EUREF' },
+    ];
 
 /**
  * The directory changes as volunteers come and go, which is a timescale of days.
@@ -78,6 +99,11 @@ export type Station = {
   systems: string;
   /** Whether the caster says the stream needs authentication or charges a fee. */
   open: boolean;
+  /** Whether the caster marks the stream as charged for. */
+  fee?: boolean;
+  /** The network that publishes it, and what it takes to use it. See CASTERS. */
+  network?: string;
+  signup?: string;
 };
 
 export type Nearest = {
@@ -93,7 +119,9 @@ let lastError = '';
 let timer: ReturnType<typeof setInterval> | null = null;
 
 /** Test seam, so tests never reach the caster. */
-let load: () => Promise<Station[]> = fetchSourcetable;
+let load: () => Promise<Station[]> = fetchAll;
+/** Each directory's last good list, so one network being down never empties the others. */
+const held = new Map<string, Station[]>();
 
 function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const rad = Math.PI / 180;
@@ -135,16 +163,24 @@ export function parseSourcetable(text: string): Station[] {
       systems: f[6] || '',
       // The caster publishes an auth flag ("N" none, "B" basic) and a fee flag.
       open: (f[15] ?? 'N') === 'N' && (f[16] ?? 'N') === 'N',
+      fee: (f[16] ?? 'N') === 'Y',
     });
   }
   return out;
 }
 
-async function fetchSourcetable(): Promise<Station[]> {
+async function fetchAll(): Promise<Station[]> {
+  const got = await Promise.allSettled(CASTERS.map((c) => fetchSourcetable(c)));
+  got.forEach((r, i) => { if (r.status === 'fulfilled' && r.value.length) held.set(CASTERS[i].url, r.value); });
+  if (!got.some((r) => r.status === 'fulfilled')) throw new Error(String((got[0] as PromiseRejectedResult).reason));
+  return [...held.values()].flat();
+}
+
+async function fetchSourcetable(caster: Caster): Promise<Station[]> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 20_000);
   try {
-    const res = await fetch(CASTER, {
+    const res = await fetch(caster.url, {
       signal: ctrl.signal,
       headers: {
         // Not optional. The caster answers 403 to anything that does not identify
@@ -154,7 +190,7 @@ async function fetchSourcetable(): Promise<Station[]> {
       },
     });
     if (!res.ok) throw new Error(`caster ${res.status}`);
-    return parseSourcetable(await res.text());
+    return parseSourcetable(await res.text()).map((st) => ({ ...st, network: caster.network, signup: caster.signup }));
   } finally {
     clearTimeout(t);
   }
@@ -205,14 +241,17 @@ export function explain(lat: number, lon: number, storedKm: number | undefined):
     if (!stations.length) return '';
     return (
       'You have not told me your baseline, and there is no public correction stream within 500 km of ' +
-      'this field on the community caster. If you are not running your own base station, that is worth ' +
+      'this field on the public networks I read. If you are not running your own base station, that is worth ' +
       'knowing before trusting a centimetre-level tolerance.'
     );
   }
 
-  const auth = n.station.open ? '' : ' That stream needs credentials from whoever runs it.';
+  const auth = n.station.fee
+    ? ` That stream is charged for, through ${n.station.network ?? 'whoever runs it'}.`
+    : n.station.open ? '' : ` That stream needs ${n.station.signup ?? 'credentials from whoever runs it'}.`;
+  const on = n.station.network ? `, on the ${n.station.network} network` : '';
   return (
-    `You have not told me your baseline. The nearest public correction stream is ${n.station.name}, ` +
+    `You have not told me your baseline. The nearest public correction stream is ${n.station.name}${on}, ` +
     `about ${n.km} km away, with ${n.alternatives} other stations inside 500 km.${auth} If you run your ` +
     `own base station the distance to that is what matters. If you rely on a public stream, ${n.km} km ` +
     'is a long way for RTK to assume the ionosphere is the same at both ends, and it is the distance ' +
@@ -280,7 +319,8 @@ export function resetForTest(): void {
   stations = [];
   fetchedAt = 0;
   lastError = '';
-  load = fetchSourcetable;
+  load = fetchAll;
+  held.clear();
 }
 
 export const limits = { MAX_USEFUL_KM };

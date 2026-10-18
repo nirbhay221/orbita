@@ -27,7 +27,7 @@ import { advise, ROLES, ROLE_HINT, ORBITS, type Role } from '../playbook.js';
 import * as particles from '../particles.js';
 import { sendEmail, emailConfigured } from '../notify.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
-import { geocode, spoken as spokenPlace } from '../geocode.js';
+import { geocode, spoken as spokenPlace, GeocoderDown, lookupDown } from '../geocode.js';
 import * as ground from '../ground.js';
 import { nextPage } from '../brief.js';
 import {
@@ -155,7 +155,8 @@ export function register(server: McpServer, farmOf: () => string): void {
       // Where they said, then where they said last time, then their first field. A place that cannot be found is
       // said back rather than quietly answered for somewhere else.
       if (place) {
-        const found = await geocode(clean(place, 80)).catch(() => null);
+        const found = await geocode(clean(place, 80)).catch((err) => (err instanceof GeocoderDown ? 'down' as const : null));
+        if (found === 'down') return say(lookupDown(clean(place, 80)), { placeFound: false, unavailable: true });
         if (!found) {
           return say(`I could not find ${clean(place, 80)}. Tell me the nearest town and the state or country.`, { placeFound: false });
         }

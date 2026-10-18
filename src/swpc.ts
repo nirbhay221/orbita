@@ -64,11 +64,14 @@ function parseAlert(raw: { issue_datetime: string; message: string }) {
 
 export async function refresh(): Promise<Snapshot> {
   try {
-    const [kpRaw, alertsRaw, scalesRaw] = await Promise.all([
+    // The Kp forecast is the answer; the alerts and the scales add to it. One of those two failing used to
+    // throw the new forecast away with it, so a slow alerts file made every answer stale.
+    const [kpRaw, alertsGot, scalesGot] = await Promise.all([
       getJson('noaa-planetary-k-index-forecast.json'),
-      getJson('alerts.json'),
-      getJson('noaa-scales.json'),
+      getJson('alerts.json').then((v) => ({ ok: true as const, v }), () => ({ ok: false as const })),
+      getJson('noaa-scales.json').then((v) => ({ ok: true as const, v }), () => ({ ok: false as const })),
     ]);
+    const prior = snapshot;
 
     const slots: Slot[] = (kpRaw as { time_tag: string; kp: number; observed: string }[])
       .filter((r) => r && r.time_tag != null && r.kp != null)
@@ -80,9 +83,9 @@ export async function refresh(): Promise<Snapshot> {
         observed: r.observed === 'observed',
       }));
 
-    const alerts = (alertsRaw as { issue_datetime: string; message: string }[])
-      .slice(0, 8)
-      .map(parseAlert);
+    const alerts = alertsGot.ok
+      ? (alertsGot.v as { issue_datetime: string; message: string }[]).slice(0, 8).map(parseAlert)
+      : prior?.alerts ?? [];
 
     // All three scales arrive in one file. G breaks GPS; R absorbs HF on the
     // sunlit side and takes low-frequency navigation with it; S is a polar
@@ -94,7 +97,7 @@ export async function refresh(): Promise<Snapshot> {
       S?: { Scale: string | null; Prob?: string | null };
       R?: { Scale: string | null; MinorProb?: string | null; MajorProb?: string | null };
     };
-    const sc = scalesRaw as Record<string, Row>;
+    const sc = (scalesGot.ok ? scalesGot.v : {}) as Record<string, Row>;
     const num = (v: unknown): number | null =>
       v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);
     const levels = (row?: Row): Levels => ({
@@ -104,7 +107,7 @@ export async function refresh(): Promise<Snapshot> {
     });
     // Key "0" is today, "-1" yesterday, "1" to "3" the outlook, where R and S
     // are day ahead probabilities rather than levels.
-    const scales = {
+    const scales = !scalesGot.ok && prior ? prior.scales : {
       ...levels(sc['0']),
       yesterday: levels(sc['-1']),
       days: ['1', '2', '3']
@@ -118,6 +121,8 @@ export async function refresh(): Promise<Snapshot> {
         })),
     };
 
+    // A forecast file that parsed to nothing is not a forecast, and must not replace the last one that was.
+    if (!slots.length) throw new Error('noaa-planetary-k-index-forecast.json: no usable rows');
     snapshot = { fetchedAt: new Date().toISOString(), slots, alerts, scales, stale: false };
     return snapshot;
   } catch (err) {

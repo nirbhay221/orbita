@@ -39,6 +39,14 @@ judged where it actually sits. Satellite teams, grid rooms, airlines, HF radio, 
 vessel positioning, ships, undersea cables, mining, fleets, robots, magnetic surveys, small plane pilots, satellite
 services, aurora watchers and households get advice for their work from the same data.
 
+**In every country Alexa+ is in** (the US, Canada, Mexico, Brazil, the UK, Germany, Austria, France, Italy, Spain,
+Australia and India, October 2026), two things it says change at the border while the verdict does not
+(`src/region.ts`). Drift is said in centimetres outside the US, and miles become kilometres outside the US and the UK.
+And the setup question names the free satellite correction a farmer there knows: WAAS in North America, EGNOS in
+Europe and the UK (whose open signal still reaches British fields after the UK left the programme in 2021), GAGAN in
+India, SouthPAN in Australia, and PPP in Brazil, which has no SBAS of its own. Official warnings, the language Alexa+
+answers in, and where planned GPS tests are and are not published were already handled per country.
+
 The Latin `orbita` meant a track cut into the ground by a wheel. Built for the
 [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com), Alexa+ track, plus the Open
 Source and AWS Builder mini challenges. Self-hosted MCP server, spec 2025-11-25, Streamable HTTP, 15 tools by
@@ -89,7 +97,7 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,169 automated checks, run on every push |
+| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,234 automated checks, run on every push |
 | Agent Skill | **Real**: `skills/orbita-gps-trust`, to the open Agent Skills format, passing the format's own validator. Installable as a folder, and readable from the server as `skill://` resources |
 | Strands agent | **Real**: `strands/agent.mjs`, on AWS's Strands Agents SDK. It reads the skill from the server and follows each next step. The chain, the yes before a write and the step cap are checked with a scripted model at no cost; the path through Claude needs a key and is not in the automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
@@ -99,7 +107,7 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 | What is not the sun: GPS tests, satellite outages, spoofing regions, aircraft-reported interference | **Real, live**: the Coast Guard's GPS testing schedule and satellite outage file, which cover the United States. The Coast Guard's site refuses automated reads from cloud servers with a 403, the deployed one included, so the outage file is read from CelesTrak's mirror, and the testing schedule from the FAA's own flight advisories for the same tests on FAASafety.gov, which give each test's centre, its radius at 50 feet and its hours in UTC, so a test counts only while it is on. Elsewhere a quiet schedule is never said as "no test": the answer says that planned tests there are announced to pilots by NOTAM, which the UK CAA and Australia's Defence publish in a form that cannot be read automatically. **Real, from the regulators**: the regions the FAA (March 2026) and EASA (July 2026) list for routine jamming and spoofing, drawn as boxes around the regions they name. GPSJAM's daily aircraft reports publish no licence, so they are **off unless switched on** |
 | The past: "what happened at 3 pm on May 10 2024" | **Real**, from the archived Kp record, by the hour |
 | Crew heat | **Real**: Open-Meteo's hourly forecast over each field |
-| Kp to expected drift | **A model**, anchored to three published measurements and scored against real receivers at four sites for the 2024 season ([BACKTEST.md](BACKTEST.md)) |
+| Kp to expected drift | **A model**, anchored to three published measurements, its one judgement fitted on real receivers for 2024 and tested on 2025 ([CALIBRATION.md](CALIBRATION.md), [BACKTEST.md](BACKTEST.md)) |
 | Emails to the crew | **Real**, through Amazon SES, only after the crew member agrees. The account is in the SES sandbox (production access requested), so today it reaches verified addresses only. The public demo shows the email in an inbox panel instead |
 | The talking demo | **Real model**: Claude Sonnet 5.5 reads the real tool list and picks a tool, as Alexa+ would. With no model available, word rules pick instead, and the screen says which |
 | Alexa+ itself | **Not available to us.** MCP add-on access is in preview |
@@ -118,7 +126,7 @@ This file is long because the reasoning is the work. If you are evaluating the p
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
 Free NOAA, USGS and DLR products, no API keys for the data. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 2,169 checks.
+external is called inside a turn. `npm test` runs 2,234 checks.
 
 ## The problem
 
@@ -913,11 +921,37 @@ Or without installing Node at all:
 docker build -t orbita . && docker run -p 8788:8788 orbita
 ```
 
-`npm test` runs everything, 2,169 checks. It is also what CI runs on every push, on Node 20 and 22,
+### Where farms are kept, and who sends the crew alerts
+
+By default every farm is in one sealed file and the storm and clear-window emails are sent by a timer inside the
+server, which only runs while the server does. A storm warning that silently stops is the failure nobody notices
+until a crew loses its line, so there is a second way to run it, with the same code:
+
+* **The farms table.** With `ORBITA_STORE=dynamodb` every farm is one DynamoDB item, sealed with the same data key
+  and bound to its own id ([`src/table.ts`](src/table.ts)). Each write says which version it read; if somebody else
+  wrote first, theirs is read and the change made again on top, so neither is lost. Sandbox farms carry a `ttl`, so
+  DynamoDB deletes them after seven days even if no server is running.
+* **The alert check on its own.** [`src/sweep.ts`](src/sweep.ts) reads NOAA once and runs the same check for every
+  account, in a Lambda EventBridge Scheduler starts every fifteen minutes, and writes down what it sent before it
+  sends. With `ORBITA_ALERTS=scheduler` the server leaves accounts to it and keeps the sandboxes, whose messages go to
+  the phone on the demo page that only the server holds.
+* **Watched, and as code.** Alarms fire when the check fails twice in a row or has not run for 45 minutes, and
+  [`infra/`](infra/) is all of it in CDK, with the Lambda built from this repository's own Dockerfile.
+
+```bash
+docker compose up --build   # the server, the alert check and DynamoDB Local, as on AWS
+npm run test:dynamo         # the store against DynamoDB Local's own version rule
+cd infra && npm test        # what the stack promises, with no AWS account
+```
+
+Moving a running server over is `node scripts/copy-to-table.mjs` once on the host, then the `/orbita/store`
+parameter set to `dynamodb` and a restart. The file is kept, so going back is the parameter and a restart.
+
+`npm test` runs everything, 2,234 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 1,913 checks, no live data
+npm run test:unit           # 1,978 checks, no live data
 npm run test:live           # 256 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines
@@ -928,6 +962,7 @@ node test-panel.mjs         # the MCP Apps handshake against a simulated host
 node test-skill.mjs         # the Agent Skill: its format, every tool and chain it names, and reading it over MCP
 node test-gaps.mjs          # spoofing regions, receivers built for scintillation, holdover, aircraft reports off by default
 node test-aws-findings.mjs  # what a session against the deployed server found: dates with no zone, a town asked about
+node test-table.mjs          # the DynamoDB store: conflicts keep both changes, sealing per farm, and the scheduled check from the table alone
                             #       by somebody with a field, the bubble hours for drone pilots and robots
 node test-conversations.mjs # whole conversations in the patterns real users were recorded in, with a scripted host
 node test-readme.mjs        # every count, file, setting and result this README states, against the code
@@ -968,7 +1003,7 @@ the local stdio kind, which is exactly the half of the ecosystem this already is
 **One warning if you run this alongside the companion add-on.** Cursor has a soft
 ceiling of roughly 40 active tools across every connected server, and past it the agent
 silently loses access to some of them rather than telling you. Orbita publishes 15 and
-Sudor 18, so the pair is 33 before anything else is connected. On a host with a ceiling,
+Sudor 13, so the pair is 28 before anything else is connected. On a host with a ceiling,
 connect one or the other.
 
 ## Getting it in front of Alexa+
@@ -1062,6 +1097,26 @@ Grand Island, Nebraska  ->  Bremen, Kansas    174 km    8 others within 500 km
 central Iowa            ->  Titonka, Iowa     137 km   14 others within 500 km
 Winnipeg                ->  Larimore, ND      217 km    7 others within 500 km
 ```
+
+**Four directories, not one.** RTK2go is mostly American: of its 767 streams, 142 are in the US and 9 in France. Each
+country Alexa+ is in has its own public network, so four sourcetables are now read and merged (`src/ntrip.ts`), and
+the station is named with its network and what it takes to use it, from that network's own listing. Read live on
+18 October 2026, 3,193 stations:
+
+```
+Lyon, France            ->  Villeurbanne (Centipede)            3 km   686 others within 500 km
+Wagga Wagga, Australia  ->  Wagga Wagga (Geoscience Australia)  1 km   256 others
+Bologna, Italy          ->  Medicina (EUREF)                   25 km   223 others
+Seville, Spain          ->  Huelva (EUREF)                     86 km    30 others
+Leeds, UK               ->  Leeds (RTK2go)                     13 km   208 others
+Ludhiana, India         ->  none within 500 km
+Sorriso, Brazil         ->  none within 500 km (Brazil's RBMC caster did not answer)
+```
+
+Only the public directories are read, never a stream. Every network asks for a login (Geoscience Australia and EUREF
+by free registration), and some Australian streams are charged for, which is said
+([Centipede terms](https://www.centipede-rtk.org/terms-conditions), [Geoscience Australia](https://gnss.ga.gov.au/stream),
+[EUREF registration](http://register.rtcm-ntrip.org)).
 
 RTK assumes the ionosphere is the same over the base and the rover. Over 137 km
 during a storm it is emphatically not, and per the limitation on tropospheric delay
@@ -1158,6 +1213,21 @@ has saved as counts and never names. With no key, or once the cap is reached, pl
 (`src/rules.ts`) and the screen says so. The demo page takes typed or spoken words; hearing and speaking are the
 browser's own.
 
+It keeps the conversation, as Alexa+ does: Amazon's guide says Alexa, not the add-on, holds continuity across turns and
+understands references to earlier ones. The page sends its last six turns with each sentence, so a bare "not sure"
+after "Is it RTK, WAAS, or are you not sure?" is read as the answer to that question
+([conversation surface](https://developer.amazon.com/docs/alexaplus/add-ons/mcp-addon-conversation-surface.html)).
+
+It takes a whole turn the way Alexa+ does, not one tool call. Amazon's guide says Alexa reads what the add-on returns
+and composes the reply itself, and the hackathon's rules let the Alexa+ experience be simulated in a web app "using
+their own agentic tools", judged on whether it is "a complete, coherent product experience". So the model calls a
+tool, reads the result, may call the next step it names, and then speaks a short reply in its own words
+(`converse()` in `src/agent.ts`). Three limits: at most three tools a turn; after the first, only a tool that changes
+nothing runs without the customer, so nothing is saved, sent or emailed by a chain; and a reply that drops an
+emergency number the tool said is replaced by the tool's own words. With no model, the word rules read a bare "yes",
+"no" or "not sure" against the question just asked, and a "yes" takes the step the last answer named
+(`bareAnswer()` in `src/rules.ts`).
+
 ## Hearing it
 
 Every sentence this server produces is written to be heard once, by somebody with their hands busy,
@@ -1179,10 +1249,8 @@ text out at a different rate and price.
 ## Another server can ask us too
 
 Orbita's `storm_status` is public and takes no arguments, which makes it usable as a feed by
-something other than a voice host. Sudor, the companion add-on, does exactly that: it opens an MCP
-client twice an hour, calls `storm_status`, and folds a G4 or G5 into what it tells someone who
-keeps insulin cold or runs an oxygen concentrator. Nothing personal travels in that direction, and
-the call is rate limited like any other.
+something other than a voice host: any MCP client can call it on a timer and read the NOAA scales out
+of the structured answer. Nothing personal is needed to ask, and the call is rate limited like any other.
 
 ## What it keeps, and for how long
 
@@ -1278,6 +1346,15 @@ matters most: 79 percent of outdoor workers who died of heat were in their first
 * **One story by default.** The default tool set is the field job: can it run, when does it clear, watch it, tell the crew,
   log it, report it, plus one tool for everyone else a storm reaches and one for a machine asking about its position.
   The list of everything else a storm touches is published only with `ORBITA_SCOPE=all`.
+* **Setup questions say why, then ask.** Amazon's add-on rules and its voice guide ask for a reason before a
+  question, the question last so it is the last thing heard before the microphone opens, one at a time, and no menu of
+  options. So a new farm hears "A storm hits a field harder the further north it is. Which field should I watch, and
+  what town is it near?", and a machine "How far a storm throws your guidance depends on the correction the planter
+  runs. Is it RTK, WAAS, or are you not sure?" Not sure is an answer: the machine is judged as RTK, the one a storm
+  degrades first, so no job is passed that should be held, and they are told where to find it. Once a field and a
+  machine are both known, the closing question is the check itself: "Want me to check whether you can run a job there
+  today?" ([functional requirements](https://developer.amazon.com/en-US/docs/alexa/alexaplus/add-ons/functional-requirements.html),
+  [what Alexa says](https://developer.amazon.com/fr/designing-for-voice/what-alexa-says/)).
 * **Answers hand back a handle.** An answer about a job carries `fieldId` and `equipmentId`, every tool that takes a
   field or a machine accepts them, and they still find the field after it is renamed.
 * **An answer ends on the next step.** A blocked job that will clear ends with "Want me to watch it and tell you when it
@@ -1417,10 +1494,17 @@ Named deliberately, because it exists.
   the same replay gives a few percent. The steps between those three anchors are interpolation.
 * **Checked against real receivers, with limits.** `node evals/receivers.mjs` scores the model block by block against
   five-minute positions from permanent GPS stations at Saskatoon, Fargo, Grand Island and Lubbock for the 2024 season.
-  They agree in 92 to 96 percent of blocks, and all four receivers lost precise positioning for twelve hours or more
+  They agree in 93 to 96 percent of blocks, and all four receivers lost precise positioning for twelve hours or more
   on 10 and 11 May, which the model calls. Those positions are worked out afterwards from both GPS frequencies, so
   they show when precise positioning was lost, not how far an RTK rover in a cab drifted. That has still not been
-  measured. At Saskatoon the model looks a little too easy at Kp 4 to 5 at night.
+  measured.
+* **Fitted on one year, tested on the next.** `node evals/calibrate.mjs` ([CALIBRATION.md](CALIBRATION.md)) chooses
+  the one piece of geometry set by judgement, how far poleward of NOAA's aurora view line the disturbed sky is, on all
+  of 2024 at those four stations, and scores it on all of 2025, which was not used to choose. The fitted value held
+  35 of 43 storm blocks in 2025 in which receivers lost precise positioning, against 25 for the value used before,
+  for 62 false holds in about 6,700 fine blocks against 20. It applies to RTK and PPP, which is what those stations
+  measure; WAAS and no correction keep the old value, because nothing here measured them. At Saskatoon in 2025 the
+  model held 131 blocks, and the receiver really lost precise positioning in 88 of them.
 * **Every job was replayed, not only planting, and that found a second fault.** The rules for WAAS, PPP and no
   correction made every northern site 60 percent worse on a quiet day, so a sprayer on WAAS at Fargo was told it could
   never hold spraying tolerance. Every correction is now judged from one measure of how disturbed the sky is. Only RTK

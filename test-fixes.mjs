@@ -226,7 +226,7 @@ console.log('\nNothing is said twice in one answer, and the next step is named')
   const who = await connect('acct:lean');
   await who('register_field', { name: 'North 40', lat: 40.92, lon: -98.34 });
   const eq = await who('register_equipment', { name: 'planter', correction: 'rtk' });
-  check('adding a machine points at the farm overview', eq.data.nextAction?.tool === 'farm_status', JSON.stringify(eq.data.nextAction));
+  check('adding a machine to a known field offers the check itself, as the closing question', eq.data.nextAction?.tool === 'can_i_run' && /Want me to check whether you can run a job there today\?$/.test(eq.said), JSON.stringify(eq.data.nextAction) + ' ' + eq.said);
   const crew = await who('crew_contact', { action: 'add', name: 'Dana', email: 'dana2@example.com' });
   check('staging a crew contact points at confirming them, by name', crew.data.nextAction?.tool === 'crew_contact' && crew.data.nextAction.arguments.action === 'confirm' && crew.data.nextAction.arguments.name === 'Dana', JSON.stringify(crew.data.nextAction));
   const logged = await who('log_job', { operation: 'planting' });
@@ -260,9 +260,9 @@ console.log('\nOne tool for the farm');
   const farmNow = store.get('acct:merged');
   check('a field and a machine in one call are both added', farmNow.fields.length === 1 && farmNow.equipment.length === 1 && both.data.did.length === 2, both.said);
   check('...and it does not then ask what the machine runs', !/what correction/i.test(both.said), both.said);
-  check('...and points at the overview', both.data.nextAction?.tool === 'farm_status');
+  check('...and offers the check for that field', both.data.nextAction?.tool === 'can_i_run' && both.data.nextAction?.arguments?.field === 'North 40', JSON.stringify(both.data.nextAction));
   const half = await who('my_farm', { machineName: 'sprayer' });
-  check('a machine with no correction is asked about, not guessed', store.get('acct:merged').equipment.length === 1 && /What correction does sprayer run/.test(half.said), half.said);
+  check('a machine with no correction is asked about, not guessed', store.get('acct:merged').equipment.length === 1 && /correction the sprayer runs\. Is it RTK, WAAS, or are you not sure\?$/.test(half.said), half.said);
   const gone = await who('my_farm', { removeWhat: 'machine', removeName: 'planter' });
   check('a machine can be taken off through it', store.get('acct:merged').equipment.length === 0, gone.said);
   const go = await who('can_i_run', { operation: 'planting' });
@@ -279,7 +279,51 @@ console.log('\nFound by using it as a stranger');
   check('following it remembers both the field and the machine', store.get('acct:walk').fields.length === 1 && store.get('acct:walk').equipment.length === 1, kept.said);
   check('a field and a machine given together are not then asked for', !/Now tell me/.test(kept.said), kept.said);
   const alone = await (await connect('acct:walk2'))('my_farm', { fieldName: 'Home', place: 'Fargo, North Dakota' });
-  check('a field given alone still asks what the machine runs', /Now tell me what correction/.test(alone.said), alone.said);
+  check('a field given alone still asks what the machine runs', /Is it RTK, WAAS, or are you not sure\?$/.test(alone.said), alone.said);
+
+  // The setup questions: why first, the question last, at most three choices, and "not sure" is an answer.
+  const unsure = await who('my_farm', { machineName: 'drone', notSure: true });
+  const drone = store.get('acct:walk').equipment.find((e) => e.name === 'drone');
+  check('"I don\'t know what it runs" is kept, judged as RTK, and said so', drone?.correction === 'rtk' && drone?.assumed === true && /judge it as RTK, the most demanding/.test(unsure.said), unsure.said);
+  const told = await who('register_equipment', { name: 'drone', correction: 'sbas' });
+  check('...and told later, the guess is dropped', store.get('acct:walk').equipment.find((e) => e.name === 'drone')?.assumed === undefined, told.said);
+  const bare = await who('register_equipment', { name: 'rover' });
+  check('a machine with no correction at all is asked, and nothing is kept', !store.get('acct:walk').equipment.some((e) => e.name === 'rover') && /the rover runs\. Is it RTK, WAAS, or are you not sure\?$/.test(bare.said), bare.said);
+  const fresh = await connect('acct:first-time');
+  const intro = await fresh('what_can_you_do', {});
+  check('"what can you do" on a new farm ends on one question, with the reason before it', /further north it is\. Which field should I watch, and what town is it near\?$/.test(intro.said), intro.said);
+  const nothing = await fresh('my_farm', {});
+  check('an empty setup asks for the first field as a question', /Which field should I watch, and what town is it near\?$/.test(nothing.said), nothing.said);
+
+  const rules = await import('./dist/rules.js');
+  // The twelve Alexa+ countries: the region's own correction in the question, and centimetres outside the US.
+  const region = await import('./dist/region.js');
+  check('the question names the local free correction: EGNOS, GAGAN, SouthPAN, WAAS, and PPP in Brazil', region.secondChoice('FR') === 'EGNOS' && region.secondChoice('GB') === 'EGNOS' && region.secondChoice('IN') === 'GAGAN' && region.secondChoice('AU') === 'SouthPAN' && region.secondChoice('MX') === 'WAAS' && region.secondChoice('BR') === 'PPP');
+  check('drift in centimetres outside the US, inches in it', region.localiseUnits('about 0.8 inches, inside the 2.0 inches', 'DE') === 'about 2.0 centimetres, inside the 5.1 centimetres' && region.localiseUnits('about 0.8 inches', 'US') === 'about 0.8 inches');
+  check('miles become kilometres, except in the UK', region.localiseUnits('about 12 miles', 'IN') === 'about 19 km' && region.localiseUnits('about 12 miles', 'GB') === 'about 12 miles');
+  geo.configureForTest(async () => ({ name: 'Lyon', region: 'Auvergne-Rhône-Alpes', country: 'France', countryCode: 'FR', lat: 45.76, lon: 4.84, timeZone: 'Europe/Paris' }));
+  const lyon = await connect('acct:lyon');
+  const fieldFr = await lyon('my_farm', { fieldName: 'Les Grandes Terres', place: 'Lyon, France' });
+  check('a field near Lyon is asked about EGNOS, not WAAS', /Is it RTK, EGNOS, or are you not sure\?$/.test(fieldFr.said), fieldFr.said);
+  await lyon('my_farm', { machineName: 'semoir', correction: 'rtk' });
+  const goFr = await lyon('can_i_run', { operation: 'planting' });
+  check('...and its drift is said in centimetres', /centimetres/.test(goFr.said) && !/inches/.test(goFr.said), goFr.said);
+  const noFr = rules.bareAnswer('EGNOS', [{ role: 'user', text: 'x' }, { role: 'assistant', text: fieldFr.said }]);
+  check('...and "EGNOS" after that question is kept as SBAS', noFr?.args?.correction === 'sbas', JSON.stringify(noFr));
+  geo.configureForTest(async () => ({ name: 'Fargo', region: 'North Dakota', country: 'United States', lat: 46.88, lon: -96.79, timeZone: 'America/Chicago' }));
+
+  // The stand-in keeps the conversation, as Alexa+ does. See conversation() in standin.ts.
+  const { conversation } = await import('./dist/standin.js');
+  const kept2 = conversation([{ role: 'user', text: 'add my sprayer' }, { role: 'assistant', text: 'Is it RTK, WAAS, or are you not sure?' }]);
+  check('the stand-in passes the question just asked, so a bare "not sure" can be read', kept2.length === 2 && kept2[1].role === 'assistant');
+  const _rulesAgain = await import('./dist/rules.js');
+  const q = [{ role: 'user', text: 'add the sprayer' }, { role: 'assistant', text: 'Added sprayer. How far a storm throws your guidance depends on the correction the sprayer runs. Is it RTK, WAAS, or are you not sure?' }];
+  check('with no model, "not sure" after the correction question is kept for that machine', JSON.stringify(rules.bareAnswer("I'm not sure", q)) === JSON.stringify({ tool: 'my_farm', args: { machineName: 'sprayer', notSure: true } }));
+  check('...and "RTK" is kept as RTK for it', rules.bareAnswer('it runs RTK', q)?.args?.correction === 'rtk');
+  check('...and "yes" to "want me to check" runs the check the answer named', rules.bareAnswer('yes', [{ role: 'user', text: 'x' }, { role: 'assistant', text: 'Want me to check whether you can run a job there today?' }], { tool: 'can_i_run', arguments: { field: 'North 40' } })?.args?.field === 'North 40');
+  const agentMod = await import('./dist/agent.js');
+  check('a reworded reply that drops 911 is replaced by the tool\'s own words', agentMod.keepSafety('Hold off.', [{ tool: 'x', args: {}, result: { content: [{ type: 'text', text: 'Call 911 if anyone is hurt.' }] } }]) === 'Call 911 if anyone is hurt.');
+  check('...and drops anything malformed, out of order, or ending on the customer', conversation([{ role: 'system', text: 'x' }, { role: 'assistant', text: 'a' }, { role: 'user', text: 'b' }]).length === 0 && conversation('nope').length === 0);
 
   // May 10 2024, asked from a field in Chicago: the answer is about May 10, not the day after.
   const real = globalThis.fetch;

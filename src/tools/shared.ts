@@ -12,6 +12,7 @@
  * Nothing here changed in the move. It is the same code in a smaller room.
  */
 
+import { secondChoice } from '../region.js';
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
@@ -107,6 +108,25 @@ export const OPERATION_HINT =
   'drone_show for a drone light show, a swarm or a formation flight. ' +
   'machine_control for grade control, earthworks, cut and fill, or a dozer, grader or excavator on design grade.';
 export const CORRECTIONS = ['rtk', 'ppp', 'sbas', 'autonomous'] as const;
+
+/*
+ * The questions that get a farm set up, worded the way Amazon asks for Alexa+ add-ons and its voice design guide:
+ * say why first, then ask, so the question is the last thing heard before the microphone opens; one question at a
+ * time; no more than three spoken choices, never a menu; and a way to answer "I don't know", because many
+ * operators never set the correction themselves.
+ *   https://developer.amazon.com/en-US/docs/alexa/alexaplus/add-ons/functional-requirements.html
+ *   https://developer.amazon.com/fr/designing-for-voice/what-alexa-says/
+ *   https://developer.amazon.com/alexa/alexa-haus/patterns-and-components
+ */
+/** "sprayer" is said as "the sprayer"; "my planter" and "the rover" are left as they are. */
+const theMachine = (name: string): string => (/^(the|my|our|his|her|their)\s/i.test(name) ? name : `the ${name}`);
+export const ASK_FIRST_FIELD = 'A storm hits a field harder the further north it is. Which field should I watch, and what town is it near?';
+export const ASK_CORRECTION = (machine?: string, country?: string | null): string =>
+  `How far a storm throws your guidance depends on the correction ${machine ? theMachine(clean(machine)) : 'your machine'} runs. Is it RTK, ${secondChoice(country)}, or are you not sure?`;
+export const ASK_FIELD_FOR_MACHINE = 'Which field is it working, and what town is it near?';
+export const OFFER_CHECK = 'Want me to check whether you can run a job there today?';
+/** Said when they do not know the correction. RTK is the one a storm degrades first, so nothing is passed that should be held. */
+export const ASSUMED_RTK = "I'll judge it as RTK, the most demanding, so I never pass a job I should hold. It's shown on the guidance display's GPS or receiver page, or your dealer will know.";
 
 // Each says what to say next, in words a person has: the nearest town, and how the machine is corrected.
 export const NO_FIELDS = 'I need to know where the field is first. Tell me its name and the nearest town, and I will take it from there.';

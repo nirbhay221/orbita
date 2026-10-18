@@ -29,7 +29,28 @@ const inches = (m: number) => Math.max(1, Math.round(m * 39.37));
 const recipients = (farm: store.Farm, reason: store.NotifyReason) =>
   farm.crew.filter((c) => reachable(c) && c.notifyOn.includes(reason));
 
-export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
+/**
+ * Marks an alert as sent (`mark` returns false when it already was), and says whether this run is the one that marked it.
+ *
+ * EventBridge Scheduler delivers at least once, so the scheduled check can run twice for one slot, and both
+ * runs read the table before either has written. The second write is refused on its version, store.ts makes it
+ * again on top of the first, and this change then finds the key already there: that run sends nothing.
+ * On the table before anything is sent, when there is a table. See flush() in store.ts.
+ */
+async function claim(id: string, mark: (f: store.Farm) => boolean): Promise<boolean> {
+  let mine = true;
+  store.update(id, (x) => {
+    if (!mark(x)) mine = false;
+  });
+  await store.flush();
+  return mine;
+}
+
+/**
+ * `which` splits the work when the scheduled check runs in Lambda (sweep.ts): it takes the accounts, and the
+ * server keeps the sandboxes, whose messages go to the phone on the demo page, which only the server holds.
+ */
+export async function checkFieldAlerts(now = new Date(), which: 'all' | 'accounts' | 'demo' = 'all'): Promise<Delivery[]> {
   const snap = swpc.current();
   // The same "right now" the tools use, so an email cannot contradict the
   // answer the customer just heard.
@@ -42,6 +63,7 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
     // A sandbox never causes an email. What its crew would have been sent goes to the phone on the demo
     // page, word for word, where only that visitor can read it. See notify.ts.
     const demo = !canEmailFor(id);
+    if ((which === 'accounts' && demo) || (which === 'demo' && !demo)) continue;
     const out = async (c: store.CrewContact, email: Email): Promise<void> => {
       if (demo) toDemoPhone(id, { to: c.name, reason: email.reason, subject: email.subject, text: email.text.split('\n\nTo stop these emails')[0], stop: c.stopId ?? undefined });
       else attempted.push(await sendEmail(email));
@@ -56,10 +78,13 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
         const v = assess(w.operation as Operation, kpNow.kp, eq, f, now);
         if (!v.go) continue;
         // Marked before sending, so a slow or failing send can never turn into repeated emails.
-        store.update(id, (x) => {
+        const mine = await claim(id, (x) => {
           const hit = x.waiting.find((y) => y.id === w.id);
-          if (hit) hit.notifiedAt = now.toISOString();
+          if (!hit || hit.notifiedAt) return false;
+          hit.notifiedAt = now.toISOString();
+          return true;
         });
+        if (!mine) continue;
         for (const c of clearTo) {
           await out(c, {
               to: c.email,
@@ -125,7 +150,11 @@ export async function checkFieldAlerts(now = new Date()): Promise<Delivery[]> {
     const forTrade = first.ops.map((op) => adviceNow(op, false, first!.kp, 'space_weather')).filter(Boolean).slice(0, 2).join(' ');
     const key = `storm:${first.time.slice(0, 10)}`;
     if (farm.alertsSent.includes(key)) continue;
-    store.update(id, (x) => void (x.alertsSent = [...x.alertsSent.slice(-29), key]));
+    if (!(await claim(id, (x) => {
+      if (x.alertsSent.includes(key)) return false;
+      x.alertsSent = [...x.alertsSent.slice(-29), key];
+      return true;
+    }))) continue;
     for (const c of stormTo) {
       await out(c, {
           to: c.email,

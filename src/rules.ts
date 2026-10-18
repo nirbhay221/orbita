@@ -18,7 +18,7 @@ const JOBS: [RegExp, string][] = [
   [/\bdrone (light )?show|\bswarm|\blight show/i, 'drone_show'], [/\bdrone|\buav\b|\bmapping flight/i, 'drone_survey'], [/\bgrad(e|ing)|\bdozer|\bmachine control|\bblade/i, 'machine_control'],
 ];
 const jobIn = (s: string): string | undefined => JOBS.find(([re]) => re.test(s))?.[1];
-const CORRECTION: [RegExp, string][] = [[/\brtk\b/i, 'rtk'], [/\bppp\b|starfire|centerpoint/i, 'ppp'], [/\bwaas\b|\bsbas\b|\begnos\b/i, 'sbas'], [/\bno correction|\bplain gps\b/i, 'autonomous']];
+const CORRECTION: [RegExp, string][] = [[/\brtk\b/i, 'rtk'], [/\bppp\b|starfire|centerpoint/i, 'ppp'], [/\bwaas\b|\bsbas\b|\begnos\b|\bgagan\b|\bsouthpan\b|\bmsas\b/i, 'sbas'], [/\bno correction|\bplain gps\b/i, 'autonomous']];
 const when = (s: string): string | undefined =>
   /\b(yesterday|last \w+|on \w+day|\d{1,2} \w+ \d{4}|\w+ \d{1,2},? \d{4}|this morning|at \d{1,2}\s*(am|pm))\b/i.exec(s)?.[0];
 
@@ -45,7 +45,37 @@ const RULES: Rule[] = [
   { when: /\b(what can you do|how does this work)\b/i, tool: 'what_can_you_do' },
 ];
 
-export function chooseByWords(utterance: string, tools: ToolDef[]): Chosen {
+/*
+ * A bare answer to the question just asked. Every setup question ends on a yes or no, and "no" on its own matches
+ * no rule: it only means something against the question before it, which is how Alexa+ reads it. The page sends
+ * the turns so far and the next step the last answer named; a yes takes that step, and the answers below are read
+ * against the question's own words.
+ */
+const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please( do)?|go ahead|do it|i do|i have|that'?s right|correct)\b/i;
+const NO = /^\s*(no|nope|nah|none|not really|i don'?t|i do not|never)\b/i;
+const UNSURE = /\b(not sure|don'?t know|no idea|unsure|no clue)\b/i;
+type Bare = { tool: string; args: Record<string, unknown> } | null;
+const BARE: [RegExp, (said: string, question: string) => Bare][] = [
+  [/Is it RTK, (?:WAAS|EGNOS|GAGAN|SouthPAN|MSAS|KASS|PPP), or are you not sure\?$/, (s, q) => {
+    const machine = /correction (?:the )?(.+?) runs\./.exec(q)?.[1];
+    const name = machine && machine !== 'your machine' ? machine : 'my machine';
+    if (UNSURE.test(s)) return { tool: 'my_farm', args: { machineName: name, notSure: true } };
+    const c = CORRECTION.find(([re]) => re.test(s))?.[1];
+    return c ? { tool: 'my_farm', args: { machineName: name, correction: c } } : null;
+  }],
+];
+
+export function bareAnswer(utterance: string, history: { role: string; text: string }[] = [], next?: { tool?: unknown; arguments?: unknown } | null): Bare {
+  const last = [...history].reverse().find((t) => t.role === 'assistant')?.text.trim() ?? '';
+  if (!last) return null;
+  for (const [asked, read] of BARE) if (asked.test(last)) { const hit = read(utterance, last); if (hit) return hit; }
+  if (YES.test(utterance) && next && typeof next.tool === 'string') return { tool: next.tool, args: next.arguments && typeof next.arguments === 'object' ? (next.arguments as Record<string, unknown>) : {} };
+  return null;
+}
+
+export function chooseByWords(utterance: string, tools: ToolDef[], history: { role: string; text: string }[] = [], next?: { tool?: unknown; arguments?: unknown } | null): Chosen {
+  const bare = bareAnswer(utterance, history, next);
+  if (bare && tools.some((t) => t.name === bare.tool)) return { tool: bare.tool, args: bare.args, said: '', ms: 0, model: 'word rules' } as Chosen;
   const started = Date.now();
   const listed = new Set(tools.map((t) => t.name));
   const clean = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));

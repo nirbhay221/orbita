@@ -60,6 +60,20 @@ sudor="$(get /orbita/sudor-url)"
 from="$(get /orbita/email-from)"
 [ -n "$from" ] && printf 'ORBITA_EMAIL_FROM=%s\n' "$from" >>"$out"
 
+# The server's public address, for the consent and stop links in crew email and for the OAuth metadata. The
+# alert Lambda is given the same address by infra/, and the two must agree: with it set there and not here,
+# the server treats a crew member the farmer confirmed as reachable and the Lambda does not, so the storm
+# email the farmer was promised is never sent. Absent here leaves whatever the unit file set.
+pub="$(get /orbita/public-url)"
+[ -n "$pub" ] && printf 'ORBITA_PUBLIC_URL=%s\n' "$pub" >>"$out"
+
+# Where farms are kept, and who sends the scheduled crew alerts. "dynamodb" means the table from infra/, with
+# the Lambda there sending them for accounts; absent means the file and this server's own timer, as before.
+# Switching is this parameter and a restart, after scripts/copy-to-table.mjs has copied the file over.
+if [ "$(get /orbita/store)" = "dynamodb" ]; then
+  printf 'ORBITA_STORE=dynamodb\nORBITA_ALERTS=scheduler\n' >>"$out"
+fi
+
 # The key for the talking demo page. Absent means the page answers with its word rules instead, and says so.
 ak="$(get /orbita/anthropic-key)"
 [ -n "$ak" ] && printf 'ORBITA_ANTHROPIC_KEY=%s\n' "$ak" >>"$out"

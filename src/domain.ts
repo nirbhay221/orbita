@@ -49,6 +49,8 @@ export type Equipment = {
   id: string;
   name: string;
   correction: Correction;
+  /** They did not know the correction, so it is judged as RTK, the most demanding, until they say. See setup.ts. */
+  assumed?: boolean;
   /**
    * A receiver built to ride out scintillation: Trimble's IonoGuard on its NAV-900 and ProPoint base stations, or
    * a correction service with scintillation mitigation such as Hexagon's PPP. Only ever what the customer said.
@@ -196,7 +198,25 @@ function baselineFactor(km: number | undefined, correction: Correction): number 
  * Between those points the steps are this project's interpolation, not a measurement, and the numbers it
  * produces are an estimate of scale: "inches" or "feet", never a promise of a figure.
  */
-const OVERHEAD_OFFSET_DEG = 4;
+/**
+ * How far poleward of NOAA's view line the disturbed sky is overhead, in two figures.
+ *
+ * For carrier phase (RTK and PPP), 0: fitted on all of 2024 at four permanent stations and tested on 2025,
+ * where it held 35 of 43 storm blocks in which receivers lost precise positioning, against 25 for the 4 used
+ * before (CALIBRATION.md, evals/calibrate.mjs). Those stations measure exactly that, the loss of carrier phase,
+ * which is what the oval's scintillation takes first.
+ *
+ * For code positioning (WAAS and none), still 4, by judgement. Nothing here measured it, and the fitted figure
+ * applied to a phone would hold a walk across a Saskatchewan field in one block in ten of the 2025 season.
+ */
+const CARRIER_OFFSET_FITTED = 0;
+const CODE_OFFSET_DEG = 4;
+let CARRIER_OFFSET_DEG = CARRIER_OFFSET_FITTED;
+
+/** For evals/calibrate.mjs only: try another carrier phase offset, and put the fitted one back with null. */
+export function setOverheadOffsetForCalibration(deg: number | null): void {
+  CARRIER_OFFSET_DEG = deg ?? CARRIER_OFFSET_FITTED;
+}
 
 /**
  * How much further poleward the oval sits at this hour, in degrees.
@@ -215,13 +235,14 @@ export function dayShiftDeg(at: Date | undefined, lon: number): number {
   return 4 * (1 + Math.cos((2 * Math.PI * (hour - 12)) / 24));
 }
 
-export function rtkMultiplier(kp: number, lat: number, lon: number, at?: Date): number {
-  // auroralBoundaryDeg is NOAA's viewline: how far south the aurora can be SEEN, low on the horizon. The
-  // disturbed ionosphere itself is overhead some four degrees poleward of that. Using the viewline as if it
-  // were overhead had Saskatoon inside the oval at Kp 4, and outside tolerance in 38 to 62 percent of blocks.
+export function rtkMultiplier(kp: number, lat: number, lon: number, at?: Date, offsetDeg = CARRIER_OFFSET_DEG): number {
+  // auroralBoundaryDeg is NOAA's viewline: how far south the aurora can be SEEN, low on the horizon. Before
+  // the day shift existed, taking the viewline as overhead had Saskatoon outside tolerance in 38 to 62 percent
+  // of blocks, so an offset of four degrees was set by judgement. With the day shift in, the offset was fitted
+  // on real receivers instead (see CARRIER_OFFSET_DEG): for carrier phase it is the viewline itself.
   // The storm floors below do not move with the hour: the enhanced density that hurt the central United
   // States in May 2024 was a daytime and dusk effect.
-  const depth = Math.abs(geomagneticLatitude(lat, lon)) - (auroralBoundaryDeg(kp) + OVERHEAD_OFFSET_DEG + dayShiftDeg(at, lon));
+  const depth = Math.abs(geomagneticLatitude(lat, lon)) - (auroralBoundaryDeg(kp) + offsetDeg + dayShiftDeg(at, lon));
   const byDepth = depth >= 6 ? 50 : depth >= 3 ? 25 : depth >= 0 ? 10 : depth >= -2 ? 2 : depth >= -8 ? 1.4 : 1;
   // The storm's own floor. From Kp 8 it is graded by latitude, because the same extreme storm was worse in
   // the central United States than in the south-west; at Kp 7 the measured 8 cm was at low latitude, so
@@ -253,7 +274,8 @@ const SENSITIVITY: Record<Correction, number> = { rtk: 1, ppp: 0.75, sbas: 0.4, 
 
 export function expectedErrorM(kp: number, eq: Equipment, field: Field, at?: Date): number {
   const base = QUIET_ERROR_M[eq.correction];
-  const disturbance = rtkMultiplier(kp, field.lat, field.lon, at);
+  const carrier = eq.correction === 'rtk' || eq.correction === 'ppp';
+  const disturbance = rtkMultiplier(kp, field.lat, field.lon, at, carrier ? CARRIER_OFFSET_DEG : CODE_OFFSET_DEG);
   const err = base * disturbance ** SENSITIVITY[eq.correction] * baselineFactor(field.baselineKm, eq.correction);
   return Number(err.toFixed(3));
 }
@@ -381,9 +403,11 @@ export function assess(
   at?: Date,
 ): Verdict {
   const err = expectedErrorM(kp, eq, field, at);
-  // What this rig does on its best day: the better of a quiet sky and a dead calm one, so that a site the
-  // oval sits over on an ordinary night is not told its equipment is the problem.
-  const quiet = Math.min(expectedErrorM(2, eq, field, at), expectedErrorM(0, eq, field, at));
+  // What this rig does on its best day: the better of a quiet sky and a dead calm one, at this hour and at
+  // local noon, when the oval is furthest poleward. A site the oval sits over on an ordinary night (Tromso,
+  // on the offset the calibration chose) is not told its equipment is the problem.
+  const noon = new Date(Date.UTC((at ?? new Date()).getUTCFullYear(), (at ?? new Date()).getUTCMonth(), (at ?? new Date()).getUTCDate(), 12) - (field.lon / 15) * 3_600_000);
+  const quiet = Math.min(...[2, 0].flatMap((k) => [expectedErrorM(k, eq, field, at), expectedErrorM(k, eq, field, noon)]));
   const tol = TOLERANCE_M[operation];
   // Carrier-phase work near the magnetic equator after dark, whatever Kp says. See equatorialEvening.
   const bubbleHours = (eq.correction === 'rtk' || eq.correction === 'ppp') && tol < 0.3 && equatorialEvening(field, at);

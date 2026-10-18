@@ -22,6 +22,7 @@ import * as aurora from '../aurora.js';
 import { chooseOne, canAsk } from '../elicit.js';
 import * as season from '../season.js';
 import { perCaller } from '../budget.js';
+import { currentCaller } from '../caller.js';
 import * as store from '../store.js';
 import * as history from '../history.js';
 import { advise, ROLES, ROLE_HINT, type Role } from '../playbook.js';
@@ -265,7 +266,8 @@ export function register(server: McpServer, farmOf: () => string): void {
         );
       }
       if (action === 'join') {
-        if (!joins.allow(id)) return say('Too many codes tried. Wait a while and try again.', { joined: false, reason: 'limit' });
+        // Charged to the caller, not the farm: a sandbox id is free to make, a network address is not.
+        if (!joins.allow(currentCaller(id))) return say('Too many codes tried. Wait a while and try again.', { joined: false, reason: 'limit' });
         const r = store.joinWithCode(id, code ?? '');
         if (!r.ok) {
           return say(
