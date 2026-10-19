@@ -45,6 +45,7 @@ import {
   localTime,
   namesOf,
   say,
+  CORRECTIONS,
 } from './shared.js';
 
 /** What was checked and ruled out is said before what to look at; what could not be checked, after it. */
@@ -84,7 +85,14 @@ export function register(server: McpServer, farmOf: () => string): void {
       if (!eq) return say(NO_EQUIP);
 
       let at = history.parseWhen(when, new Date(), { prefer: 'past', timeZone: f.timeZone });
-      if (!at) return say(`I could not work out what date "${clean(when)}" means. Try a day name or a date.`);
+      if (!at) {
+        // A year alone is a fair question, "what about 1859?", and deserves more than "I could not work out what date".
+        const year = /^\s*(\d{4})\s*$/.exec(String(when ?? ''))?.[1];
+        if (year && Number(year) < 1932) return say(`The Kp record only goes back to 1932, so I cannot check ${year}. The storms since then, like March 1989 or May 2024, I can.`);
+        if (year && Number(year) > new Date().getFullYear()) return say('That is in the future. Ask me whether you can run instead.');
+        if (year) return say(`Which day in ${year}? Tell me the date, like May 10 ${year}.`);
+        return say(`I could not work out what date "${clean(when)}" means. Try a day name or a date.`);
+      }
       if (at.getTime() > Date.now()) return say('That is in the future. Ask me whether you can run instead.');
       if (at.getTime() < history.EARLIEST) return say('The Kp record only goes back to 1932, so I cannot check that day.');
 
@@ -169,18 +177,27 @@ export function register(server: McpServer, farmOf: () => string): void {
       // which is already the 11th in UTC: the answer came back about "Saturday, May 11".
       const namedDay = at.toLocaleDateString('en-CA', { timeZone: f.timeZone ?? 'UTC' });
       at = new Date(`${namedDay}T12:00:00Z`);
-      const dayStart = new Date(at); dayStart.setUTCHours(0, 0, 0, 0);
-      const dayEnd = dayStart.getTime() + 24 * 3600_000;
-      const cached = (swpc.current()?.slots ?? []).filter((sl) => {
-        const t = new Date(sl.time).getTime();
-        return sl.observed && t >= dayStart.getTime() && t < dayEnd;
-      });
+      // The field's own day, midnight to midnight there, not the UTC day: May 10 2024 in Nebraska ran to
+      // 05:00 UTC on the 11th, and its worst hours, Kp 9 from 7 PM, fell in the UTC block after midnight.
+      // A three-hour block belongs to the day its middle falls in, which always gives eight.
+      const dayStart = localMidnight(namedDay, f.timeZone ?? 'UTC');
+      const dayEnd = dayStart + 24 * 3600_000;
+      const BLOCK_MS = 3 * 3600_000;
+      const inDay = (sl: { time: string }) => {
+        const mid = new Date(sl.time).getTime() + BLOCK_MS / 2;
+        return mid >= dayStart && mid < dayEnd;
+      };
+      const cached = (swpc.current()?.slots ?? []).filter((sl) => sl.observed && inDay(sl));
 
       let slots = cached;
       let fromArchive = false;
       if (slots.length < 8) {
         try {
-          slots = await history.fetchDay(at);
+          // Whole UTC days around the field's day, as the archive is asked everywhere else.
+          const DAY_MS = 24 * 3600_000;
+          const from = new Date(Math.floor((dayStart - BLOCK_MS) / DAY_MS) * DAY_MS);
+          const to = new Date(Math.floor((dayEnd - 1) / DAY_MS) * DAY_MS + DAY_MS - 60_000);
+          slots = (await history.fetchRange(from, to)).filter(inDay);
           fromArchive = true;
         } catch {
           if (!cached.length) return say('I could not reach the Kp archive to check that day.');
@@ -269,7 +286,8 @@ export function register(server: McpServer, farmOf: () => string): void {
         'watch, or all of them when no job is named. Call this when the customer wants to be told when they can run ' +
         'something, asks whether anything is clear yet, or says to stop waiting. Confirmed crew contacts are emailed ' +
         'when a watched job clears. Use it to be told later, not to answer whether a job can run right now; that is ' +
-        'can_i_run. The job must be named when starting a watch.',
+        'can_i_run. The job must be named when starting a watch. When the field was only checked by its town and is ' +
+        'not saved yet, give place, and correction if they said it, and it is saved first.',
       inputSchema: {
         action: z.enum(['start', 'check', 'stop']).describe(
           'start to wait on a job, check to hear which are clear, stop to cancel',
@@ -277,6 +295,8 @@ export function register(server: McpServer, farmOf: () => string): void {
         operation: z.enum(OPERATIONS).optional().describe(`${OPERATION_HINT} Required when starting a watch.`),
         field: z.string().optional().describe('Field name as spoken, such as "North 40"; defaults to the only or first field'),
         equipment: z.string().optional().describe('Machine name as spoken, such as "the planter"; defaults to the first registered'),
+        place: z.string().optional().describe('The nearest town, as spoken, when the field is not saved yet: it is saved, then watched'),
+        correction: z.enum(CORRECTIONS).optional().describe('With place, when no machine is saved yet: the correction they said it runs'),
       },
     },
     async ({ action, operation, field, equipment }) => {
@@ -485,4 +505,17 @@ export function register(server: McpServer, farmOf: () => string): void {
     },
   );
 
+}
+
+/** The moment a calendar day begins in a time zone, as milliseconds since the epoch. */
+function localMidnight(day: string, timeZone: string): number {
+  const guess = Date.parse(`${day}T00:00:00Z`);
+  const offsetAt = (ms: number) => {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(ms));
+    const n = (t: string) => Number(parts.find((x) => x.type === t)?.value);
+    return Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute')) - ms;
+  };
+  // Twice, so a day that starts on the other side of a clock change still lands on its midnight.
+  const first = guess - offsetAt(guess);
+  return guess - offsetAt(first);
 }

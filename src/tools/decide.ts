@@ -428,6 +428,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         stillRunnable: degraded?.stillRunnable?.slice(0, 5) ?? null,
         tierChangeWarning: degraded?.advice ?? null,
         field: f.name,
+        ...(f.countryCode ? { countryCode: f.countryCode } : {}),
         equipment: eq.name,
         // Stable handles for the next call, so a follow-up does not depend on a name being heard the same way twice.
         ...(trial ? {} : { fieldId: f.id, equipmentId: eq.id }),

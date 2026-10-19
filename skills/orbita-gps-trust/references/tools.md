@@ -108,6 +108,7 @@ For a software agent, robot, drone, autonomous machine or spacecraft about to ac
 | `lat` | number | no |
 | `lon` | number | no |
 | `field` | string | no |
+| `place` | string | no |
 | `altitudeKm` | number | no |
 | `needMeters` | number | no |
 | `inMinutes` | integer | no |
@@ -148,7 +149,7 @@ No arguments.
 
 Writes.
 
-Wait on a job that space weather is blocking. action start watches a job and says when the forecast clears it. action check reports which watched jobs are clear now and when the rest clear. action stop cancels a watch, or all of them when no job is named. Call this when the customer wants to be told when they can run something, asks whether anything is clear yet, or says to stop waiting. Confirmed crew contacts are emailed when a watched job clears. Use it to be told later, not to answer whether a job can run right now; that is can_i_run. The job must be named when starting a watch.
+Wait on a job that space weather is blocking. action start watches a job and says when the forecast clears it. action check reports which watched jobs are clear now and when the rest clear. action stop cancels a watch, or all of them when no job is named. Call this when the customer wants to be told when they can run something, asks whether anything is clear yet, or says to stop waiting. Confirmed crew contacts are emailed when a watched job clears. Use it to be told later, not to answer whether a job can run right now; that is can_i_run. The job must be named when starting a watch. When the field was only checked by its town and is not saved yet, give place, and correction if they said it, and it is saved first.
 
 | Argument | Values | Needed |
 |---|---|---|
@@ -156,6 +157,8 @@ Wait on a job that space weather is blocking. action start watches a job and say
 | `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, drone_show, machine_control | no |
 | `field` | string | no |
 | `equipment` | string | no |
+| `place` | string | no |
+| `correction` | rtk, ppp, sbas, autonomous | no |
 
 ## `what_can_you_do`
 

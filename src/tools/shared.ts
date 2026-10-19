@@ -120,7 +120,7 @@ export const CORRECTIONS = ['rtk', 'ppp', 'sbas', 'autonomous'] as const;
  */
 /** "sprayer" is said as "the sprayer"; "my planter" and "the rover" are left as they are. */
 const theMachine = (name: string): string => (/^(the|my|our|his|her|their)\s/i.test(name) ? name : `the ${name}`);
-export const ASK_FIRST_FIELD = 'A storm hits a field harder the further north it is. Which field should I watch, and what town is it near?';
+export const ASK_FIRST_FIELD = 'A storm hits a field harder the nearer it is to the magnetic poles. Which field should I watch, and what town is it near?';
 export const ASK_CORRECTION = (machine?: string, country?: string | null): string =>
   `How far a storm throws your guidance depends on the correction ${machine ? theMachine(clean(machine)) : 'your machine'} runs. Is it RTK, ${secondChoice(country)}, or are you not sure?`;
 export const ASK_FIELD_FOR_MACHINE = 'Which field is it working, and what town is it near?';

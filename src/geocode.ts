@@ -13,7 +13,7 @@
 
 export type Place = { name: string; region: string | null; country: string | null; countryCode?: string | null; lat: number; lon: number; timeZone?: string | null };
 
-type Row = { name: string; admin1?: string; country?: string; country_code?: string; latitude: number; longitude: number; timezone?: string };
+type Row = { name: string; admin1?: string; country?: string; country_code?: string; latitude: number; longitude: number; timezone?: string; population?: number };
 type Lookup = (query: string) => Promise<Place | null>;
 
 /** "Grand Island, Nebraska" or "Grand Island Nebraska": the town, and whatever narrows it down. */
@@ -63,13 +63,16 @@ const countryName = (code?: string | null): string | null => {
 
 /** "France", "Puerto Rico", "India" to their codes, from the same names Intl gives the codes. */
 let byName: Map<string, string> | null = null;
+// Retired codes share a name with today's: DD reads "Germany" and comes before DE, so "Hannover, Germany" was
+// searched in East Germany and found nothing. The same for Serbia, Vietnam, Yemen, Myanmar and a few more.
+const RETIRED = new Set(['AN', 'BU', 'CS', 'DD', 'DY', 'FX', 'HV', 'NH', 'RH', 'SU', 'TP', 'UK', 'VD', 'YD', 'YU', 'ZR']);
 const codeOfCountry = (name: string): string | null => {
   if (!byName) {
     byName = new Map();
     const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     for (const a of A) for (const b of A) {
       const n = countryName(a + b);
-      if (n && n !== a + b && !/unknown/i.test(n) && !byName.has(n.toLowerCase())) byName.set(n.toLowerCase(), a + b);
+      if (n && n !== a + b && !RETIRED.has(a + b) && !/unknown/i.test(n) && !byName.has(n.toLowerCase())) byName.set(n.toLowerCase(), a + b);
     }
   }
   return byName.get(name.toLowerCase()) ?? null;
@@ -77,6 +80,15 @@ const codeOfCountry = (name: string): string | null => {
 
 /** What was said after the town, as a region, a country code, or both. */
 export function narrowing(rest: string): { region: string | null; country: string | null; said: string } {
+  // A region and a country: "Mato Grosso, Brazil", "Saskatchewan, Canada", "Texas, USA". A known state or
+  // province settles it; otherwise the last part is the country and the first is the region to look for.
+  if (rest.includes(',')) {
+    const parts = rest.split(',').map((x) => x.trim()).filter(Boolean);
+    const first = narrowing(parts[0]);
+    if (first.region) return first;
+    const last = narrowing(parts[parts.length - 1]);
+    return { region: null, country: last.country ?? first.country, said: parts[0] };
+  }
   const said = rest.trim().replace(/\.$/, '').replace(/^the /i, '');
   const up = said.toUpperCase().replace(/\./g, '');
   if (US_STATES[up]) return { region: US_STATES[up], country: 'US', said };
@@ -94,6 +106,8 @@ export function narrowing(rest: string): { region: string | null; country: strin
   return { region: null, country: null, said };
 }
 
+const biggest = (rows: Row[]): Row | undefined => rows.reduce<Row | undefined>((a, r) => (!a || (r.population ?? 0) > (a.population ?? 0) ? r : a), undefined);
+
 export function pick(query: string, rows: Row[]): Place | null {
   if (!rows.length) return null;
   const { rest } = split(query);
@@ -104,7 +118,9 @@ export function pick(query: string, rows: Row[]): Place | null {
     const want = said.toLowerCase();
     const names = (r: Row) => [r.admin1, r.country, r.country_code, countryName(r.country_code)].map((v) => (v ?? '').toLowerCase());
     if (region) hit = rows.find((r) => (r.admin1 ?? '').toLowerCase() === region.toLowerCase() && (!country || !r.country_code || r.country_code === country));
-    else if (country) hit = rows.find((r) => r.country_code === country);
+    // Within a country, the biggest place of that name: the first "Wagga Wagga, Australia" the lookup gave was a
+    // locality in Western Australia, not the city of 57,000 in New South Wales.
+    else if (country) hit = rows.find((r) => r.country_code === country && (r.admin1 ?? '').toLowerCase() === want) ?? biggest(rows.filter((r) => r.country_code === country));
     // A region the tables above do not know, "Punjab" or "Bavaria", is matched by name, whole words only.
     else hit = rows.find((r) => names(r).includes(want)) ?? (want.length >= 3 ? rows.find((r) => names(r).some((v) => ` ${v} `.includes(` ${want} `))) : undefined);
   }

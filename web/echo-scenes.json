@@ -93,29 +93,6 @@
           "args": {}
         }
       ]
-    },
-    {
-      "name": "The people on the crew",
-      "lines": [
-        {
-          "say": "Dana is sharing her day. Her code is",
-          "tool": "crew_contact",
-          "args": {
-            "action": "add",
-            "name": "Dana"
-          },
-          "input": "dayCode",
-          "hint": "eight digits from her Sudor"
-        },
-        {
-          "say": "Can I plant today, with the crew in mind?",
-          "tool": "can_i_run",
-          "args": {
-            "operation": "planting",
-            "equipment": "planter"
-          }
-        }
-      ]
     }
   ]
 }

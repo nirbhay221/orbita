@@ -4,60 +4,94 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Orbita on a screen: the machines and the people in one answer</title>
-<meta name="description" content="A stand-in for an Echo Show. Every line is a real call to the live Orbita server, and a crew member's day comes from the Sudor server beside it.">
+<meta name="description" content="A stand-in for an Echo Show. Every line is a real call to the live Orbita server.">
 <meta name="color-scheme" content="light dark">
+<script>try { const t = localStorage.getItem('echo.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch { /* private mode */ }</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="/echo.css">
 </head>
 <body>
-<a class="skip" href="#lines">Skip to the things to say</a>
+<a class="skip" href="#free-text">Skip to what to say</a>
 
 <header class="bar">
-  <a class="home" href="/">Orbita</a>
-  <p class="what">A stand-in for an Echo Show. Every line below is a real call to this server, with NOAA's live space weather and a real forecast over the field. No assistant model runs on this page: the lines are fixed, the answers are not.</p>
-  <label class="voice"><input type="checkbox" id="voice"> Read answers aloud</label>
+  <div class="brand">
+    <a class="home" href="/">Orbita</a>
+    <p class="tag">Will GPS hold for this field today? Space weather, turned into a go or a hold.</p>
+  </div>
+  <div class="bar-end">
+    <span class="pill"><span class="dot" aria-hidden="true"></span>Live NOAA data</span>
+    <button type="button" class="theme" id="theme" aria-label="Switch between light and dark"><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
+    <label class="voice"><input type="checkbox" id="voice"> <span>Read answers aloud</span></label>
+  </div>
 </header>
 
 <main class="stage">
   <section class="echo" aria-labelledby="echo-title">
     <h1 id="echo-title" class="label">The Echo Show in the shop</h1>
-    <div class="screen">
-      <p class="heard" id="heard">Pick a line below.</p>
-      <p class="answer" id="answer" aria-live="polite"></p>
-      <div class="card" id="card" hidden></div>
-      <p class="meta" id="meta"></p>
+    <div class="device">
+      <div class="bezel">
+        <div class="screen" id="screen">
+          <div class="sbar"><span id="sclock">--:--</span><span class="who"><span class="dot" aria-hidden="true"></span>Orbita</span></div>
+          <div class="idle-view" id="idle">
+            <p class="clock" id="clock">--:--</p>
+            <p class="greet" id="greet">Hello</p>
+          </div>
+          <p class="hint-foot" id="try">Try “Can I plant today?”</p>
+          <div class="live-view">
+            <p class="heard" id="heard">Pick a line below.</p>
+            <p class="answer" id="answer" aria-live="polite"></p>
+            <div class="card" id="card" hidden></div>
+            <p class="meta" id="meta"></p>
+          </div>
+        </div>
+      </div>
+      <div class="base" aria-hidden="true"></div>
     </div>
+
+    <form id="free" class="free" aria-label="Say anything">
+      <button type="button" class="mic" id="mic" aria-label="Speak"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg><span class="mic-label">Speak</span></button>
+      <label for="free-text" class="sr">Or say anything</label>
+      <input id="free-text" type="text" autocomplete="off" placeholder="Can I plant this afternoon?" maxlength="300">
+      <button type="submit" class="send">Say it</button>
+    </form>
+
+    <div class="when" role="group" aria-labelledby="when-label">
+      <span id="when-label" class="when-label">When</span>
+      <button type="button" class="seg" id="when-now" aria-pressed="true">Now</button>
+      <button type="button" class="seg" id="when-pick" aria-pressed="false">Pick a date and time</button>
+      <label for="when-at" class="sr">Date and time, in the field's own time</label>
+      <input type="datetime-local" id="when-at" hidden>
+      <span class="when-note">A past date plays back what happened. Up to three days ahead checks the forecast.</span>
+    </div>
+    <p class="hint">A model reads this server's tool list and picks a tool, as Alexa+ would. When no model is running, simple word rules pick instead, and the screen says which.</p>
   </section>
 
-  <section class="phone" aria-labelledby="phone-title">
-    <h2 id="phone-title" class="label">Dana, on her own Sudor</h2>
-    <div class="handset">
-      <p class="note">Dana is a crew member. Her medicines and conditions are in Sudor, a separate add-on on a separate server, and never leave it.</p>
-      <ol class="steps">
-        <li>Open <a id="sudor-link" href="https://2f2opzcjui.execute-api.us-east-1.amazonaws.com/echo.html" target="_blank" rel="noopener">Sudor on a screen</a> in another tab.</li>
-        <li>Say who she is there, then <strong>"I just started a roofing job, seven to five."</strong></li>
-        <li>Say <strong>"Share my working day with my crew."</strong> It reads out eight digits.</li>
-        <li>Come back here, type the digits under <em>The people on the crew</em>, and ask about the job again.</li>
-      </ol>
-      <p class="note">Orbita then asks Sudor, server to server, how her day looks. What comes back is how hot her shift gets, when it turns risky for her, and how many hours of heat she should do. Never why.</p>
-      <h3 class="label" id="inbox-title">Dana's inbox</h3>
-      <p class="note">The public demo never sends email. What a crew member would be sent appears here instead, word for word, and the buttons are the real links.</p>
-      <ol class="inbox" id="inbox" aria-labelledby="inbox-title" aria-live="polite"></ol>
-      <p class="empty" id="empty">Nothing yet. Add Dana to the crew and say yes.</p>
-    </div>
-  </section>
+  <aside class="side">
+    <section class="phone" aria-labelledby="inbox-title">
+      <div class="handset">
+        <div class="phone-status"><span id="ptime">--:--</span><span class="notch" aria-hidden="true"></span><span aria-hidden="true">5G</span></div>
+        <div class="thread-head"><span class="avatar" aria-hidden="true">D</span><div><h2 id="inbox-title">Dana's inbox</h2><p>Messages from Orbita</p></div></div>
+        <ol class="inbox" id="inbox" aria-labelledby="inbox-title" aria-live="polite"></ol>
+        <p class="empty" id="empty">Nothing yet. Add Dana to the crew and say yes.</p>
+        <p class="note">The public demo never sends email. What a crew member would be sent appears here instead, word for word, and the buttons are the real links.</p>
+      </div>
+    </section>
+
+    <section class="behind" aria-labelledby="behind-title">
+      <h2 id="behind-title" class="label">Behind the answer</h2>
+      <p class="what">A stand-in for an Echo Show. Every line below is a real call to this server, with NOAA's live space weather and a real forecast over the field. The answers are live. No assistant model runs on the fixed lines: they call the tool named in them. The box under them is the stand-in, where a model picks the tool, as Alexa+ would.</p>
+      <ol class="trace" id="trace"></ol>
+      <p class="trace-empty" id="trace-empty">Each tool call appears here, with how long it took.</p>
+    </section>
+  </aside>
 </main>
 
-<section class="free-wrap" aria-label="Say anything">
-  <form id="free" class="free">
-    <label for="free-text">Or say anything</label>
-    <input id="free-text" type="text" autocomplete="off" placeholder="Can I plant this afternoon?" maxlength="300">
-    <button type="submit" class="chip go">Say it</button>
-    <button type="button" class="chip" id="mic">Speak</button>
-  </form>
-  <p class="note">A model reads this server's tool list and picks a tool, as Alexa+ would. When no model is running, simple word rules pick instead, and the screen says which.</p>
-</section>
-
-<section class="lines" id="lines" aria-label="Things to say"></section>
+<details class="manual">
+  <summary>Testing without a microphone? Use these lines.</summary>
+  <section class="lines" id="lines" aria-label="Things to say"></section>
+</details>
 
 <footer class="foot">
   <p>Your farm here is private to this browser and expires on its own. <button type="button" class="link" id="reset">Start again</button></p>

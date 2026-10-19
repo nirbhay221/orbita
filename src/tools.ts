@@ -115,9 +115,29 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
     const readOnly = (config.annotations as { readOnlyHint?: boolean } | undefined)?.readOnlyHint === true;
     const wrapped = (...args: unknown[]) =>
       reading.run(readOnly, async () => {
+        // A watch asked for straight after a check by town alone: "near Sorriso, Brazil… watch it for me". The check
+        // saved nothing, so the watch had no field and answered "I need to know where the field is first". The town
+        // and correction come with the watch, and are saved first, the same way my_farm saves them.
+        if (name === 'watch_jobs') {
+          const a = (args[0] ?? {}) as { action?: string; field?: string; place?: string; correction?: string };
+          const farm = store.get(farmOf());
+          if (a.action === 'start' && a.place && !(a.field ? store.findField(farm, a.field) : farm.fields[0])) {
+            const fieldName = a.field || `Field near ${a.place.split(',')[0].trim()}`;
+            await impl.get('my_farm')?.({ fieldName, place: a.place, ...(a.correction && !farm.equipment.length ? { machineName: 'my machine', correction: a.correction } : {}) });
+            args[0] = { ...a, field: fieldName };
+          }
+        }
         const said = finish(name, args[0], shorten((await cb(...args)) as Parameters<typeof shorten>[0], farmOf(), { readOnly }));
         // Centimetres and kilometres where the fields are not in the United States. See region.ts.
-        const done = localised(said, farmCountry(store.get(farmFor()).fields));
+        // The field the question is about decides the units: a farm with a field in Nebraska and one in Punjab
+        // was answered in inches for both, because a mixed farm had no one country. Unnamed, it is the first field,
+        // which is the one the tools default to.
+        const fields = store.get(farmFor()).fields;
+        const asked = String((args[0] as { field?: unknown } | undefined)?.field ?? '').toLowerCase();
+        const about = asked ? fields.find((f) => f.id.toLowerCase() === asked || f.name.toLowerCase() === asked) : undefined;
+        // A check by town alone saves no field, so the answer itself says which country it was about.
+        const checked = (said as { structuredContent?: { countryCode?: unknown } }).structuredContent?.countryCode;
+        const done = localised(said, about?.countryCode ?? (typeof checked === 'string' ? checked : null) ?? farmCountry(fields) ?? fields[0]?.countryCode ?? null);
         // The chain this answer is on: what was just done, the next step, and the ones after. See flow.ts.
         const sc = done?.structuredContent;
         if (!sc || done.isError) return done;

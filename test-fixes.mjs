@@ -201,6 +201,42 @@ console.log('\nA town is answered in its own time');
   check('picking a town keeps the zone the lookup gave', geo.pick('Phoenix, Arizona', [{ name: 'Phoenix', admin1: 'Arizona', country: 'United States', latitude: 33.45, longitude: -112.07, timezone: 'America/Phoenix' }]).timeZone === 'America/Phoenix');
 }
 
+console.log('\nA farm across two countries, and a year said alone');
+{
+  geo.configureForTest(async (q) => (/Ludhiana/.test(q)
+    ? { name: 'Ludhiana', region: 'Punjab', country: 'India', countryCode: 'IN', lat: 30.9, lon: 75.85, timeZone: 'Asia/Kolkata' }
+    : { name: 'Grand Island', region: 'Nebraska', country: 'United States', countryCode: 'US', lat: 40.92, lon: -98.34, timeZone: 'America/Chicago' }));
+  const two = await connect('acct:two-countries');
+  await two('my_farm', { fieldName: 'US field', place: 'Grand Island, Nebraska', machineName: 'planter', correction: 'rtk' });
+  await two('my_farm', { fieldName: 'India field', place: 'Ludhiana, India' });
+  const india = await two('can_i_run', { operation: 'planting', field: 'India field' });
+  const us = await two('can_i_run', { operation: 'planting', field: 'US field' });
+  check('a field in India is answered in centimetres, on a farm that also has one in Nebraska', /centimetres/.test(india.said) && !/inches/.test(india.said), india.said);
+  check('...and the Nebraska field still in inches', /inches/.test(us.said), us.said);
+  const old = await two('what_happened', { when: '1859' });
+  check('a year before the record says where the record starts', /only goes back to 1932, so I cannot check 1859/.test(old.said), old.said);
+  const some = await two('what_happened', { when: '2003' });
+  check('a year in the record asks which day', /Which day in 2003\?/.test(some.said), some.said);
+  geo.configureForTest(null);
+}
+
+console.log('\nA watch straight after a check by town alone, and a machine that names its town');
+{
+  const looked = [];
+  geo.configureForTest(async (q) => { looked.push(q); return /Fargo/.test(q)
+    ? { name: 'Fargo', region: 'North Dakota', country: 'United States', countryCode: 'US', lat: 46.88, lon: -96.79, timeZone: 'America/Chicago' }
+    : { name: 'Sorriso', region: 'Mato Grosso', country: 'Brazil', countryCode: 'BR', lat: -12.55, lon: -55.71, timeZone: 'America/Cuiaba' }; });
+  const v = await connect('acct:town-watch');
+  const w = await v('watch_jobs', { action: 'start', operation: 'planting', place: 'Sorriso, Brazil', correction: 'rtk' });
+  check('a watch given only a town saves the field first, instead of asking where the field is', !/where the field is first/.test(w.said), w.said);
+  const once = await connect('acct:town-once');
+  const abroad = await once('can_i_run', { operation: 'planting', place: 'Sorriso, Brazil', correction: 'rtk' });
+  check('a one-off check by a town abroad carries its country, so its units are that country\'s, though no field is saved', abroad.data.countryCode === 'BR' && !/inches/.test(abroad.said), abroad.said);
+  const r = await v('position_trust', { place: 'Fargo, North Dakota' });
+  check('a position named by town is looked up and judged there, not at a saved field', looked.some((q) => /Fargo/.test(q)) && !/couldn't find/.test(r.said), r.said);
+  geo.configureForTest(null);
+}
+
 console.log('\nAnswers hand back a handle, and the next step takes it');
 {
   geo.configureForTest(null);
@@ -291,7 +327,7 @@ console.log('\nFound by using it as a stranger');
   check('a machine with no correction at all is asked, and nothing is kept', !store.get('acct:walk').equipment.some((e) => e.name === 'rover') && /the rover runs\. Is it RTK, WAAS, or are you not sure\?$/.test(bare.said), bare.said);
   const fresh = await connect('acct:first-time');
   const intro = await fresh('what_can_you_do', {});
-  check('"what can you do" on a new farm ends on one question, with the reason before it', /further north it is\. Which field should I watch, and what town is it near\?$/.test(intro.said), intro.said);
+  check('"what can you do" on a new farm ends on one question, with the reason before it', /nearer it is to the magnetic poles\. Which field should I watch, and what town is it near\?$/.test(intro.said), intro.said);
   const nothing = await fresh('my_farm', {});
   check('an empty setup asks for the first field as a question', /Which field should I watch, and what town is it near\?$/.test(nothing.said), nothing.said);
 
@@ -323,6 +359,11 @@ console.log('\nFound by using it as a stranger');
   check('...and "yes" to "want me to check" runs the check the answer named', rules.bareAnswer('yes', [{ role: 'user', text: 'x' }, { role: 'assistant', text: 'Want me to check whether you can run a job there today?' }], { tool: 'can_i_run', arguments: { field: 'North 40' } })?.args?.field === 'North 40');
   const agentMod = await import('./dist/agent.js');
   check('a reworded reply that drops 911 is replaced by the tool\'s own words', agentMod.keepSafety('Hold off.', [{ tool: 'x', args: {}, result: { content: [{ type: 'text', text: 'Call 911 if anyone is hurt.' }] } }]) === 'Call 911 if anyone is hurt.');
+  // Found with the model: the part of an answer that is about this field was dropped in the rewording.
+  const border = { tool: 'can_i_run', args: {}, result: { content: [{ type: 'text', text: 'Clear for planting. One thing that is not the sun: the FAA lists the India and Pakistan border for regular GPS jamming and spoofing, so check your line.' }] } };
+  check('a reworded reply that drops the line about what is not the sun gets it back', /not the sun: the FAA lists the India and Pakistan border/.test(agentMod.keepReason('Clear for planting today.', [border])));
+  const own = 'Clear. The FAA lists the India and Pakistan border for regular GPS jamming and spoofing.';
+  check('...but one that said it in its own words is not given it twice', agentMod.keepReason(own, [border]) === own);
   check('...and drops anything malformed, out of order, or ending on the customer', conversation([{ role: 'system', text: 'x' }, { role: 'assistant', text: 'a' }, { role: 'user', text: 'b' }]).length === 0 && conversation('nope').length === 0);
 
   // May 10 2024, asked from a field in Chicago: the answer is about May 10, not the day after.
@@ -355,6 +396,18 @@ console.log('\nFound by using it as a stranger');
   check('...with the passes to look at', /Passes made between/.test(late.said), late.said);
   const day2 = await who('what_happened', { when: 'May 11 2024' });
   check('a whole day asked afterwards still gets all eight blocks', day2.data.blocksTotal === 8, String(day2.data.blocksTotal));
+
+  // The field's own day, not the UTC day: on May 10 2024 the Kp 9 block began at midnight UTC, 7 PM in Chicago.
+  // The same storm is replayed a year earlier here, so the day cached by the tests above is not reused.
+  globalThis.fetch = async (url, init) => {
+    if (!String(url).includes('kp.gfz.de')) return real(url, init);
+    const [a, b] = [...String(url).matchAll(/(\d{4}-\d{2}-\d{2})T/g)].map((m) => m[1]);
+    const days = a === b ? [a] : [a, b];
+    const kp = { '2023-05-10': [2.7, 2.7, 2.3, 2, 3.7, 7.7, 8.7, 8.7], '2023-05-11': [9, 8.3, 8.3, 9, 8.7, 8.3, 7.7, 7.7] };
+    return new Response(JSON.stringify({ datetime: days.flatMap((day) => Array.from({ length: 8 }, (_, i) => `${day}T${String(i * 3).padStart(2, '0')}:00:00Z`)), Kp: days.flatMap((day) => kp[day] ?? Array(8).fill(1)) }));
+  };
+  const evening = await who('what_happened', { when: 'May 10 2023' });
+  check('a day is the field\'s own day: the evening block after midnight UTC counts', evening.data.peak?.kp === 9 && evening.data.blocksTotal === 8, `${evening.data.peak?.kp} ${evening.data.blocksTotal} ${evening.said}`);
   globalThis.fetch = real;
 
   const trade = await import('./dist/trade.js');

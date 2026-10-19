@@ -70,11 +70,17 @@ const names = (await client.listTools()).tools.map((t) => t.name);
 const lines = scenes.groups.flatMap((g) => g.lines);
 check('the page has lines to say', lines.length >= 10, String(lines.length));
 check('every line names a tool a customer gets by default', lines.every((l) => names.includes(l.tool)), lines.filter((l) => !names.includes(l.tool)).map((l) => l.tool).join(','));
-check('exactly one line takes something typed, and it is the crew member\'s code', lines.filter((l) => l.input).length === 1 && lines.find((l) => l.input).input === 'dayCode');
+check('no line on the page takes something typed', lines.every((l) => !l.input));
 const html = readFileSync('./web/echo.html', 'utf8');
-check('the page says it is a stand-in and that no assistant model runs on it', /stand-in for an Echo Show/.test(html) && /No assistant model runs on this page/.test(html));
-check('the page says a crew member\'s health never leaves the other server', /never leave it/.test(html) && /Never why/.test(html));
+check('the page says it is a stand-in, and which part a model runs', /stand-in for an Echo Show/.test(html) && /No assistant model runs on the fixed lines/.test(html) && /a model picks the tool/.test(html));
+check('the page does not name or link the other add-on', !/Sudor/.test(html) && !/execute-api/.test(html));
 check('the answer is announced to a screen reader', /id="answer" aria-live="polite"/.test(html));
+// The main demo page sets up its stand-in farm only when the server says there is none. It looked for wording the
+// server no longer used, so no farm was ever set up. Its check must still match what the server says today.
+const shared = await import('./dist/tools/shared.js');
+const appJs = readFileSync('./web/app.js', 'utf8');
+const opening = shared.NO_FIELDS.split('.')[0];
+check("the demo page recognises the server's own no-field answer", appJs.includes(opening), opening);
 
 console.log('\nThe story the page tells, start to finish');
 const said = {};
@@ -96,8 +102,11 @@ for (const group of scenes.groups) {
 check('planting is clear on a quiet day, and the crew is told about the heat', said['Can I plant today?'].data.go === true && /For the crew, the heat index reaches/.test(said['Can I plant today?'].said), said['Can I plant today?'].said);
 check('the very first answer about a new field is in local time, not UTC', /Clear until \w{3} \d{1,2}(:\d\d)? [AP]M MST/.test(said['Can I plant today?'].said) && !/UTC/.test(said['Can I plant today?'].said), said['Can I plant today?'].said);
 check('before Dana shares her day, she is not named', !/Dana is on day/.test(said['Can I plant today?'].said));
-check('typing her code links her day', said['Dana is sharing her day. Her code is'].data.linked === true, said['Dana is sharing her day. Her code is'].said);
-const withCrew = said['Can I plant today, with the crew in mind?'];
+// Sharing a crew member's day is no longer on the page, and still works: her code, then the same question.
+const linked = await call('crew_contact', { action: 'add', name: 'Dana', dayCode: '4691 4443' });
+await crewday.refresh('dana-link', true);
+check('typing her code links her day', linked.data.linked === true, linked.said);
+const withCrew = await call('can_i_run', { operation: 'planting', equipment: 'planter' });
 check('after it, the same question names her and her hours', /Dana is on day 1 in the heat: 2 hours of it today, done by 9 am\./.test(withCrew.said), withCrew.said);
 check('the storm of May 2024 is called what it was', /That was the sun/.test(said['What happened on May 10, 2024?'].said) && /lose their precise fix altogether/.test(said['What happened on May 10, 2024?'].said), said['What happened on May 10, 2024?'].said);
 check('the sprayer on WAAS is answered for its own tolerance', said['Can I spray?'].data.correction === 'sbas' && said['Can I spray?'].data.go === true);

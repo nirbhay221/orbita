@@ -101,6 +101,7 @@
     the hairline rules that carry no meaning on their own but make the ones that
     do harder to read.
   */
+  .example { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
   @media (prefers-contrast: more) {
     .viz {
       --text-secondary: var(--text-primary);
@@ -115,6 +116,7 @@
 <body>
 
 <main class="viz">
+  <p class="example" id="example" hidden>Example only, not live</p>
   <div class="verdict">
     <h1 id="title">Planting, North 40</h1>
     <span class="chip hold" id="chip">&times; Hold</span>
@@ -158,6 +160,9 @@
   const thresholdKp = (d) => (typeof d.thresholdKp === 'number' ? d.thresholdKp : null);
 
   function render(d, opts = {}) {
+    // Said at the top as well as in the footer: on a short screen the footer is below the fold, and a made up
+    // storm was showing as a real Hold on a quiet day.
+    document.getElementById('example').hidden = !opts.example;
     const opName = String(d.operation || 'work').replace(/_/g, '-');
     document.getElementById('title').textContent =
       opName.charAt(0).toUpperCase() + opName.slice(1) + (d.field ? ` - ${d.field}` : '');
@@ -275,17 +280,22 @@
       if (m.method && handlers[m.method]) handlers[m.method](m.params || {});
     });
     return {
-      request(method, params) {
+      request(method, params, wait = 10000) {
         return new Promise((resolve, reject) => {
           const id = nextId++;
           pending.set(id, { resolve, reject });
           post({ id, method, params });
           setTimeout(() => {
             if (pending.delete(id)) reject(new Error(method + ' timed out'));
-          }, 10000);
+          }, wait);
         });
       },
       notify(method, params) { post({ method, params }); },
+      // ui/initialize, asked again every second until a host answers. A host page whose script starts after this
+      // view has loaded misses the first ask, and this view then sat on its example forever: both demo pages did.
+      start(params, tries = 10) {
+        return this.request('ui/initialize', params, 1000).catch((err) => (tries > 1 ? this.start(params, tries - 1) : Promise.reject(err)));
+      },
       on(method, fn) { handlers[method] = fn; },
     };
   })();
@@ -314,7 +324,7 @@
 
   if (window.parent && window.parent !== window) {
     bridge
-      .request('ui/initialize', {
+      .start({
         protocolVersion: '2026-01-26',
         appInfo: { name: 'orbita-window', version: '0.2.0' },
         appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },

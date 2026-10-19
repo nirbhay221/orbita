@@ -21,6 +21,14 @@ console.log('\nA town and its state, as a farmer says them');
   ];
   check('"Ames, IA" is Ames, Iowa, not Ames in Galicia', geo.pick('Ames, IA', ames)?.region === 'Iowa');
   check('"Ames, Iowa" still is', geo.pick('Ames, Iowa', ames)?.region === 'Iowa');
+  check('"Germany" is DE, not the retired East German code that shares its name', geo.narrowing('Germany').country === 'DE');
+  const wagga = [{ name: 'Wagga Wagga', admin1: 'Western Australia', country_code: 'AU', latitude: -28.33, longitude: 116.94 }, { name: 'Wagga Wagga', admin1: 'New South Wales', country_code: 'AU', latitude: -35.13, longitude: 147.35, population: 57000 }];
+  check('"Wagga Wagga, Australia" is the city in New South Wales, not the first locality the lookup lists', geo.pick('Wagga Wagga, Australia', wagga)?.region === 'New South Wales');
+  // Town, region, country: everything after the first comma was read as one name and matched nothing.
+  const sorriso = [{ name: 'Sorriso', admin1: 'Lombardy', country: 'Italy', country_code: 'IT', latitude: 45.6, longitude: 9.9 }, { name: 'Sorriso', admin1: 'Mato Grosso', country: 'Brazil', country_code: 'BR', latitude: -12.55, longitude: -55.71 }];
+  check('"Sorriso, Mato Grosso, Brazil" is found, in Brazil', geo.pick('Sorriso, Mato Grosso, Brazil', sorriso)?.region === 'Mato Grosso');
+  check('"Saskatoon, Saskatchewan, Canada" is read by its province', geo.narrowing('Saskatchewan, Canada').region === 'Saskatchewan');
+  check('"Ludhiana, Punjab, India" narrows to India and looks for Punjab', geo.narrowing('Punjab, India').country === 'IN' && geo.narrowing('Punjab, India').said === 'Punjab');
   const fargo = [
     { name: 'Fargo', admin1: 'Indiana', country: 'United States', country_code: 'US', latitude: 38.4, longitude: -86.48 },
     { name: 'Fargo', admin1: 'North Dakota', country: 'United States', country_code: 'US', latitude: 46.88, longitude: -96.79 },

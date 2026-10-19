@@ -227,7 +227,11 @@ function updateLatencyStat() {
   el('stat-latency').innerHTML = `${median} <small>ms median</small>`;
 }
 
+// Set once the browser's own farm exists. A click that came first was answered for nobody.
+let ready = null;
+
 async function run(tool, args, button) {
+  if (ready) await ready;
   if (button) { button.disabled = true; button.setAttribute('aria-pressed', 'true'); }
   document.querySelectorAll('.request[aria-pressed="true"]').forEach((b) => {
     if (b !== button) b.setAttribute('aria-pressed', 'false');
@@ -314,7 +318,9 @@ async function ensureFarm() {
   const note = el('farm-note');
   try {
     const status = await callTool('farm_status');
-    if (!status.text.startsWith('No fields registered yet')) {
+    // The server's way of saying there is no field yet was reworded once and this check missed it, so no farm
+    // was ever set up and every line on the page asked where the field was. Both wordings are read.
+    if (!/^(No fields registered yet|I need to know where the field is first)/.test(status.text)) {
       note.textContent = FARM_NOTE;
       return;
     }
@@ -380,8 +386,9 @@ el('reset-demo').addEventListener('click', () => {
 });
 
 buildRequests();
+ready = ensureFarm();
 await refreshSky();
-await ensureFarm();
+await ready;
 
 
 /*

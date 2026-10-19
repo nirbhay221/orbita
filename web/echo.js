@@ -5,8 +5,7 @@
  * model runs here, so the lines are fixed and listed in echo-scenes.json; what comes back is whatever the
  * server says today, for the farm built on this page.
  *
- * One line takes something typed: the eight digits a crew member reads out from their own Sudor. That is the
- * only thing that crosses from one add-on to the other by hand. After it, this server asks that one directly.
+ * A line can take something typed, marked with `input` in echo-scenes.json. None does on the page today.
  */
 
 const SESSION_KEY = 'orbita.demo.session';
@@ -79,18 +78,108 @@ function showCard(card, enterAt) {
   box.hidden = false;
 }
 
+// The idle screen shows the time and a greeting, as an Echo Show does.
+function tick() {
+  const now = new Date();
+  const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  for (const id of ['clock', 'sclock', 'ptime']) if (el(id)) el(id).textContent = time;
+  const h = now.getHours();
+  if (el('greet')) el('greet').textContent = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+}
+tick();
+setInterval(tick, 20000);
+
+// Light or dark: the system's choice until the button is pressed, then the visitor's, remembered here.
+el('theme')?.addEventListener('click', () => {
+  const root = document.documentElement;
+  const now = root.dataset.theme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  root.dataset.theme = now === 'light' ? 'dark' : 'light';
+  try { localStorage.setItem('echo.theme', root.dataset.theme); } catch { /* private mode */ }
+});
+
+// Once anything is said, the screen swaps the clock for the conversation.
+function goLive() {
+  const screen = el('screen');
+  screen?.classList.add('live');
+  // On a narrow screen the lines sit below the device, so bring the answer back into view.
+  if (screen && window.matchMedia('(max-width: 60rem)').matches) screen.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Behind the answer: every tool call, newest first, with how long it took.
+function trace(what, detail) {
+  const list = el('trace');
+  if (!list) return;
+  const li = document.createElement('li');
+  const a = document.createElement('span');
+  a.textContent = what;
+  const b = document.createElement('span');
+  b.textContent = detail;
+  li.append(a, b);
+  list.prepend(li);
+  while (list.children.length > 6) list.lastChild.remove();
+  el('trace-empty').hidden = true;
+}
+
+// When the question is about. Starts at now; the picked moment is sent as words, read in the field's own time.
+let when = null;
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function spoken(d) {
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const clock = `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
+  return `${months[d.getMonth()]} ${d.getDate()} ${d.getFullYear()} at ${clock}`;
+}
+// A past moment is a look back at what happened; a later one is a check of the forecast for it.
+function forWhen(tool, args) {
+  if (!when) return [tool, args];
+  const past = when.getTime() < Date.now() - 15 * 60_000;
+  if (tool === 'can_i_run' || tool === 'storm_status') {
+    return past ? ['what_happened', { when: spoken(when), operation: args.operation ?? 'planting' }] : [tool, { ...args, when: spoken(when) }];
+  }
+  if (tool === 'what_happened') return [tool, { ...args, when: spoken(when) }];
+  return [tool, args];
+}
+const whenNote = () => (when ? ` (${spoken(when)})` : '');
+const whenWords = (words) => (when ? `${words} I mean ${spoken(when)}.` : words);
+
+function setUpWhen() {
+  const now = el('when-now');
+  const pick = el('when-pick');
+  const box = el('when-at');
+  if (!now || !pick || !box) return;
+  const local = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  // The archive starts in 1932 and the forecast reaches about three days ahead.
+  box.min = '1932-01-01T00:00';
+  box.max = local(new Date(Date.now() + 3 * 86_400_000));
+  const show = (on) => {
+    now.setAttribute('aria-pressed', String(!on));
+    pick.setAttribute('aria-pressed', String(on));
+    box.hidden = !on;
+    if (!on) when = null;
+    else { if (!box.value) box.value = local(new Date()); when = new Date(box.value); box.focus(); }
+  };
+  now.addEventListener('click', () => show(false));
+  pick.addEventListener('click', () => show(true));
+  box.addEventListener('change', () => { when = box.value ? new Date(box.value) : null; });
+}
+setUpWhen();
+
 async function say(line, typed, focusBack) {
   const controls = [...document.querySelectorAll('.chip, .typed')];
   controls.forEach((b) => (b.disabled = true));
+  goLive();
   el('heard').classList.remove('idle');
-  el('heard').textContent = typed ? `${line.say} ${typed}` : line.say;
+  const said = typed ? `${line.say} ${typed}` : line.say;
+  el('heard').textContent = when ? `${said.replace(/today|right now/i, 'then')} (${spoken(when)})` : said;
   el('answer').textContent = '…';
   try {
     const args = { ...(line.args ?? {}) };
     if (line.input) args[line.input] = typed;
-    const r = await callTool(line.tool, args);
+    const [tool, sent] = forWhen(line.tool, args);
+    const r = await callTool(tool, sent);
     el('answer').textContent = r.text;
-    el('meta').textContent = `${line.tool} answered in ${r.ms} ms${r.data.decidedBy ? `, decided by the ${r.data.decidedBy}` : ''}`;
+    el('meta').textContent = `${tool} answered in ${r.ms} ms${r.data.decidedBy ? `, decided by the ${r.data.decidedBy}` : ''}`;
+    trace(tool, `${r.ms} ms`);
     showCard(r.data.card, r.data.enterAt);
     speak(r.text);
   } catch (err) {
@@ -232,13 +321,16 @@ void start();
 const echoTurns = [];
 let echoNext = null;
 async function sayAnything(words, button) {
+  if (!String(words ?? '').trim()) return;
   const buttons = [...document.querySelectorAll('.chip, #free button')];
   buttons.forEach((b) => (b.disabled = true));
+  goLive();
   el('heard').classList.remove('idle');
-  el('heard').textContent = words;
+  el('heard').textContent = words + whenNote();
   el('answer').textContent = '…';
+  const sent = whenWords(words);
   try {
-    const res = await fetch('/agent', { method: 'POST', headers: { 'content-type': 'application/json', 'x-orbita-demo': session }, body: JSON.stringify({ say: words, history: echoTurns, next: echoNext }) });
+    const res = await fetch('/agent', { method: 'POST', headers: { 'content-type': 'application/json', 'x-orbita-demo': session }, body: JSON.stringify({ say: sent, history: echoTurns, next: echoNext }) });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.detail || `The server said no (HTTP ${res.status}).`);
     const text = body.reply || body.result?.content?.[0]?.text || body.said || '';
@@ -249,6 +341,7 @@ async function sayAnything(words, button) {
     el('answer').textContent = text;
     const by = body.model === 'word rules' ? 'word rules (no model running)' : body.model;
     el('meta').textContent = body.chose ? `${by} chose ${(body.steps ?? [body.chose]).map((s) => s.tool).join(' then ')}` : `${by} chose no tool`;
+    for (const step of [...(body.steps ?? (body.chose ? [body.chose] : []))].reverse()) trace(step.tool, `chosen by ${body.model === 'word rules' ? 'word rules' : 'the model'}`);
     showCard(body.result?.structuredContent?.card, body.result?.structuredContent?.enterAt);
     speak(text);
   } catch (err) {
@@ -274,20 +367,58 @@ function setUpFree() {
   const Hear = window.SpeechRecognition || window.webkitSpeechRecognition;
   const mic = el('mic');
   if (!Hear) { mic.hidden = true; return; }
+  const label = mic.querySelector('.mic-label');
+  /*
+   * Listening, done the way a person speaks. The browser's recogniser used to stop at the first pause, or on a
+   * cough, and could end with nothing heard; that empty text was sent and the server refused it (HTTP 400). Now it
+   * keeps listening, shows the words in the box as they come, stops after about a second and a half of quiet or a
+   * second press, sends only words, and says why when it could not hear.
+   */
+  let r = null;
+  let heard = '';
+  let quiet = null;
+  const WHY = {
+    'not-allowed': 'The microphone is blocked. Allow it for this page in the browser, or type instead.',
+    'service-not-allowed': 'The microphone is blocked. Allow it for this page in the browser, or type instead.',
+    'no-speech': "I didn't hear anything. Press the microphone and speak, or type instead.",
+    'audio-capture': 'No microphone was found. Type instead.',
+    network: "The browser's speech service could not be reached. Type instead.",
+  };
+  const stop = () => { if (r) r.stop(); };
+  const reset = () => { r = null; clearTimeout(quiet); label.textContent = 'Speak'; mic.setAttribute('aria-label', 'Speak'); mic.classList.remove('listening'); };
   mic.addEventListener('click', () => {
-    const r = new Hear();
+    if (r) { stop(); return; }
+    heard = '';
+    r = new Hear();
     r.lang = 'en-US';
-    r.interimResults = false;
-    mic.textContent = 'Listening…';
-    mic.disabled = true;
+    r.continuous = true;
+    r.interimResults = true;
+    label.textContent = 'Listening… press again to stop';
+    mic.setAttribute('aria-label', 'Listening. Press again to stop');
+    mic.classList.add('listening');
     r.onresult = (ev) => {
-      const words = ev.results[0][0].transcript;
-      box.value = words;
-      void sayAnything(words, mic);
+      let final = '';
+      let interim = '';
+      for (let i = 0; i < ev.results.length; i += 1) {
+        const t = ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) final += t; else interim += t;
+      }
+      heard = (final + ' ' + interim).replace(/\s+/g, ' ').trim();
+      box.value = heard;
+      clearTimeout(quiet);
+      quiet = setTimeout(stop, 1500);
     };
-    r.onend = () => { mic.textContent = 'Speak'; mic.disabled = false; };
-    r.onerror = () => { mic.textContent = 'Speak'; mic.disabled = false; };
-    r.start();
+    r.onerror = (ev) => {
+      if (ev.error === 'aborted') return;
+      const why = WHY[ev.error];
+      if (why) { el('heard').classList.remove('idle'); el('screen')?.classList.add('live'); el('heard').textContent = ''; el('answer').textContent = why; el('meta').textContent = ''; }
+    };
+    r.onend = () => {
+      const words = heard.trim();
+      reset();
+      if (words) void sayAnything(words, mic);
+    };
+    try { r.start(); } catch { reset(); }
   });
 }
 setUpFree();

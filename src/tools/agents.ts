@@ -37,6 +37,7 @@ import * as spacecraft from '../spacecraft.js';
 import * as store from '../store.js';
 import { NOAA_DOWN, say, kpRightNow } from './shared.js';
 import * as deps from '../dependencies.js';
+import { geocode, GeocoderDown, lookupDown } from '../geocode.js';
 
 export type Trust = 'trust' | 'verify' | 'do_not_trust';
 
@@ -70,6 +71,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         lat: z.number().min(-90).max(90).optional().describe('Latitude of the position in decimal degrees'),
         lon: z.number().min(-180).max(180).optional().describe('Longitude of the position in decimal degrees'),
         field: z.string().optional().describe('A saved field, by name or id, in place of latitude and longitude'),
+        place: z.string().optional().describe('A town, as spoken, in place of latitude and longitude, e.g. "Fargo, North Dakota"'),
         altitudeKm: z
           .number()
           .min(0)
@@ -106,6 +108,18 @@ export function register(server: McpServer, farmOf: () => string): void {
       },
     },
     async (args) => {
+      // A town said in place of coordinates: "a delivery robot in Fargo". Without this the saved field was judged
+      // instead, which answered for Nebraska. Looked up, or said plainly when it cannot be found.
+      if (args.place && (args.lat == null || args.lon == null) && !args.points?.length) {
+        try {
+          const found = await geocode(args.place);
+          if (!found) return say(`I couldn't find ${String(args.place).slice(0, 60)}. Tell me the nearest town with its state or country.`, { verdict: null, reason: 'place_not_found' });
+          args = { ...args, lat: found.lat, lon: found.lon };
+        } catch (err) {
+          if (err instanceof GeocoderDown) return say(lookupDown(String(args.place).slice(0, 60)), { verdict: null, reason: 'lookup_down' });
+          throw err;
+        }
+      }
       if (args.points?.length) return fleet(args, args.points);
       if (args.windowsHours) return plan(args, args.windowsHours);
       // The position alone, as it always was, unless the caller names more it depends on. See dependencies.ts.

@@ -97,7 +97,7 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,234 automated checks, run on every push |
+| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,247 automated checks, run on every push |
 | Agent Skill | **Real**: `skills/orbita-gps-trust`, to the open Agent Skills format, passing the format's own validator. Installable as a folder, and readable from the server as `skill://` resources |
 | Strands agent | **Real**: `strands/agent.mjs`, on AWS's Strands Agents SDK. It reads the skill from the server and follows each next step. The chain, the yes before a write and the step cap are checked with a scripted model at no cost; the path through Claude needs a key and is not in the automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
@@ -126,7 +126,7 @@ This file is long because the reasoning is the work. If you are evaluating the p
 | Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
 
 Free NOAA, USGS and DLR products, no API keys for the data. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 2,234 checks.
+external is called inside a turn. `npm test` runs 2,247 checks.
 
 ## The problem
 
@@ -947,11 +947,11 @@ cd infra && npm test        # what the stack promises, with no AWS account
 Moving a running server over is `node scripts/copy-to-table.mjs` once on the host, then the `/orbita/store`
 parameter set to `dynamodb` and a restart. The file is kept, so going back is the parameter and a restart.
 
-`npm test` runs everything, 2,234 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 2,247 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 1,978 checks, no live data
+npm run test:unit           # 1,991 checks, no live data
 npm run test:live           # 256 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines
@@ -1208,7 +1208,7 @@ than an error: a host that calls nothing when nothing fits is behaving correctly
 
 It is not Alexa. It does not share Alexa's prompt, its turn budget or its judgment about when to call
 something, and that disclaimer travels in the response payload rather than living here. The model is Claude
-Sonnet 5.5, with a daily cap of 25 calls (Haiku 4.5 answered one turn in five with a question instead of a tool in the conversation tests, so it was replaced), and it is given the server's own instructions, which say what this farm
+Sonnet 5.5, with a daily cap of 150 calls (Haiku 4.5 answered one turn in five with a question instead of a tool in the conversation tests, so it was replaced), and it is given the server's own instructions, which say what this farm
 has saved as counts and never names. With no key, or once the cap is reached, plain word rules choose the tool
 (`src/rules.ts`) and the screen says so. The demo page takes typed or spoken words; hearing and speaking are the
 browser's own.
@@ -1348,7 +1348,7 @@ matters most: 79 percent of outdoor workers who died of heat were in their first
   The list of everything else a storm touches is published only with `ORBITA_SCOPE=all`.
 * **Setup questions say why, then ask.** Amazon's add-on rules and its voice guide ask for a reason before a
   question, the question last so it is the last thing heard before the microphone opens, one at a time, and no menu of
-  options. So a new farm hears "A storm hits a field harder the further north it is. Which field should I watch, and
+  options. So a new farm hears "A storm hits a field harder the nearer it is to the magnetic poles. Which field should I watch, and
   what town is it near?", and a machine "How far a storm throws your guidance depends on the correction the planter
   runs. Is it RTK, WAAS, or are you not sure?" Not sure is an answer: the machine is judged as RTK, the one a storm
   degrades first, so no job is passed that should be held, and they are told where to find it. Once a field and a
