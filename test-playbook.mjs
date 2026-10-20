@@ -197,5 +197,17 @@ check('every action and note carries an https source', unsourced.length === 0, u
 check('no em dashes in anything spoken or sourced',
   !/[\u2013\u2014]/.test(JSON.stringify(PLAYBOOKS, (k, v) => (typeof v === 'function' ? v({ expected: { g: 3, s: 0, r: 0 } }) : v))));
 
+console.log('\nNow is what was measured, not the forecast for this block');
+{
+  // NOAA carries its forecast for the current block as "estimated". On 19 October it was Kp 5 (G1) while the
+  // one minute estimate was 0.3, and the maritime answer said a storm was running now.
+  const forecastOnly = advise('maritime_dp', sky({ slots: slots({ 0: 5 }) }), 40);
+  const measured = advise('maritime_dp', sky({ slots: slots({ 0: 5 }), kpNow: 0.33 }), 40);
+  const storm = advise('maritime_dp', sky({ slots: slots({ 0: 2 }), kpNow: 5.3 }), 40);
+  check('with no live Kp, the forecast for this block still counts as now', /running now/.test(forecastOnly.spoken), forecastOnly.spoken.slice(0, 120));
+  check('a live Kp of 0.3 is not a storm running now', !/running now/.test(measured.spoken), measured.spoken.slice(0, 120));
+  check('a live Kp of 5.3 is a storm running now, whatever the forecast said', /running now at G1/.test(storm.spoken), storm.spoken.slice(0, 120));
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

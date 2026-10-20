@@ -171,6 +171,7 @@ export function register(server: McpServer, farmOf: () => string): void {
         yesterday: snap.scales.yesterday,
         days: snap.scales.days,
         slots: snap.slots,
+        kpNow: solarwind.estimatedKp()?.kp ?? null,
       };
       const advice = advise(chosen, context, gmLat, step ?? 0, orbit);
       // "Go on" or "what else" reaches tell_me_more, so the next page is left there to read. See brief.nextPage.

@@ -44,6 +44,8 @@ export type Sky = {
   yesterday: Levels;
   days: DayOutlook[];
   slots: Slot[];
+  /** The live one minute Kp estimate, when there is one. It stands for the current three hour block. */
+  kpNow?: number | null;
 };
 
 export const ROLES = [
@@ -1159,7 +1161,11 @@ const startOf = (s: Slot) => new Date(s.time).getTime();
 function readG(from: number, sky: Sky): Reading {
   const t = sky.now.getTime();
   // The three hour block containing now counts as now, observed or estimated.
-  const current = sky.slots.filter((s) => startOf(s) <= t && t - startOf(s) < 3 * HOUR);
+  // The live one minute Kp, when there is one, is what is happening now. NOAA carries its forecast for the
+  // current block as "estimated", and a forecast Kp of 5 was said as "a geomagnetic storm is running now at G1"
+  // while the measured Kp was 0.3, in the same minute another tool said Kp 0.3.
+  const inBlock = sky.slots.filter((s) => startOf(s) <= t && t - startOf(s) < 3 * HOUR);
+  const current = sky.kpNow != null ? [{ kp: sky.kpNow }] : inBlock;
   const nowLevel = Math.max(sky.levels.g, ...current.map((s) => gFromKp(s.kp)));
   if (nowLevel >= from) return { scale: 'G', from, phase: 'during', level: nowLevel };
 

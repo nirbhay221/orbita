@@ -61,6 +61,7 @@
         {
           "say": "My guidance is out. What else is affected?",
           "tool": "what_else_is_affected",
+"secondary": true,
           "args": {}
         },
         {
