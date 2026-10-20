@@ -84,6 +84,8 @@ const CARD_HTML = resolve('./ui/card.html');
  * language model that answers in the customer's language. The answers here are written in English, so the host is
  * told which language the farm most likely speaks, and to keep every number and time exactly as given.
  */
+/** Hosts know the date; so does the stand-in, or "December 20 to 27" is guessed into last year. */
+const today = () => ` Today is ${new Date().toISOString().slice(0, 10)}. A date said without a year is the next one to come, unless they are asking about something that has already happened.`;
 const LANGUAGE: Record<string, string> = { DE: 'German', AT: 'German', FR: 'French', ES: 'Spanish', MX: 'Spanish', AR: 'Spanish', CO: 'Spanish', IT: 'Italian', BR: 'Portuguese', PT: 'Portuguese', IN: 'Hindi or English' };
 
 function instructionsFor(farmId: string): string {
@@ -106,12 +108,14 @@ function instructionsFor(farmId: string): string {
   ].filter(Boolean);
   const codes = [...new Set(f.fields.map((x) => (x.countryCode ?? '').toUpperCase()).filter(Boolean))];
   const lang = codes.length === 1 ? LANGUAGE[codes[0]] : undefined;
+  // Their own words decide the language. "Dana, at dana@example.com", said in English about a field in Brazil, was
+  // answered in Portuguese because the field's country was the first thing the model was told.
   const say = lang
-    ? ` This farm's fields are where ${lang} is spoken: unless the customer speaks to you in English, give the answer in ${lang}, translating it faithfully, and keep every number, time and correction name (RTK, PPP, SBAS) exactly as given.`
+    ? ` Answer in the language the customer used in their last message: English when they wrote English. Only when they speak ${lang} to you, answer in ${lang}, translating faithfully and keeping every number, time and correction name (RTK, PPP, SBAS) exactly as given.`
     : '';
   return known.length
-    ? `${base}${say} This farm has already saved ${known.join(' and ')}. Use them: do not ask which field, where it is, or what correction it runs.`
-    : `${base}${say} This farm has not saved anything yet; a tool will say what it needs.`;
+    ? `${base}${say}${today()} This farm has already saved ${known.join(' and ')}. Use them: do not ask which field, where it is, or what correction it runs.`
+    : `${base}${say}${today()} This farm has not saved anything yet; a tool will say what it needs.`;
 }
 
 function build(farmId: string): McpServer {

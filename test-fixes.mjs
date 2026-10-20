@@ -131,7 +131,7 @@ console.log('\nIt cannot be used to pester a stranger');
   await visitor('crew_contact', { action: 'add', name: 'Stranger', email: 'stranger@example.com' });
   const demo = await visitor('crew_contact', { action: 'confirm', name: 'Stranger' });
   await settle();
-  check('a visitor to the demo cannot send an invitation at all', sent.length === 0 && /phone on this page, not to a real inbox/.test(demo.said), demo.said);
+  check('a visitor to the demo cannot send an invitation at all', sent.length === 0 && /on their phone, shown on this page/.test(demo.said), demo.said);
   const phone = notify.demoPhone('demo:xyz');
   check('...it goes to the inbox on the demo page, word for word', phone.length === 1 && phone[0].to === 'Stranger' && /asked for you to be emailed/.test(phone[0].text) && /^[0-9a-f]{48}$/.test(phone[0].accept ?? ''), JSON.stringify(phone));
   check('...which nobody else can read', notify.demoPhone('demo:abc').length === 0 && notify.demoPhone('acct:farm').length === 0);

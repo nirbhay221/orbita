@@ -108,11 +108,14 @@ export function register(server: McpServer, farmOf: () => string): void {
         if (!found) return say(`I couldn't find ${clean(place, 80)}. Try the nearest town with its state or country.`, { unavailable: true });
         // The lookup that found the town also says what time zone it keeps. Without it a first answer gave
         // "clear until Wed 3 AM UTC" to somebody in Arizona.
-        farm = { ...farm, fields: [{ id: 'trial-field', name: spokenPlace(found), lat: found.lat, lon: found.lon, ...(found.timeZone ? { timeZone: found.timeZone } : {}), ...(found.countryCode ? { countryCode: found.countryCode } : {}) }] };
+        // "The North 40, near Grand Island" with nothing saved names the field too. The town was judged as a field
+        // named after the town, and the name said with it then matched nothing: "I need to know where the field is".
+        farm = { ...farm, fields: [{ id: 'trial-field', name: field && !held.fields.length ? clean(field, 60) : spokenPlace(found), lat: found.lat, lon: found.lon, ...(found.timeZone ? { timeZone: found.timeZone } : {}), ...(found.countryCode ? { countryCode: found.countryCode } : {}) }] };
         trial = true;
       }
       if (!held.equipment.length && correction) {
-        farm = { ...farm, equipment: [{ id: 'trial-machine', name: 'your machine', correction: correction as Correction }] };
+        // Named as they named it, so "the planter's on RTK" is not answered "I don't have a machine called planter".
+        farm = { ...farm, equipment: [{ id: 'trial-machine', name: equipment ? clean(equipment, 40) : 'your machine', correction: correction as Correction }] };
         trial = true;
       }
       if (!farm.fields.length) return say(NO_FIELDS, { needs: 'field' });

@@ -49,7 +49,7 @@ answers in, and where planned GPS tests are and are not published were already h
 
 The Latin `orbita` meant a track cut into the ground by a wheel. Built for the
 [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com), Alexa+ track, plus the Open
-Source and AWS Builder mini challenges. Self-hosted MCP server, spec 2025-11-25, Streamable HTTP, 15 tools by
+Source and AWS Builder mini challenges. Self-hosted MCP server, spec 2025-11-25, Streamable HTTP, 17 tools by
 default, with an MCP Apps panel for the Echo Show.
 
 ## One storm
@@ -97,7 +97,7 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, 15 tools by default | **Real and deployed** on AWS, behind account linking. 2,247 automated checks, run on every push |
+| MCP server, 17 tools by default | **Real and deployed** on AWS, behind account linking. 2,247 automated checks, run on every push |
 | Agent Skill | **Real**: `skills/orbita-gps-trust`, to the open Agent Skills format, passing the format's own validator. Installable as a folder, and readable from the server as `skill://` resources |
 | Strands agent | **Real**: `strands/agent.mjs`, on AWS's Strands Agents SDK. It reads the skill from the server and follows each next step. The chain, the yes before a write and the step cap are checked with a scripted model at no cost; the path through Claude needs a key and is not in the automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
@@ -726,7 +726,7 @@ call is the flight director's and the flight surgeon's.
 
 ## Tools
 
-Fifteen tools by default. Setting up a farm is one tool, `my_farm`, because tool choice gets worse as the list
+Seventeen tools by default. Setting up a farm is one tool, `my_farm`, because tool choice gets worse as the list
 grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are listed instead.
 
 **Answers**
@@ -746,6 +746,17 @@ grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are liste
   one of three verdicts an agent can branch on. See "For an agent that acts on a position" below
 * `what_can_you_do` answers the customer who asks what this is
 * `tell_me_more` the rest of the last answer
+
+**Planning the week, and the hours already lost** (added on 19 October; the tools above are unchanged by them)
+* `schedule_jobs` takes the hours of work each job needs, "twelve hours of planting and six of spraying", and puts
+  them into the hours the NOAA forecast leaves clear over the next three days, on the machine each runs on, inside the
+  crew's working hours if they say them. The tightest job is fitted first because it has the fewest hours to choose
+  from, and one machine never does two jobs in the same hour. Every hour it uses is one `clearWindows` calls clear, so
+  it never schedules work `can_i_run` would hold, and near the magnetic equator it keeps carrier-phase work out of the
+  evening plasma bubble hours
+* `outage_patterns` looks back over the last week, month or year at a field and counts the working hours space
+  weather would have held a job on its machine, from the GFZ Kp archive: how many hours and days, the worst day,
+  how many of them were the evening bubble hours rather than storms, and for a year the month that cost most
 
 **Waiting on a job**
 * `watch_jobs` starts a watch on a job the sky is blocking, reports which watched jobs are clear, or stops

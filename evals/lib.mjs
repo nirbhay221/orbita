@@ -33,6 +33,10 @@ function sameValue(got, want) {
   if (typeof got === 'string' && typeof want === 'string') {
     return got.trim().toLowerCase() === want.trim().toLowerCase();
   }
+  // A list of jobs, each a small object: the same length, and every key the case names matching in each. Keys the
+  // case leaves out are free, as they are at the top level. Compared with ===, a perfect host never matched one.
+  if (Array.isArray(want)) return Array.isArray(got) && got.length === want.length && want.every((w, i) => sameValue(got[i], w));
+  if (want && typeof want === 'object') return !!got && typeof got === 'object' && Object.entries(want).every(([k, v]) => sameValue(got[k], v));
   return got === want;
 }
 

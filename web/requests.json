@@ -2,18 +2,47 @@
   "_comment": "The demo page's requests live here so a test can call every one of them and prove each button is a real tool with real arguments. {{next-friday}} is filled in at load.",
   "groups": [
     {
-      "name": "The field",
+      "name": "Everyone",
       "requests": [
         {
-          "say": "Can I plant the North 40 right now?",
-          "tool": "can_i_run",
+          "say": "What is the sun doing?",
+          "tool": "storm_status",
+          "args": {}
+        },
+        {
+          "say": "I want to see the aurora tonight.",
+          "tool": "what_should_i_do",
           "args": {
-            "operation": "planting",
-            "field": "North 40"
+            "role": "aurora"
           }
         },
         {
-          "say": "When does it clear?",
+          "say": "Did space weather ruin 10 May 2024?",
+          "tool": "what_happened",
+          "args": {
+            "when": "10 May 2024",
+            "operation": "planting"
+          },
+          "slow": true
+        },
+        {
+          "say": "My guidance is out. What else is affected?",
+          "tool": "what_else_is_affected",
+          "secondary": true,
+          "args": {}
+        },
+        {
+          "say": "What can you do?",
+          "tool": "what_can_you_do",
+          "args": {}
+        }
+      ]
+    },
+    {
+      "name": "Farms",
+      "requests": [
+        {
+          "say": "Can I plant the North 40 right now?",
           "tool": "can_i_run",
           "args": {
             "operation": "planting",
@@ -39,52 +68,116 @@
           }
         },
         {
-          "say": "What can I run at all today?",
-          "tool": "farm_status",
-          "args": {}
+          "say": "I need twelve hours of planting and six of spraying. When do I run them?",
+          "tool": "schedule_jobs",
+          "args": {
+            "jobs": [
+              {
+                "operation": "planting",
+                "hours": 12,
+                "equipment": "planter"
+              },
+              {
+                "operation": "spraying",
+                "hours": 6,
+                "equipment": "sprayer"
+              }
+            ]
+          }
         },
         {
           "say": "Which weeks in the next month and a half are worth booking a crew for?",
           "tool": "plan_season",
           "args": {}
-        }
-      ]
-    },
-    {
-      "name": "The sky",
-      "requests": [
-        {
-          "say": "What is the sun doing?",
-          "tool": "storm_status",
-          "args": {}
         },
         {
-          "say": "My guidance is out. What else is affected?",
-          "tool": "what_else_is_affected",
-"secondary": true,
-          "args": {}
-        },
-        {
-          "say": "Did space weather ruin 10 May 2024?",
-          "tool": "what_happened",
+          "say": "How many hours did space weather cost the planter this year?",
+          "tool": "outage_patterns",
           "args": {
-            "when": "10 May 2024",
-            "operation": "planting"
+            "period": "year",
+            "operation": "planting",
+            "equipment": "planter"
           },
           "slow": true
         },
         {
-          "say": "I'm a delivery robot in Fargo. Can I trust my GPS position right now?",
-          "tool": "position_trust",
+          "say": "Tell me when planting clears.",
+          "tool": "watch_jobs",
           "args": {
-            "lat": 46.88,
-            "lon": -96.79
+            "action": "start",
+            "operation": "planting",
+            "field": "North 40"
+          }
+        },
+        {
+          "say": "I planted 40 acres this morning.",
+          "tool": "log_job",
+          "args": {
+            "operation": "planting",
+            "field": "North 40",
+            "acres": 40
+          }
+        },
+        {
+          "say": "When does it clear?",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "field": "North 40"
+          }
+        },
+        {
+          "say": "What can I run at all today?",
+          "tool": "farm_status",
+          "args": {}
+        },
+        {
+          "say": "Is anything clear yet?",
+          "tool": "watch_jobs",
+          "args": {
+            "action": "check"
+          }
+        },
+        {
+          "say": "Give me the report for the last week.",
+          "tool": "job_report",
+          "args": {
+            "days": 7
           }
         }
       ]
     },
     {
-      "name": "Other people, same storm",
+      "name": "Drones and survey",
+      "requests": [
+        {
+          "say": "I am flying a drone show in Hong Kong tonight. Can it run?",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "drone_show",
+            "place": "Hong Kong",
+            "when": "tonight"
+          }
+        },
+        {
+          "say": "Can my survey crew work near Ludhiana, India?",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "surveying",
+            "place": "Ludhiana, India"
+          }
+        },
+        {
+          "say": "I run autonomous haul trucks at a mine.",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "mining"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Satellites and space",
       "requests": [
         {
           "say": "I run satellites. What should I do?",
@@ -94,12 +187,26 @@
           }
         },
         {
-          "say": "I am on the grid control desk.",
+          "say": "I run geostationary satellites. Is charging a risk right now?",
           "tool": "what_should_i_do",
           "args": {
-            "role": "grid_operator"
+            "role": "satellite_operator",
+            "orbit": "high"
           }
         },
+        {
+          "say": "We have a crew on the way to the Moon. What should we do about the sun?",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "crewed_spaceflight",
+            "orbit": "beyond"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Flights, ships, radio",
+      "requests": [
         {
           "say": "I dispatch flights.",
           "tool": "what_should_i_do",
@@ -115,17 +222,22 @@
           }
         },
         {
-          "say": "I run autonomous haul trucks at a mine.",
+          "say": "I run a shortwave radio net.",
           "tool": "what_should_i_do",
           "args": {
-            "role": "mining"
+            "role": "hf_radio"
           }
-        },
+        }
+      ]
+    },
+    {
+      "name": "Power, data, timing",
+      "requests": [
         {
-          "say": "I want to see the aurora tonight.",
+          "say": "I am on the grid control desk.",
           "tool": "what_should_i_do",
           "args": {
-            "role": "aurora"
+            "role": "grid_operator"
           }
         },
         {
@@ -136,62 +248,24 @@
           }
         },
         {
-          "say": "We have a crew on the way to the Moon. What should we do about the sun?",
+          "say": "Our cell network takes its time from GPS.",
           "tool": "what_should_i_do",
           "args": {
-            "role": "crewed_spaceflight",
-            "orbit": "beyond"
-          }
-        },
-        {
-          "say": "I run geostationary satellites. Is charging a risk right now?",
-          "tool": "what_should_i_do",
-          "args": {
-            "role": "satellite_operator",
-            "orbit": "high"
+            "role": "timing"
           }
         }
       ]
     },
     {
-      "name": "Waiting, and the record",
+      "name": "Robots",
       "requests": [
         {
-          "say": "Tell me when planting clears.",
-          "tool": "watch_jobs",
+          "say": "I'm a delivery robot in Fargo. Can I trust my GPS position right now?",
+          "tool": "position_trust",
           "args": {
-            "action": "start",
-            "operation": "planting",
-            "field": "North 40"
+            "lat": 46.88,
+            "lon": -96.79
           }
-        },
-        {
-          "say": "Is anything clear yet?",
-          "tool": "watch_jobs",
-          "args": {
-            "action": "check"
-          }
-        },
-        {
-          "say": "I planted 40 acres this morning.",
-          "tool": "log_job",
-          "args": {
-            "operation": "planting",
-            "field": "North 40",
-            "acres": 40
-          }
-        },
-        {
-          "say": "Give me the report for the last week.",
-          "tool": "job_report",
-          "args": {
-            "days": 7
-          }
-        },
-        {
-          "say": "What can you do?",
-          "tool": "what_can_you_do",
-          "args": {}
         }
       ]
     }
@@ -214,7 +288,9 @@
     "plan_season",
     "share_access",
     "tell_me_more",
-    "position_trust"
+    "position_trust",
+    "schedule_jobs",
+    "outage_patterns"
   ],
   "seed": {
     "field": {

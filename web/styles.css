@@ -8,58 +8,62 @@
 
 :root {
   color-scheme: light;
-  --bg:            #fbfbf9;
+  --bg:            #f5f6fa;
   --surface:       #ffffff;
-  --surface-2:     #f3f3ef;
-  --ink:           #12120f;
-  --ink-2:         #4a4a44;
-  --muted:         #686860;
-  --rule:          #e2e2db;
-  --rule-strong:   #d2d2c9;
-  --accent:        #1f66bd;
-  --accent-deep:   #1d5698;
-  --good:          #0f7a2e;
-  --bad:           #c0392b;
-  --shadow:        0 1px 2px rgba(18, 18, 15, 0.04), 0 8px 24px rgba(18, 18, 15, 0.04);
-  --radius:        10px;
-  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --surface-2:     #eef1f7;
+  --ink:           #0b1220;
+  --ink-2:         #263450;
+  --muted:         #52607a;
+  --rule:          #dbe1ec;
+  --rule-strong:   #c6cfdf;
+  --accent:        #9a5200;
+  --accent-deep:   #7a4100;
+  --accent-ink:    #ffffff;
+  --good:          #1f7a4d;
+  --bad:           #b3261e;
+  --shadow:        0 1px 2px rgba(11, 18, 32, 0.05), 0 10px 30px rgba(11, 18, 32, 0.06);
+  --radius:        12px;
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg:          #131312;
-    --surface:     #1b1b1a;
-    --surface-2:   #232322;
-    --ink:         #f7f7f4;
-    --ink-2:       #c5c4bb;
-    --muted:       #8e8d83;
-    --rule:        #33332e;
-    --rule-strong: #43433c;
-    --accent:      #6aa9f0;
-    --accent-deep: #9cc6f6;
-    --good:        #4cc26a;
-    --bad:         #ef7a6d;
-    --shadow:      none;
+    --bg:          #070b16;
+    --surface:     #0e1424;
+    --surface-2:   #141c30;
+    --ink:         #eef2fa;
+    --ink-2:       #c4cde0;
+    --muted:       #97a3bd;
+    --rule:        #24304a;
+    --rule-strong: #33415f;
+    --accent:      #ffb547;
+    --accent-deep: #ffd08a;
+    --accent-ink:  #1a1205;
+    --good:        #6fd3a0;
+    --bad:         #ff8a80;
+    --shadow:      0 10px 30px rgba(0, 0, 0, 0.35);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg:          #131312;
-  --surface:     #1b1b1a;
-  --surface-2:   #232322;
-  --ink:         #f7f7f4;
-  --ink-2:       #c5c4bb;
-  --muted:       #8e8d83;
-  --rule:        #33332e;
-  --rule-strong: #43433c;
-  --accent:      #6aa9f0;
-  --accent-deep: #9cc6f6;
-  --good:        #4cc26a;
-  --bad:         #ef7a6d;
-  --shadow:      none;
+  --bg:          #070b16;
+  --surface:     #0e1424;
+  --surface-2:   #141c30;
+  --ink:         #eef2fa;
+  --ink-2:       #c4cde0;
+  --muted:       #97a3bd;
+  --rule:        #24304a;
+  --rule-strong: #33415f;
+  --accent:      #ffb547;
+  --accent-deep: #ffd08a;
+  --accent-ink:  #1a1205;
+  --good:        #6fd3a0;
+  --bad:         #ff8a80;
+  --shadow:      0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
 * { box-sizing: border-box; }
@@ -93,11 +97,14 @@ a:hover { color: var(--accent); }
 .skip:focus { left: 0; }
 
 /* ---------- header ---------- */
-.top { border-bottom: 1px solid var(--rule); background: var(--bg); }
+.top {
+  border-bottom: 1px solid var(--rule); position: sticky; top: 0; z-index: 5;
+  background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
 .top-inner { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 62px; flex-wrap: wrap; }
 .brand { display: flex; align-items: baseline; gap: 10px; text-decoration: none; color: var(--ink); }
 .mark { width: 20px; height: 20px; color: var(--accent); align-self: center; }
-.brand-name { font-weight: 650; letter-spacing: -0.02em; font-size: 1.05rem; }
+.brand-name { font-family: var(--display); font-weight: 650; letter-spacing: -0.02em; font-size: 1.05rem; }
 .brand-tag { color: var(--muted); font-size: 0.82rem; }
 .top-nav { display: flex; align-items: center; gap: 20px; font-size: 0.9rem; }
 .top-nav a { color: var(--ink-2); text-decoration: none; }
@@ -111,8 +118,8 @@ a:hover { color: var(--accent); }
   text-decoration: none; cursor: pointer; transition: border-color 120ms ease, background 120ms ease;
 }
 .button:hover { border-color: var(--muted); color: var(--ink); }
-.button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.button.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); color: #fff; }
+.button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.button.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); color: var(--accent-ink); }
 .button.small { padding: 7px 13px; font-size: 0.88rem; }
 .ghost {
   background: none; border: 1px solid var(--rule-strong); color: var(--ink-2);
@@ -128,8 +135,9 @@ a:hover { color: var(--accent); }
 }
 h1 {
   margin: 0 0 20px; font-size: clamp(2.05rem, 5vw, 3.15rem); line-height: 1.04;
-  letter-spacing: -0.032em; font-weight: 660; max-width: 17ch;
+  letter-spacing: -0.032em; font-weight: 650; max-width: 17ch; font-family: var(--display);
 }
+h1 .hl { color: var(--accent); }
 .lede { margin: 0; max-width: 62ch; font-size: clamp(1.02rem, 1.5vw, 1.14rem); color: var(--ink-2); }
 .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
 
@@ -150,7 +158,7 @@ h1 {
 /* ---------- sections ---------- */
 .section { padding-block: clamp(48px, 7vw, 88px); }
 .section-head { max-width: 62ch; margin-bottom: 28px; }
-.section-head h2 { margin: 0 0 8px; font-size: clamp(1.4rem, 2.4vw, 1.85rem); letter-spacing: -0.024em; font-weight: 640; }
+.section-head h2 { font-family: var(--display); margin: 0 0 8px; font-size: clamp(1.4rem, 2.4vw, 1.85rem); letter-spacing: -0.024em; font-weight: 640; }
 .section-head p { margin: 0; color: var(--ink-2); }
 .label { margin: 0; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); }
 
@@ -284,3 +292,56 @@ h1 {
 /* The play control. Quiet, and it only exists when the server can speak. */
 .speak { margin-top: .5rem; font-size: .85rem; padding: .3rem .6rem; }
 .speak[disabled] { opacity: .6; cursor: default; }
+
+
+/* ---------- the sky, and the groups that fold ---------- */
+/* The sky behind everything (sky.js). Content sits above it; the canvas never takes a click. */
+.sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+body > header, body > main, body > footer { position: relative; z-index: 1; }
+body > header.top { position: sticky; z-index: 5; }
+.stats, .panel-card, .request, .limits li, .sources, .code { backdrop-filter: blur(2px); }
+details.group > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 0 8px; }
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform 150ms ease; margin-right: 2px; }
+details.group[open] > summary::before { transform: rotate(45deg); }
+details.group > summary .count { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); letter-spacing: 0; }
+.request:hover { transform: translateX(2px); }
+.request { transition: border-color 120ms ease, background 120ms ease, transform 120ms ease; }
+
+/* On a phone the header is one line: the tagline goes, and the links scroll sideways instead of wrapping. */
+@media (max-width: 640px) {
+  .brand-tag { display: none; }
+  .top-inner { min-height: 52px; gap: 10px; flex-wrap: nowrap; }
+  .top-nav { gap: 14px; font-size: 0.86rem; overflow-x: auto; white-space: nowrap; scrollbar-width: none; min-width: 0; }
+  .top-nav::-webkit-scrollbar { display: none; }
+}
+
+/* ---------- asking, and the examples by who is asking ---------- */
+.ask { margin-bottom: 20px; padding: 24px; }
+.ask-title { font-family: var(--display); font-size: clamp(1.2rem, 2.2vw, 1.5rem); margin: 6px 0 14px; letter-spacing: -0.02em; }
+.standin form.ask-form { display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; margin-top: 0; }
+.ask-form input {
+  flex: 1 1 auto; min-width: 0; padding: 12px 14px; font: inherit; font-size: 1rem; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--rule-strong); border-radius: 9999px;
+}
+.ask-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ask-form .button { border-radius: 9999px; padding-inline: 22px; }
+.mic {
+  flex: none; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--rule-strong);
+  background: var(--surface); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.mic svg { width: 20px; height: 20px; fill: currentColor; }
+.mic:hover { border-color: var(--accent); color: var(--accent); }
+.mic.listening { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); animation: listen 1.2s ease-in-out infinite; }
+@keyframes listen { 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 25%, transparent); } }
+.ask .hint { margin: 12px 0 0; font-size: 0.86rem; color: var(--muted); }
+.audiences { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+.audience {
+  border: 1px solid var(--rule-strong); background: transparent; color: var(--ink-2); border-radius: 9999px;
+  padding: 6px 12px; font: inherit; font-size: 0.85rem; cursor: pointer; transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.audience:hover { color: var(--ink); border-color: var(--muted); }
+.audience[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.audience:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.farm-note { font-size: 0.82rem; color: var(--muted); margin: 14px 0 8px; }
+@media (max-width: 640px) { .ask { padding: 18px; } .ask-form .button { padding-inline: 14px; } .ask-form { gap: 8px; } .mic { width: 40px; height: 40px; } }

@@ -152,7 +152,9 @@ export function register(server: McpServer, farmOf: () => string): void {
       crewheat.watch(field.lat, field.lon);
       // The one thing still missing, asked as one question, or the next step once both are known.
       const machines = store.get(id).equipment.length;
-      return say(`Added ${field.name}${near}.`, { fieldId: field.id, lat: field.lat, lon: field.lon, ...(machines ? { offer: OFFER_CHECK, nextAction: { tool: 'can_i_run', arguments: { field: field.name } } } : { offer: ASK_CORRECTION(undefined, country), asks: 'correction' }) });
+      // A field named after its town is said once: "Added your field near Sorriso, Mato Grosso", not "Field near Sorriso near Sorriso".
+      const addedAs = /^field near /i.test(field.name) ? `your field${near}` : `${field.name}${near}`;
+      return say(`Added ${addedAs}.`, { fieldId: field.id, lat: field.lat, lon: field.lon, ...(machines ? { offer: OFFER_CHECK, nextAction: { tool: 'can_i_run', arguments: { field: field.name } } } : { offer: ASK_CORRECTION(undefined, country), asks: 'correction' }) });
     },
   );
 

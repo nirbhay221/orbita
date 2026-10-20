@@ -39,6 +39,8 @@ that follow.
 | What is the sun doing; is a storm coming; what is the Kp | `storm_status` |
 | How is the whole farm looking | `farm_status` |
 | Which weeks are worth booking a crew for | `plan_season` |
+| I need twelve hours of planting and six of spraying, when do I run them | `schedule_jobs` |
+| How many hours did space weather cost me this month or this year | `outage_patterns` |
 | I run satellites, a grid, flights, a data centre, a pipeline; what should I do | `what_should_i_do` |
 | I am a robot, drone or spacecraft; can I trust my position | `position_trust` |
 | I planted 80 acres on the North 40 | `log_job` |

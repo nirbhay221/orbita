@@ -5,7 +5,7 @@
       "name": "First, the farm",
       "lines": [
         {
-          "say": "My field is near Yuma, Arizona, and the planter runs RTK.",
+          "say": "The Yuma Block, near Yuma, Arizona. The planter runs RTK.",
           "tool": "my_farm",
           "args": {
             "fieldName": "Yuma Block",
@@ -23,7 +23,7 @@
           }
         },
         {
-          "say": "Add Dana to the crew.",
+          "say": "Add Dana to the crew, dana@example.com.",
           "tool": "crew_contact",
           "args": {
             "action": "add",

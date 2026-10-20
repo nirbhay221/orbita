@@ -1,57 +1,66 @@
 /* The Echo-style demo page. Theme tokens first, then the layout. */
+/*
+ * One family, from the subject: the night sky the satellites cross, and the sun that disturbs them. Deep navy
+ * grounds, one warm amber accent for what can be pressed, and the Echo screen's own dot in the same amber. It
+ * used to mix a blue accent, an orange dot and a brown second accent, which read as three products.
+ */
 :root {
-  --display: 'Archivo', system-ui, sans-serif;
-  --display-weight: 700;
+  --display: 'Space Grotesk', system-ui, sans-serif;
+  --display-weight: 600;
   --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
-  --screen-accent: #ff9f1c;
-  --bg: #0b0e13;
-  --surface: #14181e;
-  --surface-2: #1b2028;
-  --line: #252b35;
-  --line-soft: #1c2129;
-  --ink: #e9eef5;
-  --ink-2: #c3ccd8;
-  --soft: #98a3b3;
-  --accent: #4ea8ff;
-  --accent-ink: #0b1220;
-  --accent-2: #8cc4ff;
+  --screen-accent: #ffb547;
+  --bg: #070b16;
+  --surface: #0e1424;
+  --surface-2: #141c30;
+  --line: #24304a;
+  --line-soft: #182136;
+  --ink: #eef2fa;
+  --ink-2: #c4cde0;
+  --soft: #97a3bd;
+  --accent: #ffb547;
+  --accent-ink: #1a1205;
+  --accent-2: #ffd08a;
   --good: #6fd3a0;
   --bad: #ff8a80;
 }
 /* Light mode: the system setting, or the button in the bar. The Echo Show's screen stays dark, as the device's does. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #f8f9fb;
+    --bg: #f5f6fa;
     --surface: #ffffff;
-    --surface-2: #eff2f6;
-    --line: #e0e5ec;
-    --line-soft: #ebeef3;
+    --surface-2: #eef1f7;
+    --line: #dbe1ec;
+    --line-soft: #e8ecf3;
     --ink: #0b1220;
-    --ink-2: #24324a;
-    --soft: #536175;
-    --accent: #1f6fd1;
+    --ink-2: #263450;
+    --soft: #52607a;
+    --accent: #9a5200;
     --accent-ink: #ffffff;
-    --accent-2: #8f4700;
+    --accent-2: #7a4100;
     --good: #1f7a4d;
     --bad: #b3261e;
   }
 }
 :root[data-theme="light"] {
-  --bg: #f8f9fb;
+  --bg: #f5f6fa;
   --surface: #ffffff;
-  --surface-2: #eff2f6;
-  --line: #e0e5ec;
-  --line-soft: #ebeef3;
+  --surface-2: #eef1f7;
+  --line: #dbe1ec;
+  --line-soft: #e8ecf3;
   --ink: #0b1220;
-  --ink-2: #24324a;
-  --soft: #536175;
-  --accent: #1f6fd1;
+  --ink-2: #263450;
+  --soft: #52607a;
+  --accent: #9a5200;
   --accent-ink: #ffffff;
-  --accent-2: #8f4700;
+  --accent-2: #7a4100;
   --good: #1f7a4d;
   --bad: #b3261e;
 }
+
+/* The sky behind everything (sky.js). Content sits above it; the canvas never takes a click. */
+.sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+body > header, body > main, body > details, body > footer { position: relative; z-index: 1; }
 
 /*
  * Layout. Spacing, radii and type follow the Alexa+ add-on visual foundations: an 8px grid
@@ -100,7 +109,7 @@ button { font: inherit; cursor: pointer; }
 .bezel { background: #050608; border-radius: 24px; padding: 14px; position: relative; }
 .bezel::before { content: ''; position: absolute; top: 5px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: #22262d; }
 .base { height: 32px; margin: 0 6%; border-radius: 0 0 28px 28px / 0 0 20px 20px; background-color: #2a2d33; background-image: radial-gradient(rgba(255, 255, 255, .08) 1px, transparent 1.3px); background-size: 4px 4px; }
-.screen { border-radius: 12px; min-height: clamp(320px, 36vw, 420px); padding: clamp(20px, 3vw, 32px) clamp(20px, 3.4vw, 40px); background: #0e1116; color: #f2f3f5; overflow: hidden; display: flex; flex-direction: column; }
+.screen { border-radius: 12px; min-height: clamp(320px, 36vw, 420px); padding: clamp(20px, 3vw, 32px) clamp(20px, 3.4vw, 40px); background: #0a1020; color: #f2f3f5; overflow: hidden; display: flex; flex-direction: column; }
 .sbar { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #9aa2af; }
 .who { display: inline-flex; align-items: center; gap: 8px; }
 .who .dot { background: var(--screen-accent); }
@@ -109,8 +118,8 @@ button { font: inherit; cursor: pointer; }
 .clock { margin: 0; font: 300 clamp(56px, 8vw, 88px)/1 var(--body); letter-spacing: -.035em; }
 .greet { margin: 12px 0 32px; font: 400 clamp(18px, 2.2vw, 24px)/1.3 var(--body); color: #b4bbc6; }
 .try { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.chip.try-card { display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; text-align: left; border: 0; border-radius: 12px; background: #1b2028; color: #f2f3f5; padding: 16px 20px; font-size: 16px; line-height: 1.45; transition: background .2s; }
-.chip.try-card:hover, .chip.try-card:focus-visible { background: #232a34; outline: none; }
+.chip.try-card { display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; text-align: left; border: 0; border-radius: 12px; background: #141c2e; color: #f2f3f5; padding: 16px 20px; font-size: 16px; line-height: 1.45; transition: background .2s; }
+.chip.try-card:hover, .chip.try-card:focus-visible { background: #1c2740; outline: none; }
 .try-card small { display: block; font: 500 11px/1 var(--mono); letter-spacing: .12em; color: #8b94a3; }
 
 .live-view { display: none; flex: 1; flex-direction: column; gap: 16px; padding-top: 24px; }
@@ -123,9 +132,9 @@ button { font: inherit; cursor: pointer; }
 .heard.idle::before, .heard.idle::after { content: ''; }
 .answer { margin: 0; font: 400 clamp(20px, 2.3vw, 26px)/1.5 var(--body); letter-spacing: -.005em; flex: 1; max-width: 34em; }
 .meta { margin: 0; font: 500 11px var(--mono); letter-spacing: .04em; color: #6f7886; }
-.card { background: #1b2028; border-radius: 12px; padding: 16px 20px; }
+.card { background: #141c2e; border-radius: 12px; padding: 16px 20px; }
 .card h3 { margin: 0 0 8px; font: 600 17px/1.3 var(--body); }
-.card .status { display: inline-block; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 4px 8px; border-radius: 9999px; background: #262d38; margin-bottom: 8px; color: #d3d7de; }
+.card .status { display: inline-block; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 4px 8px; border-radius: 9999px; background: #1f2a42; margin-bottom: 8px; color: #d3d7de; }
 .card .status.bad { color: #ffb4a8; }
 .card .status.good { color: #8fdcb4; }
 .card ul { margin: 0; padding-left: 18px; color: #b4bbc6; font-size: 15px; }
@@ -229,3 +238,22 @@ button { font: inherit; cursor: pointer; }
   .free { border-radius: 24px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* Start again sits with the controls it resets, not in the footer, where people did not find it. */
+.restart { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 9999px; padding: 6px 14px; font: inherit; font-size: 14px; cursor: pointer; transition: border-color .15s, background .15s; }
+.restart:hover { border-color: var(--soft); background: var(--surface); }
+.restart:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.restart svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Another time: one-tap choices, a date and a time apart, and the choice said back in words. */
+.when-panel { flex-basis: 100%; display: grid; gap: 12px; margin-top: 4px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.when-panel[hidden] { display: none; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.preset { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 9999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+.preset:hover { border-color: var(--soft); }
+.preset[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.preset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.when-fields { display: flex; flex-wrap: wrap; gap: 12px; }
+.when-field { display: grid; gap: 4px; font-size: 12px; color: var(--soft); letter-spacing: .04em; }
+.when-field span { font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.when-readout { margin: 0; font-size: 14px; color: var(--ink-2); }

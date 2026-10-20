@@ -95,7 +95,7 @@ sky(8, 2);
 
 console.log('\nConnected through Strands\' MCP client');
 const orbita = await orbitaFor('acct:strands');
-check('the tools are the server\'s default set', orbita.tools.length === 15 && orbita.tools.some((t) => t.name === 'position_trust'), String(orbita.tools.length));
+check('the tools are the server\'s default set', orbita.tools.length === 17 && orbita.tools.some((t) => t.name === 'position_trust'), String(orbita.tools.length));
 check('the skill was read from the server, not from a file', /^---\nname: orbita-gps-trust\n/.test(orbita.skill) && SKILL_URI === 'skill://orbita-gps-trust/SKILL.md');
 check('the server\'s instructions came with it', /already saved 1 field/.test(orbita.instructions));
 const prompt = systemPrompt(orbita);

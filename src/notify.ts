@@ -175,7 +175,7 @@ export function configureForTest(opts: { from?: string; transport?: Transport })
 export const canEmailFor = (id: string): boolean => !id.startsWith('demo:');
 
 /** What is said to a sandbox visitor who tries. Spoken aloud, so plain words. */
-export const DEMO_NO_EMAIL = 'Email is turned off in the public demo, so I have not sent anything. A linked account can use it.';
+export const DEMO_NO_EMAIL = 'Email is turned off on this public page, so I have not sent anything. A linked account can use it.';
 
 /*
  * The phone on the demo page.
@@ -204,4 +204,4 @@ export function toDemoPhone(farmId: string, message: Omit<PhoneMessage, 'at'>): 
 export const demoPhone = (farmId: string): PhoneMessage[] => [...(phones.get(farmId) ?? [])];
 
 /** Said in place of "I've emailed them" to a sandbox visitor. */
-export const DEMO_PHONE = 'In this demo that goes to the phone on this page, not to a real inbox.';
+export const DEMO_PHONE = 'It is on their phone, shown on this page.';

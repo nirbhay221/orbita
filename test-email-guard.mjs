@@ -81,7 +81,7 @@ console.log('\nThe predicate itself');
   check('a linked account may', notify.canEmailFor(ACCT) === true);
   check('local development may', notify.canEmailFor('local-dev') === true);
   check('a name merely containing "demo" is not a sandbox', notify.canEmailFor('acct:demo:fake') === true);
-  check('the refusal is a plain sentence', /public demo/.test(notify.DEMO_NO_EMAIL) && !/Error|at /.test(notify.DEMO_NO_EMAIL));
+  check('the refusal is a plain sentence', /public page/.test(notify.DEMO_NO_EMAIL) && !/Error|at /.test(notify.DEMO_NO_EMAIL));
 }
 
 console.log('\nThe storm and clear-window alerts skip a sandbox entirely');
@@ -113,7 +113,7 @@ console.log('\nThe job report does not carry a sandbox visitor words to an inbox
 
   const refused = text(await demo.job_report({ days: 30, emailTo: 'Sam' }));
   await new Promise((r) => setTimeout(r, 50));
-  check('a sandbox is told email is off, in plain words', refused.includes('public demo'), refused);
+  check('a sandbox is told email is off, in plain words', refused.includes('public page'), refused);
   check('nothing was sent to the sandbox crew', !mails.some((m) => m.to === 'sandbox-victim@example.com'));
   check('in particular, no mail carrying the attacker text went to the sandbox address',
     !mails.some((m) => m.to === 'sandbox-victim@example.com' && m.text.includes('claim your prize')));

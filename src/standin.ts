@@ -166,7 +166,7 @@ export function mountStandIn(app: express.Express, build: (farmId: string) => Mc
     if (!speak.SPEAK_ON) {
       res.status(503).json({
         error: 'not_enabled',
-        detail: 'Set ORBITA_SPEAK=on to enable spoken answers. The demo works as text without it.',
+        detail: 'Set ORBITA_SPEAK=on to enable spoken answers. The page works as text without it.',
       });
       return;
     }

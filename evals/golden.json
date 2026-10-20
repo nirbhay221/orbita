@@ -562,6 +562,74 @@
       "args": {
         "operation": "drone_show"
       }
+    },
+    {
+      "_comment": "Fitting a week of jobs into the clear hours, and the hours the sky took before."
+    },
+    {
+      "say": "I need twelve hours of planting and six of spraying this week, when should I run them",
+      "tool": "schedule_jobs",
+      "args": {
+        "jobs": [
+          {
+            "operation": "planting",
+            "hours": 12
+          },
+          {
+            "operation": "spraying",
+            "hours": 6
+          }
+        ]
+      }
+    },
+    {
+      "say": "schedule ten hours of planting on the north forty",
+      "tool": "schedule_jobs",
+      "args": {
+        "jobs": [
+          {
+            "operation": "planting",
+            "hours": 10
+          }
+        ]
+      }
+    },
+    {
+      "say": "when should the crew do eight hours of surveying in the next few days",
+      "tool": "schedule_jobs",
+      "args": {
+        "jobs": [
+          {
+            "operation": "surveying",
+            "hours": 8
+          }
+        ]
+      }
+    },
+    {
+      "say": "how many hours did space weather cost me this month",
+      "tool": "outage_patterns",
+      "args": {
+        "period": "month"
+      }
+    },
+    {
+      "say": "how much GPS downtime did we have over the last year",
+      "tool": "outage_patterns",
+      "args": {
+        "period": "year"
+      }
+    },
+    {
+      "say": "was last week bad for the planter",
+      "tool": "outage_patterns",
+      "args": {
+        "period": "week"
+      },
+      "alsoOk": [
+        "job_report"
+      ],
+      "why": "A report of logged jobs is a fair reading too."
     }
   ]
 }

@@ -80,6 +80,8 @@ const SPOKEN = {
   // task-carrying one. Both paths are exercised: this map covers the plain one.
   plan_season: {},
   position_trust: { lat: 46.88, lon: -96.79 },
+  schedule_jobs: { jobs: [{ operation: 'planting', hours: 6 }] },
+  outage_patterns: { period: 'week' },
   what_happened: { when: '10 May 2024', operation: 'planting' },
   what_should_i_do: { role: 'grid_operator' },
   what_else_is_affected: {},

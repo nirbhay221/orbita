@@ -76,7 +76,7 @@ async function callTool(name, args = {}) {
   const raw = await res.text();
 
   if (res.status === 401) {
-    throw new Error('This server has account linking switched on, so the demo page cannot call it directly.');
+    throw new Error('This server has account linking switched on, so this page cannot call it directly.');
   }
   const line = raw.split('\n').find((l) => l.startsWith('data: '));
   let json;
@@ -281,27 +281,56 @@ async function run(tool, args, button) {
 function buildRequests() {
   const host = el('request-groups');
   host.textContent = '';
+  // Examples by who is asking, one tab each, Everyone first. A single long column that opened on "the field"
+  // made a service for satellites, flights, grids and drones read as a farm app.
+  const tabs = document.createElement('div');
+  tabs.className = 'audiences';
+  tabs.setAttribute('role', 'tablist');
+  tabs.setAttribute('aria-label', 'Who is asking');
+  host.append(tabs);
+  const panels = [];
+  const choose = (i) => {
+    [...tabs.children].forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; });
+    panels.forEach((p, k) => { p.hidden = k !== i; });
+  };
   for (const group of GROUPS) {
     const requests = group.requests.filter((r) => offered(r.tool));
     if (!requests.length) continue;
+    const i = panels.length;
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'audience';
+    tab.setAttribute('role', 'tab');
+    tab.id = `aud-${i}`;
+    tab.setAttribute('aria-controls', `aud-panel-${i}`);
+    tab.textContent = group.name;
+    tab.addEventListener('click', () => choose(i));
+    tab.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + panels.length) % panels.length;
+      choose(next);
+      tabs.children[next].focus();
+    });
+    tabs.append(tab);
     const wrap = document.createElement('div');
     wrap.className = 'group';
-    const heading = document.createElement('p');
-    heading.className = 'label';
-    heading.textContent = group.name;
-    wrap.append(heading);
+    wrap.id = `aud-panel-${i}`;
+    wrap.setAttribute('role', 'tabpanel');
+    wrap.setAttribute('aria-labelledby', tab.id);
     for (const req of requests) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'request';
       button.setAttribute('aria-pressed', 'false');
       button.innerHTML = `<span>${req.say}</span><span class="tool">${req.tool}</span>`;
-      if (req.slow) button.title = 'This one reaches the Kp archive for an old date, so it takes longer.';
+      if (req.slow) button.title = 'This one reaches the Kp archive, so it takes longer.';
       button.addEventListener('click', () => run(req.tool, req.args, button));
       wrap.append(button);
     }
+    panels.push(wrap);
     host.append(wrap);
   }
+  choose(0);
 
   const select = el('adv-tool');
   for (const tool of ALL_TOOLS.filter(offered)) {
@@ -317,8 +346,8 @@ function buildRequests() {
  * ------------------------------------------------------------------ */
 
 const FARM_NOTE =
-  'Stand-in farm, not a real one: North 40 near Ames, Iowa, with a planter on RTK and a sprayer on SBAS. ' +
-  'Use your own location and the answers are about ground you can see.';
+  'Farm examples use a stand-in field, North 40 near Ames, Iowa, with a planter on RTK and a sprayer on WAAS. ' +
+  'Use your location and they are about ground you can see.';
 
 /** Replace the stand-in with the visitor's real coordinates. */
 async function useMyLocation() {
@@ -356,7 +385,7 @@ async function ensureFarm() {
     for (const machine of SEED.equipment) await callTool('register_equipment', machine);
     note.textContent = FARM_NOTE;
   } catch (err) {
-    note.textContent = `Could not set up the demo farm. ${err.message}`;
+    note.textContent = `Could not set up the stand-in farm. ${err.message}`;
   }
 }
 
@@ -493,7 +522,10 @@ if (standInForm) {
         `<p class="muted">${esc(body.model)}  |  ${body.ms} ms to decide  |  ${roundTrip} ms total  |  ` +
         `${esc(body.standIn)}</p>`
       );
-      // The answer is the thing worth hearing, not the tool name.
+      // The answer is the thing worth hearing, not the tool name. It goes in the main answer card too, and the
+      // panel follows it, so asking and tapping an example end in the same place.
+      renderAnswer({ text, ms: roundTrip, tool: chain || body.chose.tool, structured: body.result?.structuredContent ?? null, result: body.result });
+      pushLog(chain || body.chose.tool, roundTrip, true);
       // Kept for the next sentence, as Alexa+ keeps the conversation: "no" means something after a question.
       turns.push({ role: 'user', text: say }, { role: 'assistant', text });
       turns.splice(0, Math.max(0, turns.length - 6));
@@ -576,4 +608,43 @@ async function offerSpeech(container, text) {
   });
 
   container.appendChild(button);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Asking by voice. The browser's own speech recognition, where it has one; the
+ * button hides itself where it does not. Stops after a second and a half of
+ * quiet, or on a second press, and never asks with nothing said.
+ * ------------------------------------------------------------------ */
+{
+  const mic = el('ask-mic');
+  const input = el('standin-input');
+  const form = el('standin-form');
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (mic && !Recognition) mic.hidden = true;
+  if (mic && Recognition) {
+    let r = null;
+    let quiet = 0;
+    const stop = () => { try { r?.stop(); } catch { /* already stopped */ } };
+    const reset = () => { r = null; clearTimeout(quiet); mic.classList.remove('listening'); mic.setAttribute('aria-label', 'Speak'); };
+    mic.addEventListener('click', () => {
+      if (r) { stop(); return; }
+      r = new Recognition();
+      r.lang = 'en-US';
+      r.continuous = true;
+      r.interimResults = true;
+      let heard = '';
+      r.onresult = (e) => {
+        heard = [...e.results].map((x) => x[0].transcript).join(' ').trim();
+        input.value = heard;
+        clearTimeout(quiet);
+        quiet = setTimeout(stop, 1500);
+      };
+      r.onerror = (e) => { el('standin-out').innerHTML = `<p class="muted">The microphone stopped: ${e.error}. You can type instead.</p>`; };
+      r.onend = () => { reset(); if (heard) form.requestSubmit(); };
+      mic.classList.add('listening');
+      mic.setAttribute('aria-label', 'Listening. Press to stop');
+      try { r.start(); } catch { reset(); }
+    });
+  }
 }

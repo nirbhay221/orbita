@@ -40,6 +40,7 @@ import * as roles from './tools/roles.js';
 import * as discovery from './tools/discovery.js';
 import * as season from './tools/season.js';
 import * as agents from './tools/agents.js';
+import * as schedule from './tools/schedule.js';
 
 // Re-exported because alerts.ts and server.ts import them from here, and moving
 // them to shared.ts should not make every caller learn the new layout.
@@ -156,6 +157,7 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
   discovery.register(server, farmFor);
   season.register(server, farmFor);
   agents.register(server, farmFor);
+  schedule.register(server, farmFor);
 
   if (merged) {
     type Part = { content?: { text?: string }[]; structuredContent?: Record<string, unknown> };
@@ -188,6 +190,9 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
         const a = (input ?? {}) as { fieldName?: string; place?: string; crop?: string; acres?: number; baselineKm?: number; machineName?: string; correction?: string; notSure?: boolean; hardened?: boolean; removeWhat?: string; removeName?: string };
         const call = (tool: string, args: Record<string, unknown>) => impl.get(tool)!(args) as Promise<Part>;
         if (a.removeWhat) return call('remove', { what: a.removeWhat, ...(a.removeName ? { name: a.removeName } : {}) });
+        // "My field is near Sorriso" gives the town and no name. It used to save only the machine and then ask "which
+        // field is it working, and what town is it near?", the town it had just been told. Named as watch_jobs names it.
+        if (!a.fieldName && a.place && /[a-z0-9]/i.test(a.place)) a.fieldName = `Field near ${a.place.split(',')[0].trim()}`;
         const said: string[] = [];
         const did: { tool: string; [k: string]: unknown }[] = [];
         const step = async (tool: string, args: Record<string, unknown>) => {

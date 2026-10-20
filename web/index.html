@@ -6,22 +6,25 @@
 <title>Orbita, space weather turned into a go or no go</title>
 <meta name="description" content="Orbita is an MCP add-on. It reads the NOAA space weather forecast and answers whether GPS guided work will hold accuracy, and what satellite, grid, airline, rail and drone operators should do about a storm.">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12.5' fill='none' stroke='%232a78d6' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%232a78d6'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12.5' fill='none' stroke='%23e08f1a' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%23e08f1a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<a class="skip" href="#demo">Skip to the live demo</a>
+<a class="skip" href="#demo">Skip to trying it</a>
 
 <header class="top">
   <div class="wrap top-inner">
     <a class="brand" href="/">
       <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12.5" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="16" cy="16" r="3.5" fill="currentColor"/></svg>
       <span class="brand-name">Orbita</span>
-      <span class="brand-tag">space weather to go or no go</span>
+      <span class="brand-tag">space weather, as a go or no go</span>
     </a>
     <nav class="top-nav">
       <a href="/echo.html">On a screen</a>
-      <a href="#demo">Demo</a>
+      <a href="#demo">Try it</a>
       <a href="#how">How it works</a>
       <a href="#limits">Limits</a>
       <a href="#run">Run it</a>
@@ -33,7 +36,7 @@
 <main>
   <section class="hero wrap">
     <p class="eyebrow">MCP add-on, Streamable HTTP, spec 2025-11-25</p>
-    <h1>Space weather, turned into a go or no go.</h1>
+    <h1>Space weather, turned into a <span class="hl">go or no go</span>.</h1>
     <p class="lede">
       A geomagnetic storm pushes satellite navigation off by centimetres, then metres. Orbita reads the live NOAA
       forecast and answers the question the person actually has: can I run this now, and if not, when. It answers the
@@ -55,7 +58,7 @@
 
   <section id="demo" class="section wrap">
     <div class="section-head">
-      <h2>Live demo</h2>
+      <h2>Try it live</h2>
       <p>
         Every answer is computed here, from the NOAA feed this server polls in the background. Nothing on this page is
         scripted. Alexa is not in the loop: the page calls the same tools an Alexa+ add-on would call, and shows what
@@ -63,35 +66,30 @@
       </p>
     </div>
 
-    <div class="console">
-
     <!--
-      The Alexa+ stand-in. Every button below is a hardcoded tool and a hardcoded
-      set of arguments, which proves the server answers but not that the tool
-      descriptions are readable. This box is the part that tests that: a model
-      reads this server's real tools/list, decides what the sentence means, and
-      the call it chooses is executed over MCP. It is off unless the server has a
-      key, and the rest of the page works either way.
+      Ask first, the way a person would: by voice or by typing, about anything. A model reads this server's real
+      tools/list and picks the tool, as Alexa+ would. It used to sit beside a card about one stand-in farm, which
+      made a space weather service look like a farm app. The examples below it are grouped by who is asking.
     -->
-    <div class="panel-card standin">
-      <p class="label">Say it in your own words</p>
-      <p class="hint" id="standin-note">
-        A model reads this server's real <code>tools/list</code> and picks the tool. It is not Alexa: it does not
-        share Alexa's prompt or its judgment about when to call something. What it shows is whether the tool descriptions
-        are clear enough to be chosen from.
-      </p>
-      <form id="standin-form" autocomplete="off">
+    <div class="panel-card standin ask">
+      <p class="label">Ask Orbita</p>
+      <h3 class="ask-title">Ask anything, by voice or by typing.</h3>
+      <form id="standin-form" autocomplete="off" class="ask-form">
+        <button type="button" class="mic" id="ask-mic" aria-label="Speak"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg></button>
         <label class="sr-only" for="standin-input">What would you say?</label>
-        <input id="standin-input" type="text" maxlength="500" placeholder="Could I spray the North 40 this afternoon?">
+        <input id="standin-input" type="text" maxlength="500" placeholder="I fly a drone show in Hong Kong tonight. Can it run?">
         <button type="submit" class="button primary" id="standin-go">Ask</button>
       </form>
+      <p class="hint" id="standin-note">Farmers, drone pilots, satellite teams, dispatchers, ships, grids and data centres, robots, or anyone who wants to see the aurora. A model picks the tool from this server's real tool list, as Alexa+ would.</p>
       <div id="standin-out" class="standin-out" role="status" aria-live="polite"></div>
     </div>
+
+    <div class="console">
       <div class="panel-card requests">
-        <p class="label">Your demo farm</p>
-        <p class="farm-note" id="farm-note">Setting up a farm for this browser.</p>
-        <button class="button small" id="use-location" type="button">Use my location</button>
+        <p class="label">Or tap an example</p>
         <div id="request-groups"></div>
+        <p class="farm-note" id="farm-note">Farm examples use a stand-in field.</p>
+        <button class="button small" id="use-location" type="button">Use my location</button>
 
         <details class="advanced">
           <summary>Call any tool directly</summary>
@@ -105,7 +103,7 @@
           </label>
           <div class="advanced-actions">
             <button class="button primary small" id="adv-run" type="button">Send</button>
-            <button class="button small" id="reset-demo" type="button">Reset demo farm</button>
+            <button class="button small" id="reset-demo" type="button">Start again</button>
           </div>
         </details>
       </div>
@@ -116,7 +114,7 @@
             <p class="label">Spoken answer</p>
             <p class="meta" id="answer-meta"></p>
           </div>
-          <p class="answer" id="answer" aria-live="polite">Pick a request on the left and it runs against live data.</p>
+          <p class="answer" id="answer" aria-live="polite">Ask above, or tap an example, and the answer comes from live data.</p>
           <details class="raw" id="raw-wrap" hidden>
             <summary>Raw response</summary>
             <pre id="raw"></pre>
@@ -186,7 +184,7 @@
       <li><b>It cannot speak first.</b> An add-on answers when it is called, so watched jobs and storms are sent to the crew by email instead.</li>
       <li><b>It stops at three days.</b> That is how far the Kp forecast runs, and past it the answer is that it does not know.</li>
       <li><b>It is not a base station.</b> It tells you whether accuracy holds, it does not correct anything.</li>
-      <li><b>This demo farm is temporary.</b> It belongs to this browser and is cleared when the server restarts.</li>
+      <li><b>The stand-in farm is temporary.</b> It belongs to this browser and is cleared when the server restarts.</li>
     </ul>
   </section>
 
@@ -239,5 +237,6 @@ node dist/server.js        # serves this page and the MCP endpoint on 8788</code
 </footer>
 
 <script src="/app.js" type="module"></script>
+<script src="/sky.js" type="module"></script>
 </body>
 </html>

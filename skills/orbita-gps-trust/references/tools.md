@@ -89,6 +89,19 @@ Describe the operation: add or correct a field or site by its name and nearest t
 | `removeWhat` | field, machine, everything | no |
 | `removeName` | string | no |
 
+## `outage_patterns`
+
+Reads.
+
+Looks back over the last week, month or year at a field and counts the working hours space weather would have held each job on its machine: how many hours and days, the worst day, how many were the evening plasma bubble hours near the magnetic equator rather than storms, and for a year the month that cost most. From the GFZ Kp archive. Call this for how much GPS downtime they had, how many hours storms cost this month or year, or patterns over the season. It looks back; for days ahead use schedule_jobs or plan_season.
+
+| Argument | Values | Needed |
+|---|---|---|
+| `period` | week, month, year | no |
+| `operation` | planting, strip_till, cultivating, spraying, harvest, tillage, scouting, surveying, drone_survey, drone_show, machine_control | no |
+| `field` | string | no |
+| `equipment` | string | no |
+
 ## `plan_season`
 
 Reads.
@@ -117,6 +130,19 @@ For a software agent, robot, drone, autonomous machine or spacecraft about to ac
 | `dependsOn` | array | no |
 | `points` | array | no |
 | `windowsHours` | integer | no |
+
+## `schedule_jobs`
+
+Reads.
+
+Puts the hours of work a customer needs into the hours space weather leaves clear over the next three days, from the NOAA forecast: "I need twelve hours of planting and six of spraying" comes back as when to run each, on which machine, around storm blocks and, near the magnetic equator, the evening plasma bubble hours. The tightest job is fitted first; one machine does one job at a time. Pass fromHour and toHour for their working hours. Call this when they say how many hours of which jobs they need to get done, or ask when to schedule work this week. For one job right now use can_i_run; for which weeks to book use plan_season.
+
+| Argument | Values | Needed |
+|---|---|---|
+| `jobs` | array | yes |
+| `field` | string | no |
+| `fromHour` | integer | no |
+| `toHour` | integer | no |
 
 ## `share_access`
 
