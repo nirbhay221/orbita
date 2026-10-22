@@ -81,6 +81,26 @@
         <button type="submit" class="button primary" id="standin-go">Ask</button>
       </form>
       <p class="hint" id="standin-note">Farmers, drone pilots, satellite teams, dispatchers, ships, grids and data centres, robots, or anyone who wants to see the aurora. A model picks the tool from this server's real tool list, as Alexa+ would.</p>
+      <div class="when" role="group" aria-labelledby="when-label">
+        <span id="when-label" class="when-label">When</span>
+        <button type="button" class="seg" id="when-now" aria-pressed="true">Now</button>
+        <button type="button" class="seg" id="when-pick" aria-pressed="false" aria-controls="when-panel">Another time</button>
+        <button type="button" class="restart" id="reset-demo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.34-5.66M4 4v4h4"/></svg>Start again</button>
+        <div class="when-panel" id="when-panel" hidden>
+          <div class="presets" role="group" aria-label="Quick choices">
+            <button type="button" class="preset" data-preset="tonight">Tonight, 9 PM</button>
+            <button type="button" class="preset" data-preset="tomorrow-am">Tomorrow morning</button>
+            <button type="button" class="preset" data-preset="tomorrow-pm">Tomorrow evening</button>
+            <button type="button" class="preset" data-preset="may2024">May 10, 2024, the big storm</button>
+          </div>
+          <div class="when-fields">
+            <label class="when-field"><span>Date</span><input type="date" id="when-date"></label>
+            <label class="when-field"><span>Time</span><input type="time" id="when-time" step="3600"></label>
+          </div>
+          <p class="when-readout" id="when-readout" aria-live="polite"></p>
+        </div>
+        <p class="when-note">Now is this moment. Another time checks the forecast up to three days ahead, or plays back a past day, for questions and examples alike. Start again clears the conversation and gives you a fresh farm.</p>
+      </div>
       <div id="standin-out" class="standin-out" role="status" aria-live="polite"></div>
     </div>
 
@@ -88,7 +108,7 @@
       <div class="panel-card requests">
         <p class="label">Or tap an example</p>
         <div id="request-groups"></div>
-        <p class="farm-note" id="farm-note">Farm examples use a stand-in field.</p>
+        <p class="farm-note" id="farm-note">Farm examples ask about a field this page sets up for you.</p>
         <button class="button small" id="use-location" type="button">Use my location</button>
 
         <details class="advanced">
@@ -103,7 +123,6 @@
           </label>
           <div class="advanced-actions">
             <button class="button primary small" id="adv-run" type="button">Send</button>
-            <button class="button small" id="reset-demo" type="button">Start again</button>
           </div>
         </details>
       </div>
@@ -181,10 +200,10 @@
     </div>
     <ul class="limits">
       <li><b>It will not guess.</b> If NOAA is unreachable it says so and tells you where to look instead.</li>
-      <li><b>It cannot speak first.</b> An add-on answers when it is called, so watched jobs and storms are sent to the crew by email instead.</li>
+      <li><b>It cannot make Alexa speak first.</b> An add-on answers when it is called, so warnings go out another way: an email the day before a storm that matters to you and again when the solar wind turns south about an hour out, for any of the jobs it covers, and a signed message to a fleet's own software for machines that cannot read one.</li>
       <li><b>It stops at three days.</b> That is how far the Kp forecast runs, and past it the answer is that it does not know.</li>
       <li><b>It is not a base station.</b> It tells you whether accuracy holds, it does not correct anything.</li>
-      <li><b>The stand-in farm is temporary.</b> It belongs to this browser and is cleared when the server restarts.</li>
+      <li><b>The farm on this page is yours alone, and only for a while.</b> The field and machines it sets up belong to this browser, and are deleted after a week without use. Start again gives you a fresh one.</li>
     </ul>
   </section>
 

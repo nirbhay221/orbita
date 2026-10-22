@@ -1,0 +1,397 @@
+{
+  "_comment": "What real people said, not what we would write for them. Every case is somebody's own words from a forum post, a news quote or an incident report, with the link it came from. 'provenance' says how close it is: 'verbatim' is their sentence as written (spelling and grammar kept); 'joined' puts two of their sentences that sat next to each other into one turn; 'title and post' adds the thread's title in front, because the post only makes sense under it; 'first person' is a report written about somebody (an incident report, a company statement) put back into the words they would say, with their nouns kept. Words of ours added to make a turn are named in that case's note; nothing else is invented. Collected 22 October 2026. Run with: npm run eval -- --file evals/real-voices.json (a model run, so it costs money). test-real-voices.mjs checks the file for free. Not found in public and so not here yet: HF radio operators (the RadioReference threads refused every fetch), satellite operators, crewed spaceflight, airlines and private pilots asking in their own words, data centres, pipelines, drilling, rail, mining, fleets, magnetic survey and delivery robots. Reddit was not reachable. Those roles stay covered only by golden.json, which is our wording.",
+  "seedCalls": [
+    {
+      "tool": "register_field",
+      "args": {
+        "name": "North 40",
+        "lat": 40.92,
+        "lon": -98.34,
+        "crop": "corn",
+        "acres": 40,
+        "baselineKm": 18
+      }
+    },
+    {
+      "tool": "register_equipment",
+      "args": {
+        "name": "the planter",
+        "correction": "rtk"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "say": "All the tractors are sitting at the ends of the field right now shut down because of the solar storm.",
+      "who": "Kevin Kenney, farmer, Nebraska, 10 May 2024",
+      "role": "field_crew",
+      "provenance": "verbatim",
+      "source": "https://www.fox9.com/news/solar-storm-2024-gps-farming-problems",
+      "tool": "storm_status",
+      "alsoOk": [
+        "can_i_run",
+        "what_should_i_do",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "No GPS. We're right in the middle of corn planting.",
+      "who": "Kevin Kenney, farmer, Nebraska, 10 May 2024",
+      "role": "field_crew",
+      "provenance": "joined",
+      "source": "https://www.fox9.com/news/solar-storm-2024-gps-farming-problems",
+      "tool": "can_i_run",
+      "alsoOk": [
+        "storm_status",
+        "what_should_i_do"
+      ],
+      "args": {
+        "operation": "planting"
+      }
+    },
+    {
+      "say": "It showed the tractor going in circles and auto steer didn't work, and you couldn't engage it.",
+      "who": "Dennis Wolff, farmer, South Dakota, May 2024",
+      "role": "field_crew",
+      "provenance": "verbatim",
+      "source": "https://www.fox9.com/news/solar-storm-2024-gps-farming-problems",
+      "tool": "storm_status",
+      "alsoOk": [
+        "what_happened",
+        "can_i_run",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "Initially there were large misses or large overlap, up to half the air seeder width. That was with the autosteer engaged.",
+      "who": "Simon Ellis, farmer, Wawanesa, Manitoba, May 2024",
+      "role": "field_crew",
+      "provenance": "joined",
+      "source": "https://www.producer.com/news/solar-storm-sends-field-navigation-haywire/",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status",
+        "can_i_run",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "At times it would start the pass correctly then slowly start missing until the error was half of the machine width.",
+      "who": "Simon Ellis, farmer, Wawanesa, Manitoba, May 2024",
+      "role": "field_crew",
+      "provenance": "verbatim",
+      "note": "The paper's bracketed '(the error)' is kept as plain words.",
+      "source": "https://www.producer.com/news/solar-storm-sends-field-navigation-haywire/",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status",
+        "can_i_run",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "Time to freehand the field.",
+      "who": "Simon Ellis, farmer, posted on X, May 2024",
+      "role": "field_crew",
+      "provenance": "verbatim",
+      "source": "https://farmtario.com/daily/solar-storm-knocks-out-gps-signals-over-weekend",
+      "tool": "can_i_run",
+      "alsoOk": [
+        "storm_status",
+        "what_should_i_do"
+      ]
+    },
+    {
+      "say": "Our dealer says the storm has affected all brands of GPS, not solely John Deere. Should we shut off RTK?",
+      "who": "LandMark Implement's statement to its customers, May 2024, as a farmer would pass it on",
+      "role": "field_crew",
+      "provenance": "first person",
+      "note": "The dealer's sentence is verbatim. \"Should we shut off RTK?\" is ours: it is the dealer's advice to its customers (shut off RTK, use the SF2 or SF3 grace period) turned into the question a customer would ask.",
+      "source": "https://www.producer.com/news/solar-storm-sends-field-navigation-haywire/",
+      "tool": "what_should_i_do",
+      "alsoOk": [
+        "can_i_run",
+        "position_trust",
+        "storm_status"
+      ]
+    },
+    {
+      "say": "My main question is when there are solar storms, or bad ionospheric conditions, does your GPS residuals still read as being good or will they actually give you bad readings or not be able to connect at all, so that you would know right away.",
+      "who": "Sebastian, land surveyor, RPLS forum",
+      "role": "surveying",
+      "provenance": "verbatim",
+      "source": "https://rpls.com/forums/gnss-geodesy/gps-and-ionosphere/",
+      "tool": "position_trust",
+      "alsoOk": [
+        "can_i_run",
+        "what_should_i_do",
+        "storm_status"
+      ]
+    },
+    {
+      "say": "I set up on it and backsighted and my residuals were about 0.6' both vertical and horizontal. I then noticed that there were high Ionospheric condition this morning in the NWWA region.",
+      "who": "Sebastian, land surveyor, RPLS forum",
+      "role": "surveying",
+      "provenance": "joined",
+      "source": "https://rpls.com/forums/gnss-geodesy/gps-and-ionosphere/",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "Kp index 5.33. Safe to fly my Mini 3 Pro?",
+      "who": "Mrktn, drone pilot, Mavic Pilots forum",
+      "role": "drone_pilot",
+      "provenance": "title and post",
+      "source": "https://mavicpilots.com/threads/kp-index-5-33.145952/",
+      "tool": "can_i_run",
+      "alsoOk": [
+        "what_should_i_do",
+        "position_trust",
+        "storm_status"
+      ]
+    },
+    {
+      "say": "Would this have any effect on GPS system and therefore is it recommended to avoid flying during this period?",
+      "who": "pianoflyer, drone pilot, Phantom Pilots forum, during a G4 storm",
+      "role": "drone_pilot",
+      "provenance": "verbatim",
+      "source": "https://phantompilots.com/threads/stage-4-solar-event-fly.36631/",
+      "tool": "what_should_i_do",
+      "alsoOk": [
+        "can_i_run",
+        "storm_status",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "There is currently a very high KP index has anyone had any Issues using GPS navigation?",
+      "who": "geofrancis, drone builder, ArduPilot forum, 11 May 2024",
+      "role": "drone_pilot",
+      "provenance": "verbatim",
+      "source": "https://discuss.ardupilot.org/t/solar-gps-interference/117661",
+      "tool": "storm_status",
+      "alsoOk": [
+        "position_trust",
+        "what_should_i_do"
+      ]
+    },
+    {
+      "say": "I had issues with my mini 3 pro yesterday evening.",
+      "who": "Mark_Y, drone pilot, Mavic Pilots forum, during a G4 watch",
+      "role": "drone_pilot",
+      "provenance": "verbatim",
+      "source": "https://mavicpilots.com/threads/geomagnetic-storm-watch.145948/",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status"
+      ]
+    },
+    {
+      "say": "I attempted to fly 2 drones last night and both had compass issues",
+      "who": "rebelsun, drone pilot, Mavic Pilots forum, during a G4 watch",
+      "role": "drone_pilot",
+      "provenance": "verbatim",
+      "source": "https://mavicpilots.com/threads/geomagnetic-storm-watch.145948/",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status"
+      ]
+    },
+    {
+      "say": "Today and yesterday I flew my Mavic and had poor signal with lots of micro-disconnections",
+      "who": "PaoloOne, drone pilot, Mavic Pilots forum",
+      "role": "drone_pilot",
+      "provenance": "verbatim",
+      "note": "A control link problem, not GPS. A good answer says what the sun did those days without blaming it for the link.",
+      "source": "https://mavicpilots.com/threads/mavic-and-solar-storms-a-serious-analysis.17798/",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status"
+      ]
+    },
+    {
+      "say": "Is there a database of solar interference time and location?",
+      "who": "dmyers7, drone pilot, Mavic Pilots forum",
+      "role": "drone_pilot",
+      "provenance": "verbatim",
+      "source": "https://mavicpilots.com/threads/mavic-and-solar-storms-a-serious-analysis.17798/",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status",
+        "what_can_you_do"
+      ]
+    },
+    {
+      "say": "I noticed one of my commercial GPS-disciplined NTP servers had lost the GPS 1PPS timing signal",
+      "who": "John Sloan, time-nuts mailing list, September 2018",
+      "role": "timing",
+      "provenance": "verbatim",
+      "note": "The thread found a faulty antenna, not the sun. A good answer does not blame space weather on a quiet day.",
+      "source": "https://febo.com/pipermail/time-nuts_lists.febo.com/2018-September/093973.html",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status",
+        "what_should_i_do",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "My WWVB receiver apparently lost lock at about 0200 UTC last night. I'm not sure if this timing is right for the coronal ejection to hit earth.",
+      "who": "John Ackermann N8UR, time-nuts mailing list, December 2006",
+      "role": "timing",
+      "provenance": "joined",
+      "note": "The first sentence is his with 'my' capitalised.",
+      "source": "https://www.febo.com/pipermail/time-nuts/2006-December/022706.html",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status"
+      ]
+    },
+    {
+      "say": "Late this evening our DGNSS differential signal went unstable, and DGNSS 1 and 2 both dropped out of DP control.",
+      "who": "A DP vessel's operators, IMCA incident report",
+      "role": "maritime_dp",
+      "provenance": "first person",
+      "note": "The report: 'Late one evening the DPO noted instability of the DGNSS differential signal, shortly after DGNSS 1 and 2 both dropped out of DP control.'",
+      "source": "https://www.imca-int.com/resources/dp/dp-incidents/prepare-for-2025-solar-activity/",
+      "tool": "what_should_i_do",
+      "alsoOk": [
+        "storm_status",
+        "what_happened",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "We regularly get unstable DGNSS differential signals between 18:30 and 22:45.",
+      "who": "A DP vessel's operators, IMCA incident report",
+      "role": "maritime_dp",
+      "provenance": "first person",
+      "note": "The report: 'the DPOs regularly experienced unstable DGNSS differential signals between the hours of 18:30hrs and 22:45hrs.' Evening scintillation, the plasma bubble hours.",
+      "source": "https://www.imca-int.com/resources/dp/dp-incidents/prepare-for-2025-solar-activity/",
+      "tool": "what_should_i_do",
+      "alsoOk": [
+        "storm_status",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "We're seeing persistent geomagnetically induced current at multiple stations.",
+      "who": "PJM Interconnection, grid operator, 10 May 2024",
+      "role": "grid_operator",
+      "provenance": "first person",
+      "note": "PJM's words: 'persistent geomagnetically induced current (GIC) at multiple stations'.",
+      "source": "https://www.powermag.com/historic-solar-storm-spurs-pjm-to-extend-geomagnetic-disturbance-warning/",
+      "tool": "what_should_i_do",
+      "alsoOk": [
+        "storm_status"
+      ],
+      "args": {
+        "role": "grid_operator"
+      }
+    },
+    {
+      "say": "It was definitely messing with the GPS on the Tesla last night.",
+      "who": "Anthony Marter, Tesla owner, posted on X, New Zealand, May 2024",
+      "role": "household",
+      "provenance": "verbatim",
+      "note": "Quoted by the New Zealand Herald; the reprint below refuses automated reads, so this is as quoted in search results of it.",
+      "source": "https://www.pressreader.com/new-zealand/the-northern-advocate6030/20240514/281724094648209",
+      "tool": "what_happened",
+      "alsoOk": [
+        "storm_status",
+        "position_trust"
+      ]
+    },
+    {
+      "say": "Aurora on red alert. Is it just tonight?",
+      "who": "molgrips, Singletrack World forum, 10 May 2024",
+      "role": "aurora",
+      "provenance": "title and post",
+      "note": "The thread is titled 'PSA: aurora on red alert'.",
+      "source": "https://singletrackworld.com/forum/off-topic/psa-aurora-on-red-alert/",
+      "tool": "what_should_i_do",
+      "alsoOk": [
+        "storm_status"
+      ]
+    },
+    {
+      "say": "Aurora on red alert. What time does the light show start?",
+      "who": "ElShalimo, Singletrack World forum, 10 May 2024",
+      "role": "aurora",
+      "provenance": "title and post",
+      "note": "The thread is titled 'PSA: aurora on red alert'.",
+      "source": "https://singletrackworld.com/forum/off-topic/psa-aurora-on-red-alert/",
+      "tool": "what_should_i_do",
+      "alsoOk": [
+        "storm_status"
+      ]
+    },
+    {
+      "say": "chances are I will be out during the peak hours, unfortunately on the north side of Chicago",
+      "who": "Brian R., Stormtrack forum, aurora watch, 10 May 2024",
+      "role": "aurora",
+      "provenance": "verbatim",
+      "source": "https://stormtrack.org/threads/aurora-watch-may-10-11-2024.32724/",
+      "tool": "what_should_i_do",
+      "alsoOk": [
+        "storm_status"
+      ]
+    },
+    {
+      "say": "I'll bet the commodity markets spike Monday.",
+      "who": "Kevin Kenney, farmer, Nebraska, 10 May 2024",
+      "role": "field_crew",
+      "provenance": "verbatim",
+      "kind": "adversarial",
+      "note": "Markets are not something the data can answer. The right move is no tool.",
+      "source": "https://www.fox9.com/news/solar-storm-2024-gps-farming-problems",
+      "tool": null
+    },
+    {
+      "say": "Do you use airdata too?",
+      "who": "PaoloOne, drone pilot, Mavic Pilots forum",
+      "role": "drone_pilot",
+      "provenance": "verbatim",
+      "note": "A question to another pilot about a logging app.",
+      "source": "https://mavicpilots.com/threads/mavic-and-solar-storms-a-serious-analysis.17798/",
+      "tool": null
+    },
+    {
+      "say": "How about uploading them for folks to look at?",
+      "who": "MS Coast, Mavic Pilots forum, during a G4 watch",
+      "role": "drone_pilot",
+      "provenance": "verbatim",
+      "note": "Asking another member to share flight logs.",
+      "source": "https://mavicpilots.com/threads/geomagnetic-storm-watch.145948/",
+      "tool": null
+    },
+    {
+      "say": "These are looking roughly west, just above the rooflines of my neighborhood.",
+      "who": "Mikaela Norris, Stormtrack forum, aurora watch, May 2024",
+      "role": "aurora",
+      "provenance": "verbatim",
+      "note": "Describing her own photos. Nothing to look up.",
+      "source": "https://stormtrack.org/threads/aurora-watch-may-10-11-2024.32724/",
+      "tool": null
+    }
+  ],
+  "notCovered": [
+    "watch_jobs",
+    "crew_contact",
+    "share_access",
+    "log_job",
+    "job_report",
+    "farm_status",
+    "what_can_you_do",
+    "plan_season",
+    "schedule_jobs",
+    "outage_patterns",
+    "my_farm",
+    "tell_me_more",
+    "alert_my_machines"
+  ],
+  "notCoveredWhy": "Nobody we found asked for these in their own words in public. They stay covered by golden.json, in our wording."
+}

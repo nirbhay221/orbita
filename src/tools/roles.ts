@@ -29,6 +29,7 @@ import { sendEmail, emailConfigured } from '../notify.js';
 import { lookupTimeZone, spokenTime } from '../timezone.js';
 import { geocode, spoken as spokenPlace, GeocoderDown, lookupDown } from '../geocode.js';
 import * as ground from '../ground.js';
+import { reachable } from '../consent.js';
 import { nextPage } from '../brief.js';
 import {
   NOAA_DOWN,
@@ -103,6 +104,17 @@ export function register(server: McpServer, farmOf: () => string): void {
    * black start units and a dispatcher plans a lower track. Timed to how
    * far off the storm is, because most of these only help a day early.
    * ---------------------------------------------------------------- */
+  /** What to look at first when the sky is quiet, for the roles where it is not an antenna. */
+  const LOCAL_FIRST: Partial<Record<Role, string>> = {
+    grid_operator: 'a fault or switching on the system, or the monitor itself',
+    pipeline: 'the cathodic protection system and the monitor itself',
+    rail: 'the track circuits and the signalling equipment itself',
+    hf_radio: 'noise near the station, the antenna and the feed line',
+    data_centre: 'the timing receivers, their antennas and the power feed',
+    magnetic_survey: 'the sensor, the base station and anything magnetic nearby',
+    drilling: 'the survey tool and magnetic interference from the drill string',
+  };
+
   server.registerTool(
     'what_should_i_do',
     {
@@ -134,9 +146,14 @@ export function register(server: McpServer, farmOf: () => string): void {
           .max(80)
           .optional()
           .describe('Where the thing they look after is, as a town and region, when they say it: "our substation near Fargo", "my station in Leeds". Remembered, so leave it out next time'),
+        seeing: z
+          .string()
+          .max(200)
+          .optional()
+          .describe('What they say is going wrong right now, in their words, when they report a problem: "DGNSS 1 and 2 dropped out", "GIC at multiple stations", "lost GPS lock"'),
       },
     },
-    async ({ role, step, orbit, place }) => {
+    async ({ role, step, orbit, place, seeing }) => {
       const id = farmOf();
       const farm = store.get(id);
       const chosen = (role ?? farm.role) as Role | undefined;
@@ -196,10 +213,30 @@ export function register(server: McpServer, farmOf: () => string): void {
               ? [orbit === 'low' ? '' : orbit === 'medium' ? particles.sayHighOrbit(live).replace('Measured now at geostationary orbit,', 'Measured now at geostationary orbit, the nearest reading there is for medium orbit,') : particles.sayHighOrbit(live), particles.sayLaunch(live)].filter(Boolean).join(' ')
               : '';
       const local = (step ?? 0) > 0 ? { said: '', data: {} } : measuredHere(chosen, site, advice.phase !== 'quiet');
-      const spoken = [advice.spoken, measured, local.said].filter(Boolean).join(' ');
+      // Somebody reporting a problem now. People in real reports say what they are seeing ("we're seeing persistent
+      // GIC at multiple stations", "both DGNSS dropped out") and the answer used to go straight to the forecast, as
+      // if they had not spoken. So it first says whether the sky right now explains it. Near the magnetic equator
+      // the evening hours scramble satellite signals on quiet days too, so there it does not say "not the sun".
+      const kpNow = context.kpNow ?? [...snap.slots].reverse().find((s) => Date.parse(s.time) <= Date.now())?.kp ?? null;
+      const evening = gmLat != null && Math.abs(gmLat) < 20;
+      const reply =
+        (step ?? 0) > 0 || !seeing || kpNow == null
+          ? ''
+          : kpNow >= 5
+            ? `That fits: Kp is ${kpNow.toFixed(1)} right now, a geomagnetic storm.`
+            : evening
+              ? `Kp is only ${kpNow.toFixed(1)} right now, but near the magnetic equator the hours after sunset scramble satellite signals even on quiet days, so it can still be the sky.`
+              : `Kp is only ${kpNow.toFixed(1)} right now, which is quiet, so what you are seeing is not a geomagnetic storm. Check what is local first: ${LOCAL_FIRST[chosen] ?? 'the equipment, the antenna, or interference nearby'}.`;
+      // Nobody set to hear about the next one: say once that somebody can be, a day ahead and again in the last hour.
+      // See checkRoleAlerts in alerts.ts.
+      const warned = store.get(id).crew.some((c) => reachable(c) && c.notifyOn.includes('storm'));
+      const offer = (step ?? 0) > 0 || warned ? '' : 'Want a warning before the next storm, a day ahead and again in the last hour? Tell me who to email.';
+      const spoken = [reply, advice.spoken, measured, local.said].filter(Boolean).join(' ');
       return say(spoken, {
         ...advice,
         spoken,
+        // Said last, and kept when the answer is shortened. See brief.ts.
+        ...(offer ? { offer } : {}),
         ...(orbit ? { orbit } : {}),
         ...(measured && live ? { measuredNow: live, mustSay: [measured.split('. ')[0] + '.'] } : {}),
         ...(Object.keys(local.data).length ? { measuredHere: local.data } : {}),

@@ -12,6 +12,7 @@
  */
 
 import type { Slot } from './domain.js';
+import { NOAA_QUARTERS } from './noaa-archive.js';
 
 const GFZ = 'https://kp.gfz.de/app/json/';
 
@@ -24,14 +25,84 @@ export const EARLIEST = Date.UTC(1932, 0, 1);
 
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 
+/**
+ * When GFZ is down. NOAA publishes the same planetary Kp, eight three-hour values a day: the last thirty days in a
+ * live text file, and older days in quarterly files kept in noaa-archive.ts. On 22 October 2026 every GFZ address
+ * timed out from here and from AWS while NOAA answered in milliseconds, so a look back that NOAA covers is read
+ * from NOAA instead. After a failure GFZ is left alone for five minutes, so each question does not wait ten
+ * seconds to find out again.
+ */
+const NOAA_30_DAYS = 'https://services.swpc.noaa.gov/text/daily-geomagnetic-indices.txt';
+const NOAA_30_DAYS_REACH = 30 * 86_400_000;
+let gfzDownUntil = 0;
+/** Slots that came from NOAA rather than the GFZ archive, so the answer can name its source. */
+export const fromNoaa = new WeakSet<Slot[]>();
+
+/** One line per day: the date, then the planetary Kp as the only decimals on the line; -1.00 is not measured yet. */
+export function parseNoaaDays(text: string): Slot[] {
+  const out: Slot[] = [];
+  for (const line of text.split('\n')) {
+    const date = /^(\d{4}) (\d\d) (\d\d)\s/.exec(line);
+    if (!date) continue;
+    const kps = line.match(/-?\d+\.\d+/g) ?? [];
+    if (kps.length !== 8) continue;
+    kps.forEach((v, i) => {
+      const kp = Number(v);
+      if (kp < 0) return;
+      out.push({ time: new Date(Date.UTC(+date[1], +date[2] - 1, +date[3], i * 3)).toISOString(), kp, observed: true });
+    });
+  }
+  return out;
+}
+
+const archived = parseNoaaDays(Object.values(NOAA_QUARTERS).join('\n'));
+
+/** The NOAA days for a range: the stored quarters, and the live thirty days when the range reaches into them. */
+async function fetchNoaaRange(from: Date, to: Date): Promise<Slot[]> {
+  // From the three-hour block the start falls in, as GFZ answers.
+  const first = Math.floor(from.getTime() / (3 * 3_600_000)) * 3 * 3_600_000;
+  const inRange = (x: Slot) => {
+    const t = Date.parse(x.time);
+    return t >= first && t <= to.getTime();
+  };
+  const byTime = new Map(archived.filter(inRange).map((x) => [x.time, x]));
+  if (to.getTime() >= Date.now() - NOAA_30_DAYS_REACH) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    try {
+      const res = await fetch(NOAA_30_DAYS, { signal: ctrl.signal });
+      if (res.ok) for (const x of parseNoaaDays(await res.text()).filter(inRange)) byTime.set(x.time, x);
+    } catch {
+      /* the stored quarters may still cover it */
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  const slots = [...byTime.values()].sort((a, b) => a.time.localeCompare(b.time));
+  // Only an answer when NOAA has the day the range starts on: a range NOAA does not cover is not answered from a part of it.
+  if (!slots.length || slots[0].time.slice(0, 10) !== new Date(first).toISOString().slice(0, 10)) throw new Error('Not in the NOAA days either');
+  fromNoaa.add(slots);
+  return slots;
+}
+
 export async function fetchRange(from: Date, to: Date): Promise<Slot[]> {
   const key = `${dayKey(from)}..${dayKey(to)}`;
   const hit = cache.get(key);
   if (hit) return hit;
+  if (Date.now() < gfzDownUntil) return fetchNoaaRange(from, to);
+  try {
+    return await fetchGfz(from, to, key);
+  } catch {
+    gfzDownUntil = Date.now() + 5 * 60_000;
+    return fetchNoaaRange(from, to);
+  }
+}
 
+async function fetchGfz(from: Date, to: Date, key: string): Promise<Slot[]> {
   const url = `${GFZ}?start=${from.toISOString().slice(0, 19)}Z&end=${to.toISOString().slice(0, 19)}Z&index=Kp`;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10000);
+  // Two and a half seconds: a voice turn cannot wait longer, and NOAA's days answer when GFZ does not.
+  const timer = setTimeout(() => ctrl.abort(), 2500);
   try {
     const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) throw new Error(`GFZ: HTTP ${res.status}`);

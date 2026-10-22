@@ -1,29 +1,35 @@
 {
-  "_comment": "The demo page's requests live here so a test can call every one of them and prove each button is a real tool with real arguments. {{next-friday}} is filled in at load.",
+  "_comment": "The demo page's requests live here so a test can call every one of them and prove each button is a real tool with real arguments. {{next-friday}} is filled in at load. Examples with \"who\" and \"source\" are real people's words (see evals/real-voices.json); the page shows who said them and links where. The rest are our wording, for jobs nobody we found has asked about in public.",
   "groups": [
     {
       "name": "Everyone",
       "requests": [
         {
-          "say": "What is the sun doing?",
+          "say": "There is currently a very high KP index has anyone had any Issues using GPS navigation?",
           "tool": "storm_status",
-          "args": {}
+          "args": {},
+          "who": "A drone builder on the ArduPilot forum, 11 May 2024",
+          "source": "https://discuss.ardupilot.org/t/solar-gps-interference/117661"
         },
         {
-          "say": "I want to see the aurora tonight.",
+          "say": "Aurora on red alert. Is it just tonight?",
           "tool": "what_should_i_do",
           "args": {
             "role": "aurora"
-          }
+          },
+          "who": "A forum member in Britain, 10 May 2024",
+          "source": "https://singletrackworld.com/forum/off-topic/psa-aurora-on-red-alert/"
         },
         {
-          "say": "Did space weather ruin 10 May 2024?",
+          "say": "May 10, 2024: it showed the tractor going in circles and auto steer didn't work, and you couldn't engage it.",
           "tool": "what_happened",
           "args": {
             "when": "10 May 2024",
             "operation": "planting"
           },
-          "slow": true
+          "slow": true,
+          "who": "Dennis Wolff, a South Dakota farmer, on that day",
+          "source": "https://www.fox9.com/news/solar-storm-2024-gps-farming-problems"
         },
         {
           "say": "My guidance is out. What else is affected?",
@@ -42,7 +48,19 @@
       "name": "Farms",
       "requests": [
         {
-          "say": "Can I plant the North 40 right now?",
+          "say": "No GPS. We're right in the middle of corn planting.",
+          "tool": "can_i_run",
+          "args": {
+            "operation": "planting",
+            "field": "North 40"
+          },
+          "who": "Kevin Kenney, a Nebraska farmer, 10 May 2024",
+          "source": "https://www.fox9.com/news/solar-storm-2024-gps-farming-problems"
+        },
+        {
+          "say": "Our dealer says the storm has affected all brands of GPS, not solely John Deere. Should we shut off RTK?",
+          "who": "A John Deere dealer's message to farmers, May 2024 (the question is ours)",
+          "source": "https://www.producer.com/news/solar-storm-sends-field-navigation-haywire/",
           "tool": "can_i_run",
           "args": {
             "operation": "planting",
@@ -59,7 +77,7 @@
           }
         },
         {
-          "say": "I have to be planted by {{next-friday}}.",
+          "say": "I have to be planted by Friday.",
           "tool": "can_i_run",
           "args": {
             "operation": "planting",
@@ -160,6 +178,24 @@
           }
         },
         {
+          "say": "Would this have any effect on GPS system and therefore is it recommended to avoid flying during this period?",
+          "who": "A drone pilot on the Phantom Pilots forum, during a G4 storm",
+          "source": "https://phantompilots.com/threads/stage-4-solar-event-fly.36631/",
+          "tool": "what_should_i_do",
+          "args": {
+            "role": "drone_pilot"
+          }
+        },
+        {
+          "say": "I attempted to fly 2 drones last night and both had compass issues",
+          "who": "A drone pilot on the Mavic Pilots forum, during a G4 watch",
+          "source": "https://mavicpilots.com/threads/geomagnetic-storm-watch.145948/",
+          "tool": "what_happened",
+          "args": {
+            "when": "last night"
+          }
+        },
+        {
           "say": "Can my survey crew work near Ludhiana, India?",
           "tool": "can_i_run",
           "args": {
@@ -208,18 +244,23 @@
       "name": "Flights, ships, radio",
       "requests": [
         {
-          "say": "I dispatch flights.",
+          "say": "We are adjusting the flight pattern of a few of our flights. We're flying further south than we would normally fly.",
           "tool": "what_should_i_do",
           "args": {
             "role": "airline"
-          }
+          },
+          "who": "Delta's spokesman, January 2012 radiation storm",
+          "source": "https://www.foxnews.com/science/delta-reroutes-planes-following-massive-solar-eruption"
         },
         {
-          "say": "I hold a ship on position offshore.",
+          "say": "Late this evening our DGNSS differential signal went unstable, and DGNSS 1 and 2 both dropped out of DP control.",
           "tool": "what_should_i_do",
           "args": {
-            "role": "maritime_dp"
-          }
+            "role": "maritime_dp",
+            "seeing": "Late this evening our DGNSS differential signal went unstable, and DGNSS 1 and 2 both dropped out of DP control."
+          },
+          "who": "A ship's crew, from an IMCA incident report",
+          "source": "https://www.imca-int.com/resources/dp/dp-incidents/prepare-for-2025-solar-activity/"
         },
         {
           "say": "I run a shortwave radio net.",
@@ -234,11 +275,14 @@
       "name": "Power, data, timing",
       "requests": [
         {
-          "say": "I am on the grid control desk.",
+          "say": "We're seeing persistent geomagnetically induced current at multiple stations.",
           "tool": "what_should_i_do",
           "args": {
-            "role": "grid_operator"
-          }
+            "role": "grid_operator",
+            "seeing": "We're seeing persistent geomagnetically induced current at multiple stations."
+          },
+          "who": "PJM, the US grid operator, 10 May 2024",
+          "source": "https://www.powermag.com/historic-solar-storm-spurs-pjm-to-extend-geomagnetic-disturbance-warning/"
         },
         {
           "say": "I run a GPU cluster. What should I do about this storm?",
@@ -248,11 +292,14 @@
           }
         },
         {
-          "say": "Our cell network takes its time from GPS.",
+          "say": "I noticed one of my commercial GPS-disciplined NTP servers had lost the GPS 1PPS timing signal",
           "tool": "what_should_i_do",
           "args": {
-            "role": "timing"
-          }
+            "role": "timing",
+            "seeing": "I noticed one of my commercial GPS-disciplined NTP servers had lost the GPS 1PPS timing signal"
+          },
+          "who": "A timing engineer on the time-nuts list",
+          "source": "https://febo.com/pipermail/time-nuts_lists.febo.com/2018-September/093973.html"
         }
       ]
     },
@@ -289,6 +336,7 @@
     "share_access",
     "tell_me_more",
     "position_trust",
+    "alert_my_machines",
     "schedule_jobs",
     "outage_patterns"
   ],

@@ -36,7 +36,8 @@ const sent = (d: Delivery[], reason: string) => d.filter((x) => x.status === 'se
 /** `read: false` uses the forecast already held, for a test that has seeded one. */
 export async function sweep(now = new Date(), { read = true } = {}): Promise<SweepResult> {
   await store.init();
-  const farms = store.allEntries().filter(([id, f]) => canEmailFor(id) && f.crew.some(reachable));
+  // Somebody to email, or a fleet's own software to push to (alert_my_machines). See alerts.ts.
+  const farms = store.allEntries().filter(([id, f]) => canEmailFor(id) && (f.crew.some(reachable) || Boolean(f.machineHook)));
   // Both read even when nobody needs them, so a broken feed shows up here and not only on a storm day.
   if (read) await Promise.all([swpc.refresh(), solarwind.refresh()]);
   const snap = swpc.current() ?? { slots: [] };

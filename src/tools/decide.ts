@@ -353,6 +353,18 @@ export function register(server: McpServer, farmOf: () => string): void {
           text += ` ${degraded.spoken}`;
         }
       }
+      // A date they have to be done by, on a clear day: it was dropped without a word, so the answer sounded like
+      // it had not heard. A bare date is a calendar day, read as written, not shifted into the field's time zone.
+      if (deadline && verdict.go) {
+        const by = new Date(deadline);
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(deadline.trim());
+        if (!Number.isNaN(by.getTime()) && by.getTime() + (dateOnly ? 86_400_000 : 0) > at.getTime()) {
+          const day = by.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: dateOnly ? 'UTC' : f.timeZone ?? 'UTC' });
+          const line = `That's ahead of ${day}, the date you need it done by, so there's no reason to wait.`;
+          text += ` ${line}`;
+          mustSay.push(line);
+        }
+      }
 
       // The people on the machine, for the hours the job would actually run: from now while it is clear, or
       // the clear window it is waiting for. Nothing is said for a job the rig can never hold. See crewheat.ts.

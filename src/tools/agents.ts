@@ -38,6 +38,8 @@ import * as store from '../store.js';
 import { NOAA_DOWN, say, kpRightNow } from './shared.js';
 import * as deps from '../dependencies.js';
 import { geocode, GeocoderDown, lookupDown } from '../geocode.js';
+import * as webhooks from '../webhooks.js';
+import * as machineAlerts from '../machinealerts.js';
 
 export type Trust = 'trust' | 'verify' | 'do_not_trust';
 
@@ -151,6 +153,71 @@ export function register(server: McpServer, farmOf: () => string): void {
         dependencies: judged,
         recheckInMinutes: verdict === 'trust' ? 30 : 10,
         sources: [...new Set([...((sc.sources as string[] | undefined) ?? []), ...judged.map((j) => j.source)])],
+      });
+    },
+  );
+
+  /* ---------------------------------------------------------------- *
+   * Telling a fleet's software, not a person. The alert machinealerts.ts builds for every account (orbita://alerts),
+   * pushed when it changes: a storm due within a day or three for this account's machines, the solar wind turning
+   * south an hour out, and the all clear after. Safety and signing are in webhooks.ts.
+   * ---------------------------------------------------------------- */
+  server.registerTool(
+    'alert_my_machines',
+    {
+      title: 'Push storm alerts to a fleet\'s own software',
+      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true, destructiveHint: false },
+      description:
+        'For robots, drones, vehicles or any machines that cannot read an email: sends this account\'s machine alert ' +
+        'to the fleet\'s own web address whenever it changes, a storm due within a day or three for the saved fields ' +
+        'and the place given to what_should_i_do, the solar wind turning south about an hour out, and the all clear. ' +
+        'Messages are signed (Standard Webhooks). action set with an https url, then a signed test is sent; status; ' +
+        'test; remove. Call this when someone wants their machines, not a person, told before a storm.',
+      inputSchema: {
+        action: z.enum(['set', 'status', 'test', 'remove']).describe('set saves the address and sends a signed test; status says what is set; test sends one again; remove stops it'),
+        url: z.string().max(300).optional().describe('For set: the https address the fleet\'s software listens on'),
+        needMeters: z.number().positive().max(1000).optional().describe('For set: the accuracy the machines need, in metres; 5 when not given, 0.05 for machines on RTK that work to the centimetre'),
+        correction: z.enum(['rtk', 'ppp', 'sbas', 'autonomous']).optional().describe('For set: how the machines\' receivers are corrected; autonomous when not given'),
+      },
+    },
+    async ({ action, url, needMeters, correction }) => {
+      const id = farmOf();
+      const farm = store.get(id);
+      const hook = farm.machineHook ?? null;
+      const demo = id.startsWith('demo:');
+      const sample = () => machineAlerts.forFarm(store.get(id));
+      if (action === 'status') {
+        if (!hook) return say('No address is set for your machines. Give me an https address and I will push storm alerts to it.', { set: false });
+        return say(`Storm alerts for your machines go to ${new URL(hook.url).host}. ${hook.lastResult ? `The last one: ${hook.lastResult}` : 'Nothing has needed sending yet.'}`, { set: true, host: new URL(hook.url).host, lastResult: hook.lastResult ?? null });
+      }
+      if (action === 'remove') {
+        store.update(id, (f) => void (f.machineHook = null));
+        return say(hook ? 'Done. Nothing more will be pushed to your machines.' : 'There was no address set.', { set: false });
+      }
+      const target = action === 'set' ? url : hook?.url;
+      if (!target) return say(action === 'set' ? 'Give me the https address your fleet\'s software listens on.' : 'No address is set yet. Give me one with action set.', { set: Boolean(hook), needs: 'url' });
+      const checked = await webhooks.checkUrl(target);
+      if (!checked.ok) return say(`I can't use that address. ${checked.why}`, { set: Boolean(hook), refused: checked.why });
+      const secret = action === 'set' || !hook ? webhooks.newSecret() : hook.secret;
+      const test = { type: 'orbita.alerts.test', ...sample() };
+      // The demo page never calls out, as it never sends email: what would be sent is shown instead.
+      const result = demo ? { ok: true, status: 0, why: 'not sent from the demo page' } : await webhooks.push(target, secret, test);
+      if (action === 'set') {
+        store.update(id, (f) => void (f.machineHook = { url: checked.url.href, secret, addedAt: new Date().toISOString(), ...(needMeters ? { needM: needMeters } : {}), ...(correction ? { correction } : {}), lastEtag: null, lastResult: null, failures: 0 }));
+      }
+      const host = checked.url.host;
+      const said = demo
+        ? `Saved ${host}. From this page nothing is sent to other addresses; the message it would have sent comes back with this answer.`
+        : result.ok
+          ? `Saved. I sent a signed test to ${host} and it answered ${result.status}. From now on it gets an alert whenever a storm changes the picture for your machines.`
+          : `Saved, but the signed test to ${host} did not arrive: ${result.why} Fix that and ask me to test it again.`;
+      return say(said, {
+        set: true,
+        host,
+        tested: !demo,
+        delivered: demo ? null : result.ok,
+        ...(action === 'set' ? { signingSecret: secret, signing: 'Standard Webhooks: webhook-id, webhook-timestamp, webhook-signature (v1, HMAC-SHA256 over id.timestamp.body)' } : {}),
+        ...(demo ? { wouldSend: test } : {}),
       });
     },
   );

@@ -18,6 +18,7 @@
 
 import { createHash } from 'node:crypto';
 import * as swpc from './swpc.js';
+import * as solarwind from './solarwind.js';
 import { clearWindows, TOLERANCE_M, type Operation } from './domain.js';
 import { statusOperations } from './tools/shared.js';
 import type { Farm } from './store.js';
@@ -52,6 +53,12 @@ export type MachineAlerts = {
    * when one is within three, three hours when it is clear, and never later than the next forecast block.
    */
   checkAgainAt: string;
+  /**
+   * The last hour's warning: the solar wind at L1 has turned hard south, the shape that drives a storm, and reaches
+   * Earth in about this many minutes. NOAA puts that notice at 15 to 60 minutes; it can still turn back north.
+   * Null when it has not.
+   */
+  arriving: { minutes: number; say: string } | null;
   note?: string;
 };
 
@@ -59,7 +66,7 @@ export function forFarm(farm: Farm, now = new Date()): MachineAlerts {
   const snap = swpc.current();
   const base = { generatedAt: now.toISOString(), horizonHours: HORIZON_HOURS };
   if (!snap?.slots.length) {
-    return { ...base, forecastThrough: null, alerts: [], etag: 'no-forecast', checkAgainAt: new Date(now.getTime() + 15 * 60_000).toISOString(), note: 'NOAA could not be read; this is not an all clear.' };
+    return { ...base, forecastThrough: null, alerts: [], arriving: null, etag: 'no-forecast', checkAgainAt: new Date(now.getTime() + 15 * 60_000).toISOString(), note: 'NOAA could not be read; this is not an all clear.' };
   }
   const last = Math.max(...snap.slots.map((s) => new Date(s.time).getTime())) + 3 * HOUR;
   const hours = Math.max(0, Math.min(HORIZON_HOURS, Math.floor((last - now.getTime()) / HOUR)));
@@ -87,9 +94,29 @@ export function forFarm(farm: Farm, now = new Date()): MachineAlerts {
       });
     }
   }
-  const etag = createHash('sha256').update(JSON.stringify(alerts.map((a) => [a.site, a.machine, a.phase, a.blocked]))).digest('hex').slice(0, 16);
-  const minutes = alerts.some((a) => a.phase === 'imminent') ? 15 : alerts.some((a) => a.phase === 'watch') ? 60 : 180;
+  // Machines that are not on a farm: a robot fleet, a mine, a drone operation, a vehicle fleet, anyone who said
+  // where they work (what_should_i_do's place). Judged as position_trust judges a machine when it is told nothing
+  // else: no correction, five metres, unless the fleet said its own when it asked to be pushed (alert_my_machines).
+  if (farm.rolePlace) {
+    const site = { id: 'role-place', name: farm.rolePlace.name, lat: farm.rolePlace.lat, lon: farm.rolePlace.lon };
+    const eq = { id: 'role-machine', name: farm.role ? farm.role.replace(/_/g, ' ') : 'machines', correction: farm.machineHook?.correction ?? ('autonomous' as const) };
+    const needM = farm.machineHook?.needM ?? 5;
+    const windows = clearWindows(snap.slots, eq, site, needM, now, hours);
+    let cursor = now.getTime();
+    let blocked: SiteAlert['blocked'] = null;
+    for (const w of [...windows, { start: new Date(end).toISOString(), end: new Date(end).toISOString(), hours: 0 }]) {
+      const st = new Date(w.start).getTime();
+      if (st - cursor >= HOUR) { blocked = { from: new Date(cursor).toISOString(), to: new Date(st).toISOString() }; break; }
+      cursor = Math.max(cursor, new Date(w.end).getTime());
+    }
+    const lead = blocked ? (new Date(blocked.from).getTime() - now.getTime()) / HOUR : Infinity;
+    alerts.push({ site: site.name, machine: eq.name, correction: eq.correction, job: 'positioning', needM, phase: lead <= 24 ? 'imminent' : lead <= HORIZON_HOURS ? 'watch' : 'clear', blocked, windows });
+  }
+  const wind = solarwind.incoming();
+  const arriving = wind?.level === 'likely' ? { minutes: wind.minutes, say: wind.say } : null;
+  const etag = createHash('sha256').update(JSON.stringify([alerts.map((a) => [a.site, a.machine, a.phase, a.blocked]), Boolean(arriving)])).digest('hex').slice(0, 16);
+  const minutes = arriving || wind?.level === 'watch' ? 5 : alerts.some((a) => a.phase === 'imminent') ? 15 : alerts.some((a) => a.phase === 'watch') ? 60 : 180;
   const nextBlock = Math.ceil(now.getTime() / (3 * HOUR)) * 3 * HOUR;
-  const checkAgainAt = new Date(Math.min(now.getTime() + minutes * 60_000, Math.max(nextBlock, now.getTime() + 15 * 60_000))).toISOString();
-  return { ...base, forecastThrough: new Date(last).toISOString(), alerts, etag, checkAgainAt };
+  const checkAgainAt = new Date(Math.min(now.getTime() + minutes * 60_000, Math.max(nextBlock, now.getTime() + Math.min(minutes, 15) * 60_000))).toISOString();
+  return { ...base, forecastThrough: new Date(last).toISOString(), alerts, arriving, etag, checkAgainAt };
 }

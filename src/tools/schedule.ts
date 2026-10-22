@@ -93,20 +93,31 @@ export function register(server: McpServer, farmOf: () => string): void {
       if (!f) return say(`I don't have a field called "${clean(field)}".${namesOf(farm.fields)} Which one did you mean?`);
       if (equipment && !store.equipmentNamed(farm, equipment)) return say(`I don't have a machine called "${clean(equipment)}".${namesOf(farm.equipment)} Which one did you mean?`, { needs: 'equipment' });
       const eq = store.findEquipment(farm, equipment) ?? farm.equipment[0];
-      const p = period ?? 'month';
+      let p = period ?? 'month';
       const now = new Date();
+      const since = (q: typeof p) => new Date(now.getTime() - PERIOD_DAYS[q] * 86_400_000 - 3 * 3_600_000);
       let slots;
+      // A year needs the GFZ archive. When it is down, the last month from NOAA is said instead, and said to be.
+      let shorter = '';
       try {
-        slots = await history.fetchRange(new Date(now.getTime() - PERIOD_DAYS[p] * 86_400_000 - 3 * 3_600_000), now);
+        slots = await history.fetchRange(since(p), now);
       } catch {
-        return say("I can't reach the Kp archive right now. Ask me again in a few minutes.", { unavailable: true });
+        if (p !== 'year') return say("I can't reach the Kp archive right now. Ask me again in a few minutes.", { unavailable: true });
+        try {
+          slots = await history.fetchRange(since('month'), now);
+          shorter = "The archive for the whole year isn't answering right now, so here is the last month. ";
+          p = 'month';
+        } catch {
+          return say("I can't reach the Kp archive right now. Ask me again in a few minutes.", { unavailable: true });
+        }
       }
       if (!slots.length) return say("The Kp archive didn't have those days. Ask me again in a few minutes.", { unavailable: true });
       // With no job named, the farm job the machine is bought for: planting on a centimetre rig, spraying otherwise.
       const usual = statusOperations(eq.correction);
       const ops = [operation ?? (usual.includes('planting') ? 'planting' : usual[0])] as Operation[];
       const lost = lostHours(slots, ops.map((o) => ({ operation: o, eq })), f, p, now);
-      return say(speakLost(lost, f.name, p), { field: f.name, period: p, jobs: lost, source: 'https://kp.gfz.de/en/data' });
+      const source = history.fromNoaa.has(slots) ? 'https://services.swpc.noaa.gov/text/daily-geomagnetic-indices.txt' : 'https://kp.gfz.de/en/data';
+      return say(`${shorter}${speakLost(lost, f.name, p)}`, { field: f.name, period: p, asked: period ?? 'month', jobs: lost, source });
     },
   );
 }

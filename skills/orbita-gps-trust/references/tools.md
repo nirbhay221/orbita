@@ -4,6 +4,19 @@ Written from the server's own tool list by `scripts/skill-tools.mjs`. Do not edi
 
 A tool marked "reads" changes nothing. A tool marked "writes" saves or sends something, so the person agrees first.
 
+## `alert_my_machines`
+
+Writes.
+
+For robots, drones, vehicles or any machines that cannot read an email: sends this account's machine alert to the fleet's own web address whenever it changes, a storm due within a day or three for the saved fields and the place given to what_should_i_do, the solar wind turning south about an hour out, and the all clear. Messages are signed (Standard Webhooks). action set with an https url, then a signed test is sent; status; test; remove. Call this when someone wants their machines, not a person, told before a storm.
+
+| Argument | Values | Needed |
+|---|---|---|
+| `action` | set, status, test, remove | yes |
+| `url` | string | no |
+| `needMeters` | number | no |
+| `correction` | rtk, ppp, sbas, autonomous | no |
+
 ## `can_i_run`
 
 Reads.
@@ -219,3 +232,4 @@ Protective steps for somebody who looks after something a solar storm can reach:
 | `orbit` | low, medium, high, beyond | no |
 | `step` | integer | no |
 | `place` | string | no |
+| `seeing` | string | no |

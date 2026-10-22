@@ -345,3 +345,35 @@ details.group > summary .count { font-family: var(--mono); font-size: 0.68rem; c
 .audience:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .farm-note { font-size: 0.82rem; color: var(--muted); margin: 14px 0 8px; }
 @media (max-width: 640px) { .ask { padding: 18px; } .ask-form .button { padding-inline: 14px; } .ask-form { gap: 8px; } .mic { width: 40px; height: 40px; } }
+
+/* When the question is about, and Start again, under the ask box. The same control as the Echo page. */
+.when { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; }
+.when-label { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+.seg, .preset, .restart { border: 1px solid var(--rule-strong); background: transparent; color: var(--ink); border-radius: 9999px; padding: 6px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+.seg { color: var(--muted); }
+.seg:hover, .preset:hover, .restart:hover { color: var(--ink); border-color: var(--muted); }
+.seg[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.preset[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.seg:focus-visible, .preset:focus-visible, .restart:focus-visible, .when input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.restart { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.restart svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.when-panel { flex-basis: 100%; display: grid; gap: 12px; padding: 14px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg); }
+.when-panel[hidden] { display: none; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.when-fields { display: flex; flex-wrap: wrap; gap: 12px; }
+.when-field { display: grid; gap: 4px; }
+.when-field span { font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.when input { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 8px; padding: 6px 10px; color-scheme: light dark; }
+.when-readout { margin: 0; font-size: 14px; color: var(--ink); }
+.when-note { flex-basis: 100%; margin: 0; font-size: 13px; color: var(--muted); }
+@media (max-width: 480px) { .restart { margin-left: 0; } }
+/* On a phone the menu scrolled sideways with no sign it could, and the theme button sat off screen. The three
+   links that only jump down this page go, since scrolling gets there; the other page, Try it and the theme stay. */
+@media (max-width: 480px) { .top-nav a:nth-of-type(n+3) { display: none; } .brand-tag { display: none; } }
+
+/* Real people's words on the examples: who said it, small, under the words; where, linked below the list. */
+.request .who { display: block; margin-top: 4px; font-size: 0.78rem; color: var(--muted); font-style: normal; }
+.said-where { margin-top: 10px; font-size: 0.85rem; color: var(--muted); }
+.said-where summary { cursor: pointer; }
+.said-where ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.said-where a { color: var(--ink); }

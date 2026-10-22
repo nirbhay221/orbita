@@ -147,8 +147,15 @@ console.log('\nThe tools, end to end');
   const back = await tools.outage_patterns({ period: 'month' });
   check('outage_patterns reads the archive and counts the storm', /planting on the planter would have been held for about 9 hours/.test(text(back)), text(back));
   globalThis.fetch = async () => { throw new Error('down'); };
-  const down = await tools.outage_patterns({ period: 'year' });
-  check('with the archive down, it says so', /can't reach the Kp archive/.test(text(down)), text(down));
+  // GFZ down and no network: a year still answers from NOAA's stored quarters, and names NOAA as its source.
+  const year = await tools.outage_patterns({ period: 'year' });
+  check('with GFZ down, a year is counted from the NOAA days kept here', /Over the last year at North 40/.test(text(year)) && /swpc\.noaa\.gov/.test(JSON.stringify(year.structuredContent ?? {})), text(year));
+  const history = await import('./dist/history.js');
+  const may = await history.fetchRange(new Date(Date.UTC(2024, 4, 10)), new Date(Date.UTC(2024, 4, 10, 23, 59)));
+  check('the May 2024 storm is kept here: eight blocks, peaking at Kp 9', may.length === 8 && Math.max(...may.map((s) => s.kp)) === 9, JSON.stringify(may));
+  // The last week is in neither GFZ nor the stored quarters, and NOAA's live file is unreachable too: it says so.
+  const down = await tools.outage_patterns({ period: 'week' });
+  check('with every archive down, it says so', /can't reach the Kp archive/.test(text(down)), text(down));
   globalThis.fetch = realFetch;
 }
 

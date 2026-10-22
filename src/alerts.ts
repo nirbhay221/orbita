@@ -22,6 +22,10 @@ import { sendEmail, canEmailFor, toDemoPhone, type Delivery, type Email } from '
 import { spokenTime } from './timezone.js';
 import { reachable, stopFooter } from './consent.js';
 import { adviceNow } from './trade.js';
+import { advise, type Role } from './playbook.js';
+import { geomagneticLatitude } from './domain.js';
+import * as machineAlerts from './machinealerts.js';
+import * as webhooks from './webhooks.js';
 
 const HOUR = 3_600_000;
 const label = (op: string) => op.replace(/_/g, ' ');
@@ -169,5 +173,120 @@ export async function checkFieldAlerts(now = new Date(), which: 'all' | 'account
         });
     }
   }
+  attempted.push(...(await checkRoleAlerts(now, which)));
+  if (which !== 'demo') await pushMachineAlerts(now);
   return attempted;
+}
+
+/**
+ * The same warning for everybody else Orbita serves, not only farms: a grid control room, a drone operator, a fleet
+ * of delivery robots, a ship holding position, a satellite team. Two moments, each sent once.
+ *
+ * The day before. The person's own playbook (playbook.ts) reads NOAA's forecast for their role at their geomagnetic
+ * latitude, and calls it imminent when a storm that matters to them is due within the day: the same reading the
+ * spoken answer gives, so the email cannot disagree with it.
+ *
+ * The last hour. The solar wind measured at L1, a million and a half kilometres upstream, turns hard south, the
+ * shape that drives a storm. NOAA says that gives 15 to 60 minutes' notice, and it can still turn back north before
+ * it arrives, which the message says. Sent to farms too, at most once in six hours.
+ * https://www.nesdis.noaa.gov/our-satellites/currently-flying/dscovr-deep-space-climate-observatory
+ */
+export async function checkRoleAlerts(now = new Date(), which: 'all' | 'accounts' | 'demo' = 'all'): Promise<Delivery[]> {
+  const snap = swpc.current();
+  if (!snap?.slots.length) return [];
+  const sky = {
+    now,
+    levels: { g: snap.scales.g, s: snap.scales.s, r: snap.scales.r },
+    yesterday: snap.scales.yesterday,
+    days: snap.scales.days,
+    slots: snap.slots,
+    kpNow: solarwind.estimatedKp()?.kp ?? null,
+  };
+  const arriving = solarwind.incoming();
+  const attempted: Delivery[] = [];
+  for (const [id, farm] of store.allEntries()) {
+    const demo = !canEmailFor(id);
+    if ((which === 'accounts' && demo) || (which === 'demo' && !demo)) continue;
+    const to = recipients(farm, 'storm');
+    if (!to.length || (!farm.role && !farm.fields.length)) continue;
+    const send = async (key: string, subject: string, body: string): Promise<void> => {
+      if (farm.alertsSent.includes(key)) return;
+      if (!(await claim(id, (x) => {
+        if (x.alertsSent.includes(key)) return false;
+        x.alertsSent = [...x.alertsSent.slice(-29), key];
+        return true;
+      }))) return;
+      for (const c of to) {
+        const email: Email = { to: c.email, sender: id, reason: 'storm', subject, text: `${body}\n\nYou are getting this because you were added as a contact for storms and agreed to it.${stopFooter(c)}` };
+        if (demo) toDemoPhone(id, { to: c.name, reason: 'storm', subject, text: body, stop: c.stopId ?? undefined });
+        else attempted.push(await sendEmail(email));
+      }
+    };
+    const site = farm.rolePlace ?? farm.fields[0];
+    const where = farm.rolePlace ? ` near ${farm.rolePlace.name}` : '';
+    // ---- the day before, for a role ----
+    // A farm with fields already has its own storm email above, job by job; the field crew playbook would repeat it.
+    if (farm.role && !(farm.role === 'field_crew' && farm.fields.length)) {
+      const advice = advise(farm.role as Role, sky, site ? geomagneticLatitude(site.lat, site.lon) : null);
+      if (advice.phase === 'imminent' || advice.phase === 'during') {
+        const day = (advice.reading.peak?.time ?? now.toISOString()).slice(0, 10);
+        const steps = advice.actions.slice(0, 3).map((a) => `- ${a.say}`).join('\n');
+        await send(
+          `role:${farm.role}:${day}`,
+          `Space weather ahead for ${advice.label}${where}`,
+          `${advice.situation}\n\n${steps ? `What to do:\n${steps}\n\n` : ''}Ask Orbita for the rest, or whether it has eased.`,
+        );
+      }
+    }
+    // ---- the last hour, for everybody watching ----
+    if (arriving?.level === 'likely') {
+      const block = Math.floor(now.getTime() / (6 * HOUR));
+      await send(
+        `arriving:${block}`,
+        `Arriving in about ${arriving.minutes} minutes: solar wind turned south`,
+        `${arriving.say}\n\nIf it holds, the next hour is when positions, radio and power lines are hit first. Anything that can wait an hour should.`,
+      );
+    }
+  }
+  return attempted;
+}
+
+/** After ten failures in a row the address is no longer tried; status says so, and set or test starts it again. */
+const MAX_HOOK_FAILURES = 10;
+
+/**
+ * The machine alert, pushed to the fleets that asked for it (alert_my_machines), whenever it changes: a storm comes
+ * into the three day forecast, moves within a day, the solar wind turns south, or it all clears. A first look that is
+ * all clear sends nothing. Only real accounts: the demo page's sandboxes never call out. See webhooks.ts.
+ */
+export async function pushMachineAlerts(now = new Date()): Promise<number> {
+  let pushed = 0;
+  for (const [id, farm] of store.allEntries()) {
+    const hook = farm.machineHook;
+    if (!hook || !canEmailFor(id) || (hook.failures ?? 0) >= MAX_HOOK_FAILURES) continue;
+    const feed = machineAlerts.forFarm(farm, now);
+    if (feed.etag === 'no-forecast' || feed.etag === hook.lastEtag) continue;
+    const matters = Boolean(feed.arriving) || feed.alerts.some((a) => a.phase !== 'clear');
+    if (!hook.lastEtag && !matters) {
+      store.update(id, (x) => void (x.machineHook && (x.machineHook.lastEtag = feed.etag)));
+      continue;
+    }
+    // Claimed first, as the emails are, so two overlapping runs cannot both push the same change.
+    if (!(await claim(id, (x) => {
+      if (!x.machineHook || x.machineHook.lastEtag === feed.etag) return false;
+      x.machineHook.lastEtag = feed.etag;
+      return true;
+    }))) continue;
+    const r = await webhooks.push(hook.url, hook.secret, { type: 'orbita.alerts', ...feed });
+    const at = spokenTime(now.toISOString(), farm.fields[0]?.timeZone);
+    store.update(id, (x) => {
+      if (!x.machineHook) return;
+      x.machineHook.lastResult = r.ok ? `delivered ${at}` : `failed ${at}: ${r.why}`;
+      x.machineHook.failures = r.ok ? 0 : (x.machineHook.failures ?? 0) + 1;
+      // Not delivered: forget the etag, so the next run tries the same change again.
+      if (!r.ok) x.machineHook.lastEtag = hook.lastEtag ?? null;
+    });
+    if (r.ok) pushed++;
+  }
+  return pushed;
 }

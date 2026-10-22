@@ -342,7 +342,15 @@ async function start() {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'chip';
-      b.textContent = line.say;
+      // A real person's words: in quotes, with who said them. Where is in the button's title.
+      b.textContent = line.source ? `“${line.say}”` : line.say;
+      if (line.who) {
+        const who = document.createElement('small');
+        who.className = 'who';
+        who.textContent = line.who;
+        b.append(who);
+        b.title = `Said by ${line.who}. Source: ${line.source}`;
+      }
       b.addEventListener('click', () => void say(line, '', b));
       box.append(b);
     }

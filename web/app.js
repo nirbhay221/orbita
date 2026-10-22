@@ -11,6 +11,8 @@
  * header, and the server scopes storage to it.
  */
 
+import { setUpWhen, forWhen, withWhen, picked, spoken, namesADay } from './when.js';
+
 const SESSION_KEY = 'orbita.demo.session';
 const THEME_KEY = 'orbita.demo.theme';
 
@@ -176,7 +178,8 @@ function setTheme(theme) {
 const nextFriday = (() => {
   const d = new Date();
   d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7 || 7));
-  return d.toISOString().slice(0, 10);
+  // The visitor's own calendar date. toISOString() gave the UTC one, a day late on every American evening.
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 })();
 
 const catalogue = await fetch('/requests.json').then((r) => r.json());
@@ -255,8 +258,10 @@ function updateLatencyStat() {
 // Set once the browser's own farm exists. A click that came first was answered for nobody.
 let ready = null;
 
-async function run(tool, args, button) {
+async function run(asked, askedArgs, button, words = '') {
   if (ready) await ready;
+  // An example tapped with another time picked is asked about that time. See forWhen in when.js.
+  const [tool, args] = forWhen(asked, askedArgs, words);
   if (button) { button.disabled = true; button.setAttribute('aria-pressed', 'true'); }
   document.querySelectorAll('.request[aria-pressed="true"]').forEach((b) => {
     if (b !== button) b.setAttribute('aria-pressed', 'false');
@@ -322,10 +327,43 @@ function buildRequests() {
       button.type = 'button';
       button.className = 'request';
       button.setAttribute('aria-pressed', 'false');
-      button.innerHTML = `<span>${req.say}</span><span class="tool">${req.tool}</span>`;
+      // A real person's words carry who said them, under the words. Where they said it is linked below the list,
+      // since a link cannot sit inside a button.
+      const words = document.createElement('span');
+      words.textContent = req.source ? `“${req.say}”` : req.say;
+      if (req.who) {
+        const who = document.createElement('small');
+        who.className = 'who';
+        who.textContent = req.who;
+        words.append(who);
+      }
+      const name = document.createElement('span');
+      name.className = 'tool';
+      name.textContent = req.tool;
+      button.append(words, name);
       if (req.slow) button.title = 'This one reaches the Kp archive, so it takes longer.';
-      button.addEventListener('click', () => run(req.tool, req.args, button));
+      button.addEventListener('click', () => run(req.tool, req.args, button, req.say));
       wrap.append(button);
+    }
+    const sourced = requests.filter((r) => r.source);
+    if (sourced.length) {
+      const where = document.createElement('details');
+      where.className = 'said-where';
+      const summary = document.createElement('summary');
+      summary.textContent = sourced.length === requests.length ? 'Where these words come from' : `Where the ${sourced.length} quoted ones come from`;
+      const list = document.createElement('ul');
+      for (const r of sourced) {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = r.source;
+        a.rel = 'noopener';
+        a.target = '_blank';
+        a.textContent = r.who;
+        li.append(a);
+        list.append(li);
+      }
+      where.append(summary, list);
+      wrap.append(where);
     }
     panels.push(wrap);
     host.append(wrap);
@@ -346,8 +384,8 @@ function buildRequests() {
  * ------------------------------------------------------------------ */
 
 const FARM_NOTE =
-  'Farm examples use a stand-in field, North 40 near Ames, Iowa, with a planter on RTK and a sprayer on WAAS. ' +
-  'Use your location and they are about ground you can see.';
+  'Farm examples ask about a field this page sets up for you: North 40 near Ames, Iowa, with a planter on RTK and a ' +
+  'sprayer on WAAS. Press Use my location and they are about the ground where you are.';
 
 /** Replace the stand-in with the visitor's real coordinates. */
 async function useMyLocation() {
@@ -359,7 +397,7 @@ async function useMyLocation() {
   if (!where) {
     button.disabled = false;
     button.textContent = 'Use my location';
-    note.textContent = `${FARM_NOTE} Your browser did not share a location, so the stand-in is still in use.`;
+    note.textContent = `${FARM_NOTE} Your browser did not share a location, so the field near Ames is still in use.`;
     return;
   }
   await callTool('register_field', { name: 'Your location', lat: where.lat, lon: where.lon, baselineKm: 18 });
@@ -385,7 +423,7 @@ async function ensureFarm() {
     for (const machine of SEED.equipment) await callTool('register_equipment', machine);
     note.textContent = FARM_NOTE;
   } catch (err) {
-    note.textContent = `Could not set up the stand-in farm. ${err.message}`;
+    note.textContent = `Could not set up the farm for this page. ${err.message}`;
   }
 }
 
@@ -442,6 +480,7 @@ el('reset-demo').addEventListener('click', () => {
 });
 
 buildRequests();
+setUpWhen();
 ready = ensureFarm();
 await refreshSky();
 await ready;
@@ -479,7 +518,7 @@ if (standInForm) {
     if (!say) return;
 
     go.disabled = true;
-    write('<p class="thinking">Choosing a tool...</p>');
+    write(`<p class="thinking">Choosing a tool${picked() && !namesADay(say) ? `, for ${esc(spoken(picked()))}` : ''}...</p>`);
     const started = Date.now();
 
     try {
@@ -488,7 +527,7 @@ if (standInForm) {
         // The identity matters: without it the stand-in ran as one shared farm, so a
         // field one visitor added was visible to the next.
         headers: { 'content-type': 'application/json', 'x-orbita-demo': session },
-        body: JSON.stringify({ say, history: turns, next }),
+        body: JSON.stringify({ say: withWhen(say), history: turns, next }),
       });
       const body = await res.json();
       const roundTrip = Date.now() - started;

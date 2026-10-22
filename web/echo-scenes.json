@@ -46,12 +46,14 @@
       "name": "Can the job run",
       "lines": [
         {
-          "say": "Can I plant today?",
+          "say": "No GPS. We're right in the middle of corn planting.",
           "tool": "can_i_run",
           "args": {
             "operation": "planting",
             "equipment": "planter"
-          }
+          },
+          "who": "Kevin Kenney, a Nebraska farmer, 10 May 2024",
+          "source": "https://www.fox9.com/news/solar-storm-2024-gps-farming-problems"
         },
         {
           "say": "Can I spray?",
@@ -76,16 +78,20 @@
           "args": {}
         },
         {
-          "say": "What is the sun doing?",
+          "say": "There is currently a very high KP index has anyone had any Issues using GPS navigation?",
           "tool": "storm_status",
-          "args": {}
+          "args": {},
+          "who": "A drone builder on the ArduPilot forum, 11 May 2024",
+          "source": "https://discuss.ardupilot.org/t/solar-gps-interference/117661"
         },
         {
-          "say": "What happened on May 10, 2024?",
+          "say": "May 10, 2024: it showed the tractor going in circles and auto steer didn't work, and you couldn't engage it.",
           "tool": "what_happened",
           "args": {
             "when": "May 10 2024"
-          }
+          },
+          "who": "Dennis Wolff, a South Dakota farmer, on that day",
+          "source": "https://www.fox9.com/news/solar-storm-2024-gps-farming-problems"
         },
         {
           "say": "Tell me more.",

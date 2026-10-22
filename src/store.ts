@@ -75,6 +75,11 @@ export type Farm = {
   role?: string;
   /** Where the thing they look after is, for what_should_i_do, when it is not one of their fields. */
   rolePlace?: { name: string; lat: number; lon: number };
+  /**
+   * Where to push this account's machine alert, for machines that cannot read an email, with the secret the messages
+   * are signed with, what was last sent (by etag) and how the last attempt went. See webhooks.ts.
+   */
+  machineHook?: { url: string; secret: string; addedAt: string; needM?: number; correction?: 'rtk' | 'ppp' | 'sbas' | 'autonomous'; lastEtag?: string | null; lastResult?: string | null; failures?: number } | null;
   crew: CrewContact[];
   jobLog: JobEntry[];
   /** Alerts already sent, as "storm:2026-09-15", so a crew is never emailed twice for one storm day. */

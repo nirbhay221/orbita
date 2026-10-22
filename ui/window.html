@@ -164,8 +164,10 @@
     // storm was showing as a real Hold on a quiet day.
     document.getElementById('example').hidden = !opts.example;
     const opName = String(d.operation || 'work').replace(/_/g, '-');
-    document.getElementById('title').textContent =
-      opName.charAt(0).toUpperCase() + opName.slice(1) + (d.field ? ` - ${d.field}` : '');
+    // storm_status names no job, and its panel read "Work". It is the forecast itself, so it says so.
+    document.getElementById('title').textContent = d.operation
+      ? opName.charAt(0).toUpperCase() + opName.slice(1) + (d.field ? ` - ${d.field}` : '')
+      : 'Kp, the next three days';
 
     const chip = document.getElementById('chip');
     // storm_status and farm_status carry no single verdict, so they get no chip
@@ -236,8 +238,10 @@
     });
 
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.setAttribute('width', W);
-    svg.setAttribute('height', H);
+    // Scaled to the panel's width. At its drawn width it was wider than the panel, so the limit's label at the
+    // right end was cut off ("limit for pla") unless the chart was scrolled.
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('style', `max-width:${W}px;height:auto`);
     svg.innerHTML = parts.join('');
 
     const blocked = tKp != null ? slots.filter((s) => s.kp > tKp).length : 0;

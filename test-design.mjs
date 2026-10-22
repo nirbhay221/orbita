@@ -77,7 +77,7 @@ const owner = await connect('acct:owner');
   process.env.ORBITA_SCOPE = 'all';
   const all = await connect('acct:all');
   const allNames = (await all.tools()).map((t) => t.name);
-  check('with the scope set to all, they are published', SECONDARY_TOOLS.every((n) => allNames.includes(n)) && MERGED_AWAY.every((n) => allNames.includes(n) && !names.includes(n)) && !allNames.includes('my_farm') && names.length === 17, `${names.length} ${names.join(',')}`);
+  check('with the scope set to all, they are published', SECONDARY_TOOLS.every((n) => allNames.includes(n)) && MERGED_AWAY.every((n) => allNames.includes(n) && !names.includes(n)) && !allNames.includes('my_farm') && names.length === 18, `${names.length} ${names.join(',')}`);
   await all.close();
   delete process.env.ORBITA_SCOPE;
 }

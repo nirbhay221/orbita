@@ -630,6 +630,14 @@
         "job_report"
       ],
       "why": "A report of logged jobs is a fair reading too."
+    },
+    {
+      "say": "Send storm alerts to our robot fleet at https://fleet.example.com/orbita",
+      "tool": "alert_my_machines",
+      "args": {
+        "action": "set",
+        "url": "https://fleet.example.com/orbita"
+      }
     }
   ]
 }

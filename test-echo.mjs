@@ -31,6 +31,10 @@ const { configureForTest: fakeZones } = await import('./dist/timezone.js');
 fakeZones(async () => 'America/Phoenix');
 geo.configureForTest(async () => ({ name: 'Yuma', region: 'Arizona', country: 'United States', lat: 32.69, lon: -114.63, timeZone: 'America/Phoenix' }));
 
+// The lines are real people's words now (see evals/real-voices.json), so they are named here once.
+const PLANT = "No GPS. We're right in the middle of corn planting.";
+const SUN = 'There is currently a very high KP index has anyone had any Issues using GPS navigation?';
+const MAY = "May 10, 2024: it showed the tractor going in circles and auto steer didn't work, and you couldn't engage it.";
 let pass = 0, fail = 0;
 const check = (label, cond, detail = '') => {
   if (cond) { pass++; console.log(`  ok    ${label}`); }
@@ -99,16 +103,16 @@ for (const group of scenes.groups) {
     check(`"${line.say}" is answered`, !r.isError && r.said.length > 10, r.said.slice(0, 90));
   }
 }
-check('planting is clear on a quiet day, and the crew is told about the heat', said['Can I plant today?'].data.go === true && /For the crew, the heat index reaches/.test(said['Can I plant today?'].said), said['Can I plant today?'].said);
-check('the very first answer about a new field is in local time, not UTC', /Clear until \w{3} \d{1,2}(:\d\d)? [AP]M MST/.test(said['Can I plant today?'].said) && !/UTC/.test(said['Can I plant today?'].said), said['Can I plant today?'].said);
-check('before Dana shares her day, she is not named', !/Dana is on day/.test(said['Can I plant today?'].said));
+check('planting is clear on a quiet day, and the crew is told about the heat', said[PLANT].data.go === true && /For the crew, the heat index reaches/.test(said[PLANT].said), said[PLANT].said);
+check('the very first answer about a new field is in local time, not UTC', /Clear until \w{3} \d{1,2}(:\d\d)? [AP]M MST/.test(said[PLANT].said) && !/UTC/.test(said[PLANT].said), said[PLANT].said);
+check('before Dana shares her day, she is not named', !/Dana is on day/.test(said[PLANT].said));
 // Sharing a crew member's day is no longer on the page, and still works: her code, then the same question.
 const linked = await call('crew_contact', { action: 'add', name: 'Dana', dayCode: '4691 4443' });
 await crewday.refresh('dana-link', true);
 check('typing her code links her day', linked.data.linked === true, linked.said);
 const withCrew = await call('can_i_run', { operation: 'planting', equipment: 'planter' });
 check('after it, the same question names her and her hours', /Dana is on day 1 in the heat: 2 hours of it today, done by 9 am\./.test(withCrew.said), withCrew.said);
-check('the storm of May 2024 is called what it was', /That was the sun/.test(said['What happened on May 10, 2024?'].said) && /lose their precise fix altogether/.test(said['What happened on May 10, 2024?'].said), said['What happened on May 10, 2024?'].said);
+check('the storm of May 2024 is called what it was', /That was the sun/.test(said[MAY].said) && /lose their precise fix altogether/.test(said[MAY].said), said[MAY].said);
 check('the sprayer on WAAS is answered for its own tolerance', said['Can I spray?'].data.correction === 'sbas' && said['Can I spray?'].data.go === true);
 void history;
 

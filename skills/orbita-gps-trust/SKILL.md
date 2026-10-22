@@ -43,6 +43,7 @@ that follow.
 | How many hours did space weather cost me this month or this year | `outage_patterns` |
 | I run satellites, a grid, flights, a data centre, a pipeline; what should I do | `what_should_i_do` |
 | I am a robot, drone or spacecraft; can I trust my position | `position_trust` |
+| Tell our robot fleet's software before a storm, at an https address | `alert_my_machines` |
 | I planted 80 acres on the North 40 | `log_job` |
 | Give me a report; send it to the office | `job_report` |
 | The North 40 is near Grand Island; the planter runs RTK | `my_farm` |

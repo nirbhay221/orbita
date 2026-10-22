@@ -81,7 +81,11 @@ const opt = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 
-const golden = JSON.parse(readFileSync('./evals/golden.json', 'utf8'));
+// Another case file in the same format, such as evals/real-voices.json: people's own words. Its results go to
+// their own file, so the golden baseline is never compared against or overwritten by a different set.
+const FILE = opt('--file', './evals/golden.json');
+const OTHER = !/(^|[\\/])golden\.json$/.test(FILE);
+const golden = JSON.parse(readFileSync(FILE, 'utf8'));
 const cases = golden.cases.filter((c) => typeof c.say === 'string');
 
 const { registerTools } = await import('./dist/tools.js');
@@ -329,15 +333,16 @@ const report = {
   declineAccuracy: declineAcc,
   ...s,
 };
-writeFileSync(join(OUT, 'last-run.json'), JSON.stringify(report, null, 2));
+const stem = OTHER ? `${FILE.replace(/^.*[\\/]/, '').replace(/\.json$/, '')}-` : '';
+writeFileSync(join(OUT, `${stem}last-run.json`), JSON.stringify({ file: FILE, ...report }, null, 2));
 if (flag('--save-baseline')) {
-  writeFileSync(join(OUT, 'baseline.json'), JSON.stringify(report, null, 2));
-  console.log('\nsaved evals/baseline.json');
+  writeFileSync(join(OUT, `${stem}baseline.json`), JSON.stringify(report, null, 2));
+  console.log(`\nsaved evals/${stem}baseline.json`);
 }
 
 let before = null;
-if (existsSync(join(OUT, 'baseline.json')) && !flag('--save-baseline')) {
-  before = JSON.parse(readFileSync(join(OUT, 'baseline.json'), 'utf8'));
+if (existsSync(join(OUT, `${stem}baseline.json`)) && !flag('--save-baseline')) {
+  before = JSON.parse(readFileSync(join(OUT, `${stem}baseline.json`), 'utf8'));
 }
 const cmp = compare(report, before);
 if (cmp.hadBaseline) {
