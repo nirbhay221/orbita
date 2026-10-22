@@ -125,6 +125,8 @@ export function register(server: McpServer, farmOf: () => string): void {
           // Only what was said this time. Leaving the crop or the baseline out must not erase the one already there.
           const given = Object.fromEntries(Object.entries(field).filter(([, v]) => v !== undefined));
           Object.assign(hit, given, { id: known.id, name: hit.name, timeZone: moved ? undefined : hit.timeZone });
+          // The field just spoken about is the one a question with no field name means.
+          f.fields = [hit, ...f.fields.filter((x) => x.id !== hit.id)];
         });
         resolveFieldTimeZone(id, known.id, field.lat, field.lon);
         // Start following the nearest magnetometer. This only notes which one is
@@ -145,7 +147,9 @@ export function register(server: McpServer, farmOf: () => string): void {
           reason: 'limit',
         });
       }
-      store.update(id, (f) => void f.fields.push(field));
+      // Newest first. Every tool defaults to the first field, so "My field is near Sorriso… how many hours did
+      // space weather cost me?" was answered for the North 40 saved earlier in the same conversation.
+      store.update(id, (f) => void f.fields.unshift(field));
       resolveFieldTimeZone(id, field.id, field.lat, field.lon);
       geomag.watch(field.lat, field.lon);
       glotec.watch(field.lat, field.lon);

@@ -145,7 +145,8 @@ console.log('\nIn can_i_run: three fields, no name spoken');
   const guessed = text(await tools.can_i_run({ operation: 'planting' }));
   check('it still answers when nobody can be asked', /Clear for planting|Hold off/.test(guessed), guessed);
   check('but it says which field and machine it assumed',
-    guessed.includes('That is for North 40 with the planter'), guessed);
+    // The field registered last is the one assumed: the one just spoken about.
+    guessed.includes('That is for Lot 12 with the planter'), guessed);
 
   // One field only: nothing ambiguous, so nothing to ask and nothing to disclose.
   store.forget('elicit-test');

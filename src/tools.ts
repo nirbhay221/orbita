@@ -122,7 +122,9 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
         if (name === 'watch_jobs') {
           const a = (args[0] ?? {}) as { action?: string; field?: string; place?: string; correction?: string };
           const farm = store.get(farmOf());
-          if (a.action === 'start' && a.place && !(a.field ? store.findField(farm, a.field) : farm.fields[0])) {
+          // A town with no field name is the town just asked about, even when another field is saved: "near
+          // Sorriso… watch it for me" was watched on the North 40 from an earlier question.
+          if (a.action === 'start' && a.place && !(a.field && store.findField(farm, a.field))) {
             const fieldName = a.field || `Field near ${a.place.split(',')[0].trim()}`;
             await impl.get('my_farm')?.({ fieldName, place: a.place, ...(a.correction && !farm.equipment.length ? { machineName: 'my machine', correction: a.correction } : {}) });
             args[0] = { ...a, field: fieldName };
