@@ -95,7 +95,7 @@ sky(8, 2);
 
 console.log('\nConnected through Strands\' MCP client');
 const orbita = await orbitaFor('acct:strands');
-check('the tools are the server\'s default set', orbita.tools.length === 17 && orbita.tools.some((t) => t.name === 'position_trust'), String(orbita.tools.length));
+check('the tools are the server\'s default set', orbita.tools.length === 18 && orbita.tools.some((t) => t.name === 'position_trust'), String(orbita.tools.length));
 check('the skill was read from the server, not from a file', /^---\nname: orbita-gps-trust\n/.test(orbita.skill) && SKILL_URI === 'skill://orbita-gps-trust/SKILL.md');
 check('the server\'s instructions came with it', /already saved 1 field/.test(orbita.instructions));
 const prompt = systemPrompt(orbita);
@@ -127,7 +127,7 @@ console.log('\nNothing is saved or sent without a yes');
   const read = await tools.find((t) => t.name === 'can_i_run').invoke({ operation: 'planting' });
   check('a tool that only reads runs without asking', !read.refused && /Kp/.test(read.say), read.say);
   const writers = orbita.tools.filter((t) => t.toolSpec.annotations?.readOnlyHint !== true).map((t) => t.name).sort();
-  check('the tools held back are exactly the ones the server marks as writing', writers.join() === ['crew_contact', 'job_report', 'log_job', 'my_farm', 'share_access', 'watch_jobs'].join(), writers.join());
+  check('the tools held back are exactly the ones the server marks as writing', writers.join() === ['alert_my_machines', 'crew_contact', 'job_report', 'log_job', 'my_farm', 'share_access', 'watch_jobs'].join(), writers.join());
 }
 
 console.log('\nWith a yes, the chain goes on');
