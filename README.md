@@ -18,6 +18,7 @@ machine and this job, and tells everyone else a solar storm reaches what to do a
 **[▶ Try it live](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html)** ·
 [The Echo Show panel](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/) ·
 [Connect any MCP client](#run-it) ·
+[Architecture](docs/ARCHITECTURE.md) ·
 [Agent Skill](skills/orbita-gps-trust/SKILL.md) ·
 [Friction log](FRICTION.md) ·
 [For the judges](#for-the-judges)
@@ -141,6 +142,11 @@ flowchart LR
   S -- "Lambda every 15 min (EventBridge)" --> D[("DynamoDB<br/>farms, sealed AES-256-GCM")]
 ```
 
+**The full design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: ten diagrams GitHub draws and lets you zoom,
+covering what runs where on AWS, a voice turn step by step, the go-or-hold decision, the storm alert path, the
+DynamoDB record, crew consent, security and deployment, with the decisions behind them. A printable copy is
+[docs/architecture.pdf](docs/architecture.pdf).
+
 Three things sit between the NOAA data and an answer, and none of them is a model:
 
 - **The job sets the tolerance.** Planting and strip-till 2 inches, spraying 20, tillage a metre, cadastral survey
@@ -245,6 +251,7 @@ node skills/orbita-gps-trust/scripts/connect.mjs https://ct5ae538t6.execute-api.
 | [`evals/`](evals) | Tool choice, whole conversations, real receivers, calibration, three storms replayed |
 | [`infra/`](infra) | CDK: the farms table, the scheduled alert check and its alarms |
 | [`deploy/`](deploy) | The instance, its hardening, secrets and the deploy script |
+| [`docs/`](docs) | The architecture: ten diagrams and the decisions behind them, and a PDF of it |
 
 ## What Alexa+ would need
 
