@@ -78,5 +78,9 @@ fi
 ak="$(get /orbita/anthropic-key)"
 [ -n "$ak" ] && printf 'ORBITA_ANTHROPIC_KEY=%s\n' "$ak" >>"$out"
 
+# The backup model's key (NVIDIA), used when Claude cannot answer. Absent means the word rules come next.
+nk="$(get /orbita/nvidia-key)"
+[ -n "$nk" ] && printf 'ORBITA_NVIDIA_KEY=%s\n' "$nk" >>"$out"
+
 [ "$owner" = "none" ] || chown "$owner:$owner" "$out"
 chmod 0400 "$out"

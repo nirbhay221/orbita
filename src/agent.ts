@@ -77,7 +77,7 @@ const MODEL = process.env.ORBITA_AGENT_MODEL ?? 'claude-sonnet-5-5';
  */
 const WORKSPACE = process.env.ORBITA_ANTHROPIC_WORKSPACE ?? '';
 
-const SYSTEM = [
+export const SYSTEM = [
   'You are standing in for Alexa+ talking to a self-hosted MCP add-on called Orbita.',
   'Orbita answers whether GPS-guided fieldwork will hold the accuracy a job needs, from NOAA space weather.',
   '',
