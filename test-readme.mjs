@@ -93,6 +93,16 @@ check('the README has links that say lines', links.length >= 8, String(links.len
 check('each says one to three lines, as the page plays', links.every((l) => l.length >= 1 && l.length <= 3), JSON.stringify(links.map((l) => l.length)));
 check('and no line is longer than the page takes', links.flat().every((l) => l.length <= 300));
 
+console.log('\nImages and links inside the page');
+const images = [...new Set([...readme.matchAll(/src="(media\/[^"]+)"/g)].map((m) => m[1]))];
+check('the README shows images', images.length >= 5, String(images.length));
+check('every image it shows is in the repository', images.every((p) => existsSync(p)), images.filter((p) => !existsSync(p)).join());
+// GitHub makes an anchor of every heading and of every <a id>. A link to one that is not there goes nowhere.
+const slug = (t) => t.trim().toLowerCase().replace(/[^a-z0-9 -]/g, '').replace(/ /g, '-');
+const anchors = new Set([...readme.matchAll(/^#{1,4} (.+)$/gm)].map((m) => slug(m[1])).concat([...readme.matchAll(/<a id="([^"]+)">/g)].map((m) => m[1])));
+const jumps = [...new Set([...readme.matchAll(/\]\(#([^)]+)\)/g)].map((m) => m[1]))];
+check('every #link lands on a heading or an anchor', jumps.every((j) => anchors.has(j)), jumps.filter((j) => !anchors.has(j)).join());
+
 console.log('\nThings that were true once');
 for (const stale of ['Seventeen tools by default', 'Twenty one tools is a lot', 'Claude Haiku 4.5 reads', 'mrfentmen', '`ORBITA_GPSJAM=off` turns it off', 'GPSJAM\'s daily aircraft reports. The testing schedule covers']) {
   check(`"${stale}" is not said any more`, !readme.includes(stale));

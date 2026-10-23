@@ -307,7 +307,7 @@
       "name": "Robots",
       "requests": [
         {
-          "say": "I'm a delivery robot in Fargo. Can I trust my GPS position right now?",
+          "say": "We run delivery robots in Fargo, North Dakota. Can they trust their GPS right now?",
           "tool": "position_trust",
           "args": {
             "lat": 46.88,

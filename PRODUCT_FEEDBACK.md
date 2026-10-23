@@ -51,6 +51,10 @@ turn, and a proactive channel for MCP add-ons, none of which exist today.
 | SES (v2) | Emails confirmed crew contacts when a watched job clears or a storm is coming |
 | Strands Agents SDK | The agent in `strands/`: Strands' MCP client connects to this server, the Agent Skill it serves becomes the system prompt, each tool is wrapped so the agent sees the next step, and writes wait for a yes. Its model is Claude through Strands' Anthropic provider |
 | Polly | Speaks the same sentence the tool returns, on the demo page, with per-caller and daily caps |
+| DynamoDB | The farms table (`infra/`): one sealed item per farm, versioned writes, and a TTL that deletes sandbox farms after seven days |
+| Lambda, EventBridge Scheduler | The alert check (`src/sweep.ts`) every fifteen minutes on its own, so a storm warning does not depend on the web server staying up |
+| CloudWatch, SNS | Alarms when that check fails twice or stops running |
+| CDK | The table, the check and the alarms as code, built from this repository's Dockerfile |
 
 Not used: Bedrock and CloudFront. Bedrock is not available to this account, so the Strands agent reaches Claude
 through Strands' Anthropic provider instead; moving it to Bedrock is a change of one model class. The stand-in model calls Anthropic's API directly, and the account could not
