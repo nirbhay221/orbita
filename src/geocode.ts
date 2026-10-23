@@ -207,12 +207,45 @@ async function fetchPlace(query: string, timeoutMs = 2500): Promise<Place | null
   return regionOnly(query, rows) ?? pick(query, rows);
 }
 
-let lookup: Lookup = (query) => fetchPlace(query);
+/**
+ * A whole address, said the way it is written on an envelope: "3130 W Stolley Park Rd, Grand Island, Nebraska 68801,
+ * USA". Everything before the first comma was taken as the town, so the geocoder was asked for a town called "3130 W
+ * Stolley Park Rd", and "Nebraska 68801" was not a state it knew; both came back "I couldn't find". A storm does not
+ * change between a street and its town, so the street is dropped and the postal code taken out, and when the town
+ * still cannot be found the postal code is looked up on its own, which the geocoder accepts.
+ */
+const POSTAL = /\b\d{5}(?:-\d{3,4})?\b|\b\d{6}\b|\b[A-Z]\d[A-Z] ?\d[A-Z]\d\b/i;
+// A street word ends an English address part ("Stolley Park Rd") and starts most others ("Avenida Blumenau"). At the
+// start in English it is a town: "St. Paul".
+const STREET_END = /\b(rd|road|st|street|ave|avenue|blvd|boulevard|dr|drive|ln|lane|way|hwy|highway|pkwy|parkway|ct|court|pl|sq|square|strasse|straße)\.?$/i;
+const STREET_START = /^(avenida|av\.|rua|calle|carrer|via|rue|chemin)\s/i;
+const streetLike = (part: string): boolean => /\d/.test(part) || STREET_END.test(part) || STREET_START.test(part);
+export function simplify(query: string): { query: string; postal: string | null } {
+  const postal = POSTAL.exec(query)?.[0] ?? null;
+  let parts = query.split(',').map((p) => p.replace(POSTAL, '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  // A leading part with a house number or a street word is the street, when something after it can be the town.
+  while (parts.length > 1 && streetLike(parts[0])) parts = parts.slice(1);
+  return { query: parts.join(', '), postal };
+}
+
+async function fetchAddress(query: string): Promise<Place | null> {
+  const { query: cleaned, postal } = simplify(query);
+  // Nothing left but a state or a country, "68801, USA": the postal code is the place.
+  const first = narrowing(cleaned.split(',')[0] ?? '');
+  if (postal && (!cleaned || first.region || first.country)) {
+    const byPostal = await fetchPlace(postal);
+    if (byPostal) return byPostal;
+  }
+  const found = cleaned ? await fetchPlace(cleaned) : null;
+  return found ?? (postal ? fetchPlace(postal) : null);
+}
+
+let lookup: Lookup = (query) => fetchAddress(query);
 export const geocode: Lookup = (query) => lookup(query);
 
 /** Test seam, so tests never reach the network. */
 export function configureForTest(fn: Lookup | null): void {
-  lookup = fn ?? ((query) => fetchPlace(query));
+  lookup = fn ?? ((query) => fetchAddress(query));
 }
 
 export const spoken = (p: Place): string => [p.name, p.region ?? p.country].filter(Boolean).join(', ');

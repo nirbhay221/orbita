@@ -19,6 +19,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { shorten, more, morePage, inScope, sentences } from './brief.js';
 import * as store from './store.js';
+import { simplify } from './geocode.js';
 import { farmCountry, localiseUnits, metric } from './region.js';
 
 /** An answer, spoken and structured, in the units of the country its fields are in. */
@@ -125,7 +126,7 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
           // A town with no field name is the town just asked about, even when another field is saved: "near
           // Sorriso… watch it for me" was watched on the North 40 from an earlier question.
           if (a.action === 'start' && a.place && !(a.field && store.findField(farm, a.field))) {
-            const fieldName = a.field || `Field near ${a.place.split(',')[0].trim()}`;
+            const fieldName = a.field || `Field near ${(simplify(a.place).query || a.place).split(',')[0].trim()}`;
             await impl.get('my_farm')?.({ fieldName, place: a.place, ...(a.correction && !farm.equipment.length ? { machineName: 'my machine', correction: a.correction } : {}) });
             args[0] = { ...a, field: fieldName };
           }
@@ -194,7 +195,7 @@ export function registerTools(server: McpServer, farmOf: () => string): void {
         if (a.removeWhat) return call('remove', { what: a.removeWhat, ...(a.removeName ? { name: a.removeName } : {}) });
         // "My field is near Sorriso" gives the town and no name. It used to save only the machine and then ask "which
         // field is it working, and what town is it near?", the town it had just been told. Named as watch_jobs names it.
-        if (!a.fieldName && a.place && /[a-z0-9]/i.test(a.place)) a.fieldName = `Field near ${a.place.split(',')[0].trim()}`;
+        if (!a.fieldName && a.place && /[a-z0-9]/i.test(a.place)) a.fieldName = `Field near ${(simplify(a.place).query || a.place).split(',')[0].trim()}`;
         const said: string[] = [];
         const did: { tool: string; [k: string]: unknown }[] = [];
         const step = async (tool: string, args: Record<string, unknown>) => {

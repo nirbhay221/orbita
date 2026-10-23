@@ -125,5 +125,18 @@ console.log('\nOnly a state or a province, as somebody running a control room sa
   check('two letters alone are not read as a state', geo.regionOnly('MN', []) === null);
 }
 
+console.log('\nA whole address, as written on an envelope');
+{
+  const s = (q) => geo.simplify(q);
+  check('the street and the zip are taken off', s('3130 W Stolley Park Rd, Grand Island, Nebraska 68801, USA').query === 'Grand Island, Nebraska, USA');
+  check('...and the zip is kept to fall back on', s('3130 W Stolley Park Rd, Grand Island, Nebraska 68801, USA').postal === '68801');
+  check('a zip after the state', s('Grand Island, NE 68801').query === 'Grand Island, NE');
+  check('a street that starts with its word, abroad', s('Avenida Blumenau 1000, Sorriso, Mato Grosso, Brazil').query === 'Sorriso, Mato Grosso, Brazil');
+  check('"St. Paul" is a town, not a street', s('St. Paul, Minnesota').query === 'St. Paul, Minnesota');
+  check('an Indian PIN code', s('Ludhiana, Punjab 141001, India').query === 'Ludhiana, Punjab, India' && s('Ludhiana, Punjab 141001, India').postal === '141001');
+  check('a zip on its own is the place', s('68801').query === '' && s('68801').postal === '68801');
+  check('a town alone is left alone', s('Fargo, North Dakota').query === 'Fargo, North Dakota' && s('Fargo, North Dakota').postal === null);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
