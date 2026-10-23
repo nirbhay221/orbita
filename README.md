@@ -1,27 +1,159 @@
 # Orbita
 
-**What the sun is about to do to the things you rely on, and what to do about it. GPS-guided work is the deepest case: a go or a hold for this field, this machine, this job.**
+**Will GPS hold today? Orbita is an Alexa+ add-on that turns NOAA space weather into a go or a hold for this field,
+this machine and this job, and tells everyone else a solar storm reaches what to do about it.**
+
+[![tests](https://github.com/nirbhay221/orbita/actions/workflows/tests.yml/badge.svg)](https://github.com/nirbhay221/orbita/actions/workflows/tests.yml)
+&nbsp;Apache-2.0 · MCP spec 2025-11-25 over Streamable HTTP · 18 tools by default · MCP Apps panel · Agent Skill ·
+live on AWS
 
 > **You:** Alexa, can I run the planter this morning?<br>
 > **Alexa:** Hold off planting. Kp 7.0 (G3 strong) puts expected drift near 3 inches against the 2 inches
 > planting needs, and measured in the last few minutes, 46 percent of the satellite signals over the field are
 > disturbed. Next clear window opens Thursday at 10 AM. Want me to watch it and tell you when it clears?
 
-**Try it:** [talk to it on a screen, with a crew member's inbox beside it](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html)
-(press **Speak**, or type) ·
-MCP endpoint `https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/mcp` (account linking) ·
-[health](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/health)
+## Try it now, no Echo needed
+
+**[Open the live demo](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html)**, then type or press
+**Speak**. A Claude model reads this server's real tool list and plays Alexa+, the tools run on the live server on
+AWS against today's NOAA data, and the phone beside the screen shows what the crew would be emailed.
+
+Every ▶ link below opens that page and says the lines for you, on a new farm of its own, so nothing said earlier
+gets in the way. The answers are live: they follow today's sky, so the numbers will not match these notes word for
+word.
+
+**A farm**
+
+* ▶ [Can I run strip-till today?](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=The%20North%2040%2C%20near%20Grand%20Island%2C%20Nebraska.%20The%20strip-till%20bar%27s%20on%20RTK.%20Can%20I%20run%20strip-till%20today%3F)
+  A field near Grand Island, Nebraska, saved in one sentence with the strip-till bar on RTK, and a go or a hold:
+  the expected drift in inches against the 2 inches the job needs, and when it clears.
+* ▶ [What happened on May 10, 2024?](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=The%20North%2040%2C%20near%20Grand%20Island%2C%20Nebraska.%20The%20planter%27s%20on%20RTK.&say=What%20happened%20to%20my%20planter%20on%20May%2010%2C%202024%3F%20The%20auto%20steer%20kept%20going%20in%20circles.)
+  The biggest storm in twenty years, replayed for that field from the archived Kp record: Kp 9 (G5), how many
+  three-hour blocks were outside planting tolerance, and which hours' passes to check for guess rows.
+* ▶ [Planting tonight in Brazil, on a quiet day](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=My%20field%20is%20near%20Sorriso%2C%20Brazil.%20The%20planter%27s%20on%20RTK.%20Can%20I%20plant%20tonight%3F&say=Watch%20it%20for%20me.)
+  Sorriso, Mato Grosso. No storm, and still a hold: near the magnetic equator, plasma bubbles break up the signals
+  after sunset. Then "Watch it for me." In Brazil's evening, about 4 to 10 PM Pacific, it sets the watch and says
+  when the job clears; at other hours the field is clear now and there is nothing to watch.
+* ▶ [How many hours did space weather cost me this month?](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=My%20field%20is%20near%20Sorriso%2C%20Brazil.%20The%20planter%27s%20on%20RTK.&say=How%20many%20hours%20did%20space%20weather%20cost%20me%20this%20month%3F)
+  Counted from the GFZ Kp archive for that field and machine: about 200 hours over the last 30 days when this was
+  written, nearly all of them the evening plasma bubble hours, and the worst day.
+* ▶ [Fit twelve hours of strip-till into the clear hours](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=The%20North%2040%2C%20near%20Grand%20Island%2C%20Nebraska.%20The%20strip-till%20bar%27s%20on%20RTK.&say=I%20need%20twelve%20hours%20of%20strip-till%20done%20in%20the%20next%20three%20days.%20When%20should%20we%20run%20it%3F)
+  The hours of work, placed in the hours the NOAA forecast leaves clear over the next three days.
+
+**Not only farms**
+
+* ▶ [A satellite operator](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=I%20operate%20satellites%20in%20low%20Earth%20orbit.%20Will%20the%20next%20three%20days%20throw%20off%20our%20orbit%20predictions%3F)
+  "Will the next three days throw off our orbit predictions?" In May 2024 drag rose so fast that they did.
+* ▶ [A drone show in Hong Kong](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=I%27m%20flying%20a%20drone%20show%20in%20Hong%20Kong%20tonight.%20The%20drones%20are%20on%20RTK.%20Can%20it%20run%3F)
+  Hong Kong called off its National Day drone show in 2024 on a quiet day. Orbita holds it in the evening hours
+  and points to the clear ones.
+* ▶ [Delivery robots in Fargo](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=We%20run%20delivery%20robots%20in%20Fargo%2C%20North%20Dakota.%20Can%20they%20trust%20their%20GPS%20right%20now%3F)
+  Trust, verify or do not trust, with the expected error against what the robots need.
+* ▶ [A survey crew in Ludhiana, India](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=Can%20my%20survey%20crew%20work%20near%20Ludhiana%2C%20India%3F%20We%27re%20on%20RTK.)
+  The sun, and the thing that is not the sun: the India and Pakistan border is on the FAA's list for jamming and
+  spoofing.
+* ▶ [A grid control room in Minnesota](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=I%20run%20a%20grid%20control%20room%20in%20Minnesota.%20Is%20there%20anything%20we%20should%20get%20ready%20for%20this%20week%3F)
+  Whether the forecast calls for its geomagnetic disturbance procedure, from NERC's template.
+* ▶ [A household that saw the news](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html?say=There%27s%20a%20solar%20storm%20on%20the%20news.%20Will%20it%20hurt%20my%20phone%20or%20anything%20in%20the%20house%3F)
+  A storm does not damage phones, cars or anything in the house, and Orbita says so.
+
+**Other ways in**
+
+* **The Echo Show panel.** [The panel page](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/) runs the MCP
+  App an Echo Show would display: the next three days of forecast drawn against the job's own limit.
+* **Any MCP client.** The endpoint is `https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/mcp`, behind account
+  linking (OAuth 2.1 with PKCE). To list the tools with no account:
+  `node skills/orbita-gps-trust/scripts/connect.mjs https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/mcp --demo`.
+* **On your own machine.** `npm install && npm run build && npm start`, then http://localhost:8788, or
+  `docker build -t orbita . && docker run -p 8788:8788 orbita`. See [Running it](#running-it). The stand-in needs
+  `ORBITA_ANTHROPIC_KEY` for the model; without it, word rules choose the tool and the screen says so.
+* [Health and today's model budget](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/health).
+
+## For the judges
+
+The rest of this file is long because the reasoning is the work. This section is the map, in the order of the
+hackathon's judging criteria.
+
+**Tech Implementation**
+
+* A self-hosted MCP server on spec 2025-11-25 over Streamable HTTP, using the official SDK at runtime
+  ([`src/server.ts`](src/server.ts), [`src/tools.ts`](src/tools.ts)). Account linking is OAuth 2.1 with PKCE in the
+  static client shape Alexa+ actually uses ([Getting it in front of Alexa+](#getting-it-in-front-of-alexa)).
+* Inside the voice budget: under 13 ms at p95 for every in-memory tool, three tools in a row 12.3 ms
+  ([LATENCY.md](LATENCY.md)). NOAA is polled in the background; nothing external is called inside a turn.
+* The newer parts of the specification, each with a reason: elicitation to ask which field
+  ([Asking, instead of guessing](#asking-instead-of-guessing)), a task for the 45 day season plan
+  ([The answer that does not fit in a turn](#the-answer-that-does-not-fit-in-a-turn)), tool annotations on every
+  tool, and structured results that carry the next step.
+* Measured, not only forecast: one-minute disturbance readings from about 4,000 satellite links, 27 magnetometers,
+  NOAA's ionosphere map and ground electric field ([Measured, not only forecast](#measured-not-only-forecast)).
+* The accuracy call was fitted on 2024 and tested on 2025 against real GPS receivers
+  ([CALIBRATION.md](CALIBRATION.md), [BACKTEST.md](BACKTEST.md)).
+* 2,405 automated checks run on every push, on Node 20 and 22, plus the infrastructure stack, DynamoDB Local and
+  the Strands agent ([Running it](#running-it)).
+
+**Design**
+
+* Built to be heard once by somebody with their hands busy: the verdict first, the number in the job's own units,
+  when it clears, and the rest held for "tell me more"
+  ([How the conversation is designed](#how-the-conversation-is-designed)).
+* Setup in one sentence by the nearest town. Questions say why before they ask, one at a time, as Amazon's add-on
+  rules ask.
+* Every answer ends on the next step and carries the chain it is on, so one request can run several steps.
+* An Echo Show panel that does not encode go and no go as red against green
+  ([The Echo Show panel](#the-echo-show-panel)), and cards for lists, reports and confirmations.
+* It speaks the local units and names the local free correction in each of the 12 countries Alexa+ is in.
+
+**Potential Impact**
+
+* The May 2024 storm stopped planting across the Midwest. Kansas State University puts losses to Midwest crop
+  producers at an assumed $565 million, and auto-steer runs on more than half of the US acres in the main crops
+  ([The problem](#the-problem)).
+* The same answer serves 23 kinds of operator a storm reaches, machines that act on a position, and spacecraft
+  ([Everyone else the storm reaches](#everyone-else-the-storm-reaches),
+  [For an agent that acts on a position](#for-an-agent-that-acts-on-a-position)).
+* Checked against what really happened: three storms replayed against operators' recorded actions, 22 of 22
+  records matched ([Is the answer worth having](#is-the-answer-worth-having)).
+
+**Quality of the Idea**
+
+* Not a native Alexa+ feature, and not a wrapper around a feed: Alexa's weather alerts come from the National
+  Weather Service, space weather comes from a different NOAA centre, and the existing space weather MCP servers
+  expose the feed without saying what to do ([Prior art](#prior-art),
+  [Why it is not a wrapper around a feed](#why-it-is-not-a-wrapper-around-a-feed)).
+* Each of the things the rules name as creative for Alexa+ is here and used for a reason:
+  * an agentic workflow: chained next steps, and a [Strands agent](#a-strands-agent-that-follows-the-chain) that
+    follows them;
+  * state across sessions: fields, machines, watches, a job log, crew contacts who agreed to be emailed;
+  * cards and an [MCP App](#the-echo-show-panel) for the Echo Show;
+  * an [Agent Skill](#the-agent-skill), also readable from the server itself.
+
+**The track and the mini challenges**
+
+* **Alexa+ track.** A working self-hosted MCP server (above) and a simulated Alexa+ experience in a web app, the
+  path the rules allow while MCP add-on access is in preview ([An Alexa+ stand-in](#an-alexa-stand-in)). The stand-in
+  is the demo page; the server is the same one Alexa+ would call.
+* **AWS Builder.** EC2 behind API Gateway and CloudFront; DynamoDB for farms; Lambda started by EventBridge
+  Scheduler for the storm alert check, with CloudWatch alarms and SNS; SES for crew email; Polly for the spoken
+  demo; SSM Parameter Store for keys; S3 for deploys; all of the table and alerting in CDK
+  ([`infra/`](infra/)); and an agent on AWS's Strands Agents SDK ([`strands/`](strands/)). Summary in
+  [PRODUCT_FEEDBACK.md](PRODUCT_FEEDBACK.md).
+* **Friction log.** [FRICTION.md](FRICTION.md): dated entries from building against the Alexa+ documentation, each
+  with what was expected, what happened, the workaround and a fix.
+* **Built in the hackathon window.** The first commit is 18 September 2026, after the 31 August start.
+* **Third-party data.** Every source and its terms are in [What is real, and what is not](#what-is-real-and-what-is-not).
+  Data whose terms do not allow this use is off by default.
+
+## What it answers
 
 A storm on the sun reaches a lot more than the sky. It moves satellite positioning off its line, blacks out HF
 radio on the daylit side, drives current into power lines, pipelines and rails, raises radiation on polar flights
 and in orbit, and takes away the vertical guidance small planes land on. NOAA publishes all of it, live and free,
-in a form written for scientists. Orbita is an Alexa+ add-on that reads it and tells each person what it means for
-the thing they look after, where it is, and when to act.
+in a form written for scientists. Orbita reads it and tells each person what it means for the thing they look
+after, where it is, and when to act.
 
-GPS-guided work is where it goes deepest, because that is where the loss is measured. The May 2024 storm alone is
-put by Kansas State University at an assumed $565 million in losses for Midwest crop producers, in the middle of
-planting ([K-State, 2025](https://www.ksre.k-state.edu/news-and-publications/news/stories/2025/04/agriculture-solar-weather-gps-outage.html)). For a farm or a crew,
-Orbita remembers the fields, machines and correction type, and answers for that job:
+GPS-guided work is where it goes deepest, because that is where the loss is measured. For a farm or a crew, Orbita
+remembers the fields, machines and correction type, and answers for that job:
 
 | Ask | What happens |
 |---|---|
@@ -33,6 +165,8 @@ Orbita remembers the fields, machines and correction type, and answers for that 
 | "Can we run, with the crew in mind?" | A crew member's heat day from the sister add-on Sudor, never their health |
 | "Can I fly the drone tonight in Pune?" | Near the magnetic equator, the evening plasma bubbles that break GPS on quiet days are a hold too |
 | "Can I spray this afternoon?" | Rain forecast over the field is said for spraying and drone jobs, and that GPS itself is unaffected |
+| "I need twelve hours of planting this week" | The hours placed in the clear windows of the next three days, one job per machine per hour |
+| "How many hours did storms cost me this month?" | The hours a job would have been held, the worst day, and how many were evening bubbles rather than storms |
 
 It works anywhere: exposure is computed from geomagnetic latitude, so a field in Punjab, Bavaria or Patagonia is
 judged where it actually sits. Satellite teams, grid rooms, airlines, HF radio, timing, pipelines, drilling, rail,
@@ -48,9 +182,9 @@ India, SouthPAN in Australia, and PPP in Brazil, which has no SBAS of its own. O
 answers in, and where planned GPS tests are and are not published were already handled per country.
 
 The Latin `orbita` meant a track cut into the ground by a wheel. Built for the
-[Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com), Alexa+ track, plus the Open
-Source and AWS Builder mini challenges. Self-hosted MCP server, spec 2025-11-25, Streamable HTTP, 18 tools by
-default, with an MCP Apps panel for the Echo Show.
+[Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com), Alexa+ track, with the AWS
+Builder mini challenge. Self-hosted MCP server, spec 2025-11-25, Streamable HTTP, 18 tools by default, with an MCP
+Apps panel for the Echo Show.
 
 ## One storm
 
@@ -60,7 +194,8 @@ position right now, and what a satellite operator, a grid room, an airline or a 
 On 10 May 2024 a G5 storm hit in the middle of planting. "All the tractors were sitting at the ends of the field," a
 Nebraska farmer [told 404 Media](https://www.404media.co/solar-storm-knocks-out-tractor-gps-systems-during-peak-planting-season); in South Dakota the screen showed the tractor "going in circles" and auto-steer would not
 engage. In March 2026 a military GPS exercise on the North Carolina coast did the same to farms that had no
-warning at all. Nobody told them either was coming, or when it would clear.
+warning at all. NOAA had put out a storm watch days before May 10, in Kp and G levels; nothing told a farmer what
+that meant for this field and this machine, or when it would clear.
 
 | The farmer says | Orbita |
 |---|---|
@@ -97,7 +232,7 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, 18 tools by default | **Real and deployed** on AWS, behind account linking. 2,247 automated checks, run on every push |
+| MCP server, 18 tools by default | **Real and deployed** on AWS, behind account linking. 2,405 automated checks, run on every push |
 | Agent Skill | **Real**: `skills/orbita-gps-trust`, to the open Agent Skills format, passing the format's own validator. Installable as a folder, and readable from the server as `skill://` resources |
 | Strands agent | **Real**: `strands/agent.mjs`, on AWS's Strands Agents SDK. It reads the skill from the server and follows each next step. The chain, the yes before a write and the step cap are checked with a scripted model at no cost; the path through Claude needs a key and is not in the automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
@@ -112,21 +247,6 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 | The talking demo | **Real model**: Claude Sonnet 5.5 reads the real tool list and picks a tool, as Alexa+ would. With no model available, word rules pick instead, and the screen says which |
 | Alexa+ itself | **Not available to us.** MCP add-on access is in preview |
 | Echo Show panel | **Real MCP App**, tested against a simulated host. Not seen on a real device |
-
-## Start here
-
-This file is long because the reasoning is the work. If you are evaluating the project:
-
-| If you want | Read |
-|---|---|
-| To try it in two minutes | [The demo page](#the-demo-page) |
-| What it does, in one exchange | [What it does](#what-it-does) |
-| Why it is not a wrapper around a feed | [Why it is not a wrapper around a feed](#why-it-is-not-a-wrapper-around-a-feed) |
-| The part that is measured rather than forecast | [Measured, not only forecast](#measured-not-only-forecast) |
-| Where it is wrong, or cannot know | [Honest limitations](#honest-limitations) |
-
-Free NOAA, USGS and DLR products, no API keys for the data. Every tool call is answered from memory; nothing
-external is called inside a turn. `npm test` runs 2,247 checks.
 
 ## The problem
 
@@ -726,7 +846,7 @@ call is the flight director's and the flight surgeon's.
 
 ## Tools
 
-Seventeen tools by default. Setting up a farm is one tool, `my_farm`, because tool choice gets worse as the list
+Eighteen tools by default. Setting up a farm is one tool, `my_farm`, because tool choice gets worse as the list
 grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are listed instead.
 
 **Answers**
@@ -744,6 +864,9 @@ grows; with `ORBITA_SCOPE=all` the original, finer-grained setup tools are liste
 * `plan_season` a longer look across the weeks ahead, as a task that reports back
 * `position_trust` is for a machine, not a person: whether a GPS position can be trusted at a place right now, as
   one of three verdicts an agent can branch on. See "For an agent that acts on a position" below
+* `alert_my_machines` is for machines that cannot read an email: it pushes the same alerts `orbita://alerts` holds to
+  the fleet's own https address whenever they change, signed to the Standard Webhooks format, with a signed test on
+  setup. The demo page never calls out; it shows what would be sent
 * `what_can_you_do` answers the customer who asks what this is
 * `tell_me_more` the rest of the last answer
 
@@ -891,13 +1014,17 @@ not part of the automated checks.
 
 ## On a screen
 
-`/echo.html` is a stand-in for an Echo Show. Down the page are the lines somebody might say; each is a real tool
-call with real arguments (`web/echo-scenes.json`), and a test calls every one. Under them, **Or say anything**
-takes typed or spoken words and sends them to the stand-in, which picks the tool and says whether a model or the
-word rules chose it. Beside the screen is a crew member's inbox: the public demo never sends email, so what the
-crew would be sent is shown there, and its buttons are the real agreement links. One line takes something typed:
-the eight digits a crew member reads out from their own Sudor. After that this server asks that one directly, and
-the answer about the job names that person and their hours.
+`/echo.html` is a stand-in for an Echo Show. Under the screen, **Speak** or the box beside it takes spoken or typed
+words and sends them to the stand-in, which picks the tool and says whether a model or the word rules chose it.
+**When** asks about now, a time in the next three days, or a past day, and **Start again** gives the browser a new,
+empty farm. Beside the screen is a crew member's inbox: the public demo never sends email, so what the crew would be
+sent is shown there, and its buttons are the real agreement links. "Behind the answer" lists every tool call and how
+long it took. For testing without a microphone, the lines folded away at the foot of the page are each a real tool
+call with real arguments (`web/echo-scenes.json`), and a test calls every one.
+
+**A link can say the lines.** `/echo.html?say=...&say=...` starts a new farm and says up to three lines in order,
+through the same model as anything typed, then takes them off the address so a reload does not say them again. Every
+▶ link in [Try it now](#try-it-now-no-echo-needed) is one of these. Three is the stand-in's burst for one caller.
 
 ## The demo page
 
@@ -958,12 +1085,12 @@ cd infra && npm test        # what the stack promises, with no AWS account
 Moving a running server over is `node scripts/copy-to-table.mjs` once on the host, then the `/orbita/store`
 parameter set to `dynamodb` and a restart. The file is kept, so going back is the parameter and a restart.
 
-`npm test` runs everything, 2,247 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 2,405 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 1,991 checks, no live data
-npm run test:live           # 256 checks, against a running server and the real feed
+npm run test:unit           # 2,113 checks, no live data
+npm run test:live           # 292 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines
 node test-playbook.mjs      # roles, phases, triggers, odds, voice limits, sources, the grid base rate
@@ -1013,8 +1140,8 @@ the local stdio kind, which is exactly the half of the ecosystem this already is
 
 **One warning if you run this alongside the companion add-on.** Cursor has a soft
 ceiling of roughly 40 active tools across every connected server, and past it the agent
-silently loses access to some of them rather than telling you. Orbita publishes 15 and
-Sudor 13, so the pair is 28 before anything else is connected. On a host with a ceiling,
+silently loses access to some of them rather than telling you. Orbita publishes 18 and
+Sudor 18, so the pair is 36 before anything else is connected. On a host with a ceiling,
 connect one or the other.
 
 ## Getting it in front of Alexa+
@@ -1464,12 +1591,12 @@ added from real misses.
 
 ## Performance
 
-Alexa+ allows roughly 500 ms for a full round trip. Measured against live NOAA data on
-12 September 2026: `storm_status` 24 ms, `can_i_run` 4 to 6 ms, `what_should_i_do` 3 to 6 ms,
-`what_else_is_affected` 4 ms, and the slowest request of the whole probe 21 ms. On 13 September,
-with all twenty one tools, the watch, crew and job log tools answered in 3 to 5 ms and the slowest
-request was 19 ms. Nothing external is touched in the request path; emails are sent after the
-answer, never inside it.
+Alexa+ allows roughly 500 ms for a full round trip. `node test-latency.mjs` measures the server's own share, 20 calls
+per tool over HTTP, and writes it to [LATENCY.md](LATENCY.md). On 22 October 2026 every in-memory tool answered
+inside 13 ms at p95 (`storm_status` the slowest at 12.7 ms, `can_i_run` 6.2 ms), and three tools one after another,
+as a single turn might, took 12.3 ms at p95. `what_happened` is the one tool that can leave the process, to read the
+GFZ Kp archive for a day older than the seven NOAA keeps live, so it has its own budget of 3 seconds. Nothing else
+external is touched in the request path; emails are sent after the answer, never inside it.
 
 ## Prior art
 
@@ -1544,7 +1671,7 @@ Named deliberately, because it exists.
   the Echo itself.
 * Crew email needs Amazon SES with a verified sender, and while an account is in the SES sandbox
   every recipient must be verified too.
-* Twenty one tools is a lot for a model to choose between. Descriptions carry the words people
+* Eighteen tools is a lot for a model to choose between. Descriptions carry the words people
   actually say, but tool choice on real Alexa+ still has to be tested.
 * It needs connectivity, which is not a given on the sites that most need it.
 * **The ionosphere is not the only atmosphere in the way.** Research on RTK names two
@@ -1588,8 +1715,10 @@ Named deliberately, because it exists.
 
 ## Roadmap
 
+* A real Echo, once MCP add-on access is granted: tool choice and phrasing tested on Alexa+ itself rather than on the
+  stand-in.
+* Brazil's RBMC correction network, whose caster did not answer, so Sorriso is told no station is within 500 km.
 * Marine and hydrographic survey, and virtual fencing, where a drifting fix moves the fence.
-* Local magnetometer data from USGS observatories in place of planetary Kp.
 * An eccentric dipole or IGRF geomagnetic conversion, and a South Atlantic Anomaly correction.
 
 ## Licence

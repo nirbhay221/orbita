@@ -84,8 +84,17 @@ const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.is
 const sources = [...walk('./src'), ...walk('./deploy'), ...walk('./strands')].map((f) => readFileSync(f, 'utf8')).join('\n');
 check('every setting the README names is read by the code', env.every((v) => sources.includes(v)), env.filter((v) => !sources.includes(v)).join());
 
+const unnamed = tools.filter((n) => !named.includes(n));
+check('every tool a host is shown is named in the README', unnamed.length === 0, unnamed.join());
+
+console.log('\nThe links that say lines on the demo page');
+const links = [...readme.matchAll(/\(https:\/\/[^)\s]+\/echo\.html\?([^)\s]+)\)/g)].map((m) => new URLSearchParams(m[1]).getAll('say'));
+check('the README has links that say lines', links.length >= 8, String(links.length));
+check('each says one to three lines, as the page plays', links.every((l) => l.length >= 1 && l.length <= 3), JSON.stringify(links.map((l) => l.length)));
+check('and no line is longer than the page takes', links.flat().every((l) => l.length <= 300));
+
 console.log('\nThings that were true once');
-for (const stale of ['Claude Haiku 4.5 reads', 'mrfentmen', '`ORBITA_GPSJAM=off` turns it off', 'GPSJAM\'s daily aircraft reports. The testing schedule covers']) {
+for (const stale of ['Seventeen tools by default', 'Twenty one tools is a lot', 'Claude Haiku 4.5 reads', 'mrfentmen', '`ORBITA_GPSJAM=off` turns it off', 'GPSJAM\'s daily aircraft reports. The testing schedule covers']) {
   check(`"${stale}" is not said any more`, !readme.includes(stale));
 }
 check('no em dashes or arrows', !/[—–→]/.test(readme));

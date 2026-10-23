@@ -106,5 +106,24 @@ console.log('\nNOAA, when one of its three files does not answer');
   globalThis.fetch = realFetch;
 }
 
+console.log('\nOnly a state or a province, as somebody running a control room says it');
+{
+  // What the geocoder gave for "Minnesota": places with that name, none of them the state, the first in Georgia.
+  const minnesota = [
+    { name: 'Minnesota', admin1: 'Georgia', country: 'United States', country_code: 'US', latitude: 31.31, longitude: -83.91 },
+    { name: 'Minnesota Lake', admin1: 'Minnesota', country: 'United States', country_code: 'US', latitude: 43.84, longitude: -93.83, population: 662 },
+  ];
+  const mn = geo.regionOnly('Minnesota', minnesota);
+  check('"Minnesota" is the middle of Minnesota, not the hamlet in Georgia', mn && mn.lat > 45 && mn.lat < 48 && mn.lon < -92 && mn.countryCode === 'US', JSON.stringify(mn));
+  check('...and is said as that', mn?.name === 'central Minnesota' && geo.spoken(mn) === 'central Minnesota, United States', mn && geo.spoken(mn));
+  check('"Saskatchewan" is the middle of the province', geo.regionOnly('Saskatchewan', [])?.countryCode === 'CA');
+  check('"near Iowa" is read the same way', geo.regionOnly('near Iowa', [])?.name === 'central Iowa');
+  const ny = [{ name: 'New York', admin1: 'New York', country: 'United States', country_code: 'US', latitude: 40.71, longitude: -74.01, population: 8_804_190 }];
+  check('"New York" stays the city people mean by it', geo.regionOnly('New York', ny)?.lat === 40.71);
+  check('a town with its state is not touched', geo.regionOnly('Fargo, North Dakota', []) === null);
+  check('a town that is not a state is not touched', geo.regionOnly('Grand Island', []) === null);
+  check('two letters alone are not read as a state', geo.regionOnly('MN', []) === null);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

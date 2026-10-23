@@ -106,6 +106,41 @@ export function narrowing(rest: string): { region: string | null; country: strin
   return { region: null, country: null, said };
 }
 
+/**
+ * Somebody who names only a state or a province: "our control room in Minnesota". The geocoder has no entry for a
+ * state as a whole, only for places, so it answered with the hamlet of Minnesota, Georgia, 1,500 km south and a
+ * different storm exposure. A storm changes over hundreds of kilometres, so the middle of the state is a fair answer,
+ * and it is said as that. A city of the same name that people mean by it, New York, is kept.
+ */
+const REGION_CENTRES: Record<string, [number, number]> = {
+  Alabama: [32.8, -86.8], Alaska: [64.0, -150.0], Arizona: [34.3, -111.7], Arkansas: [34.9, -92.4], California: [37.2, -119.5],
+  Colorado: [39.0, -105.5], Connecticut: [41.6, -72.7], Delaware: [39.0, -75.5], Florida: [28.6, -82.4], Georgia: [32.7, -83.4],
+  Hawaii: [20.8, -156.3], Idaho: [44.4, -114.6], Illinois: [40.0, -89.2], Indiana: [39.9, -86.3], Iowa: [42.1, -93.5],
+  Kansas: [38.5, -98.4], Kentucky: [37.5, -85.3], Louisiana: [31.1, -92.0], Maine: [45.4, -69.2], Maryland: [39.0, -76.8],
+  Massachusetts: [42.3, -71.8], Michigan: [44.3, -85.4], Minnesota: [46.3, -94.3], Mississippi: [32.7, -89.7], Missouri: [38.4, -92.5],
+  Montana: [47.0, -109.6], Nebraska: [41.5, -99.8], Nevada: [39.3, -116.6], 'New Hampshire': [43.7, -71.6], 'New Jersey': [40.2, -74.7],
+  'New Mexico': [34.4, -106.1], 'New York': [42.9, -75.5], 'North Carolina': [35.6, -79.4], 'North Dakota': [47.5, -100.5], Ohio: [40.3, -82.8],
+  Oklahoma: [35.6, -97.5], Oregon: [43.9, -120.6], Pennsylvania: [40.9, -77.8], 'Rhode Island': [41.7, -71.5], 'South Carolina': [33.9, -80.9],
+  'South Dakota': [44.4, -100.2], Tennessee: [35.9, -86.4], Texas: [31.5, -99.3], Utah: [39.3, -111.7], Vermont: [44.1, -72.7],
+  Virginia: [37.5, -78.9], Washington: [47.4, -120.5], 'West Virginia': [38.6, -80.6], Wisconsin: [44.6, -89.9], Wyoming: [43.0, -107.6],
+  'District of Columbia': [38.9, -77.0],
+  Alberta: [53.9, -116.6], 'British Columbia': [53.7, -127.6], Manitoba: [53.8, -98.8], 'New Brunswick': [46.6, -66.5],
+  'Newfoundland and Labrador': [53.1, -57.7], 'Nova Scotia': [45.0, -63.0], 'Northwest Territories': [64.8, -124.8], Nunavut: [70.3, -83.1],
+  Ontario: [50.0, -85.3], 'Prince Edward Island': [46.5, -63.4], Quebec: [52.9, -73.5], Saskatchewan: [52.9, -106.5], Yukon: [64.3, -135.0],
+};
+
+/** A query that is only a state or a province, as the middle of it; null for anything else. */
+export function regionOnly(query: string, rows: Row[]): Place | null {
+  const { town, rest } = split(query);
+  if (rest || /^[a-z]{2}\.?$/i.test(town)) return null;
+  const { region, country } = narrowing(town);
+  const centre = region ? REGION_CENTRES[region] : undefined;
+  if (!region || !centre) return null;
+  const city = rows.find((r) => r.name.toLowerCase() === region.toLowerCase() && (r.admin1 ?? '').toLowerCase() === region.toLowerCase() && (r.population ?? 0) >= 100_000);
+  if (city) return { name: city.name, region: city.admin1 ?? null, country: city.country ?? countryName(city.country_code), countryCode: city.country_code ?? null, lat: city.latitude, lon: city.longitude, timeZone: city.timezone ?? null };
+  return { name: `central ${region}`, region: null, country: countryName(country), countryCode: country, lat: centre[0], lon: centre[1], timeZone: null };
+}
+
 const biggest = (rows: Row[]): Row | undefined => rows.reduce<Row | undefined>((a, r) => (!a || (r.population ?? 0) > (a.population ?? 0) ? r : a), undefined);
 
 export function pick(query: string, rows: Row[]): Place | null {
@@ -168,7 +203,8 @@ async function fetchPlace(query: string, timeoutMs = 2500): Promise<Place | null
     const hit = pick(`${words.slice(0, -n).join(' ')}, ${words.slice(-n).join(' ')}`, await tryName(words.slice(0, -n).join(' '), country));
     if (hit) return hit;
   }
-  return pick(query, await tryName(town));
+  const rows = await tryName(town);
+  return regionOnly(query, rows) ?? pick(query, rows);
 }
 
 let lookup: Lookup = (query) => fetchPlace(query);
