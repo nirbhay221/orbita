@@ -114,17 +114,27 @@ export function mountStandIn(app: express.Express, build: (farmId: string) => Mc
       const nextRaw = req.body?.next as { tool?: unknown; arguments?: unknown } | undefined;
       const next = nextRaw && typeof nextRaw.tool === 'string' && tools.some((t) => t.name === nextRaw.tool) ? nextRaw : null;
       const call = (name: string, args: Record<string, unknown>) => client.callTool({ name, arguments: args }) as Promise<agent.CallResult>;
+      // The model refusing (a spend limit reached, a key revoked, the API down) used to show the visitor "the
+      // stand-in request was refused". The word rules answer instead, as they do when the day's budget is spent,
+      // and the reason is kept for the page. Only the model's own errors fall through; a tool failing is still one.
+      let modelError: string | null = null;
       if (useModel) {
-        const turn = await agent.converse(utterance, tools, client.getInstructions() ?? '', history, call, () => agentDaily.take(1));
-        const last = turn.steps[turn.steps.length - 1];
-        res.json({
-          standIn: STAND_IN_NOTE, utterance,
-          chose: turn.steps[0] ? { tool: turn.steps[0].tool, args: turn.steps[0].args } : null,
-          steps: turn.steps.map((s) => ({ tool: s.tool, args: s.args })),
-          said: turn.reply, reply: turn.reply, ms: turn.ms, model: turn.model, calls: turn.calls,
-          ...(last ? { result: last.result } : {}),
-        });
-        return;
+        try {
+          const turn = await agent.converse(utterance, tools, client.getInstructions() ?? '', history, call, () => agentDaily.take(1));
+          const last = turn.steps[turn.steps.length - 1];
+          res.json({
+            standIn: STAND_IN_NOTE, utterance,
+            chose: turn.steps[0] ? { tool: turn.steps[0].tool, args: turn.steps[0].args } : null,
+            steps: turn.steps.map((s) => ({ tool: s.tool, args: s.args })),
+            said: turn.reply, reply: turn.reply, ms: turn.ms, model: turn.model, calls: turn.calls,
+            ...(last ? { result: last.result } : {}),
+          });
+          return;
+        } catch (err) {
+          if (!agent.isModelError(err)) throw err;
+          modelError = agent.explainError(err);
+          console.error('[agent] the model refused, so the word rules answer:', modelError);
+        }
       }
       const chosen = chooseByWords(utterance, tools, history, next);
 
@@ -132,13 +142,13 @@ export function mountStandIn(app: express.Express, build: (farmId: string) => Mc
       // nothing when nothing fits is behaving correctly, and flattening that into
       // an error would hide the most interesting thing this can show.
       if (!chosen.tool) {
-        res.json({ standIn: STAND_IN_NOTE, utterance, chose: null, said: chosen.said, ms: chosen.ms, model: chosen.model });
+        res.json({ standIn: STAND_IN_NOTE, utterance, chose: null, said: chosen.said, ms: chosen.ms, model: chosen.model, ...(modelError ? { modelError } : {}) });
         return;
       }
 
       const result = await client.callTool({ name: chosen.tool, arguments: chosen.args });
       const reply = (result.content as { text?: string }[] | undefined)?.map((c) => c.text ?? '').join(' ').trim() ?? '';
-      res.json({ standIn: STAND_IN_NOTE, utterance, chose: { tool: chosen.tool, args: chosen.args }, steps: [{ tool: chosen.tool, args: chosen.args }], said: chosen.said, reply, ms: chosen.ms, model: chosen.model, result });
+      res.json({ standIn: STAND_IN_NOTE, utterance, chose: { tool: chosen.tool, args: chosen.args }, steps: [{ tool: chosen.tool, args: chosen.args }], said: chosen.said, reply, ms: chosen.ms, model: chosen.model, result, ...(modelError ? { modelError } : {}) });
     } catch (err) {
       console.error('[agent]', err);
       res.status(502).json({ error: 'stand_in_failed', detail: agent.explainError(err) });
