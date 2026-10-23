@@ -577,13 +577,32 @@ export function allEntries(): [string, Farm][] {
   return Object.keys(load()).map((id) => [id, get(id)]);
 }
 
+/*
+ * Numbers as speech recognition writes them. "North forty" and "lot twelve" did not find "North 40" and "Lot 12",
+ * and "North40" did not either: found by saying field names the way a recogniser hands them over, 22 October 2026.
+ */
+const SMALL = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+export function spokenNumbers(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\b(twenty|thirty|forty|fourty|fifty|sixty|seventy|eighty|ninety)[ -]?(one|two|three|four|five|six|seven|eight|nine)\b/g, (_a, t, u) => String(TENS.indexOf(t === 'fourty' ? 'forty' : t) * 10 + SMALL.indexOf(u)))
+    .replace(/\b(twenty|thirty|forty|fourty|fifty|sixty|seventy|eighty|ninety)\b/g, (t) => String(TENS.indexOf(t === 'fourty' ? 'forty' : t) * 10))
+    .replace(new RegExp(`\\b(${SMALL.join('|')})\\b`, 'g'), (w) => String(SMALL.indexOf(w)))
+    .replace(/([a-z])(\d)/g, '$1 $2')
+    .replace(/(\d)([a-z])/g, '$1 $2');
+}
+
+/** Whole words inside a name: "lot 1" is in "lot 1 east" and not in "lot 12". */
+const within = (name: string, part: string): boolean => ` ${name} `.includes(` ${part} `);
+
 /** Resolve a spoken field name loosely, "the north field" should find "North 40". */
 export function findField(farm: Farm, spoken: string): Field | null {
   if (!farm.fields.length) return null;
   // The id from an earlier answer finds it exactly, whatever it has been renamed to since.
   const byId = farm.fields.find((f) => f.id === spoken.trim());
   if (byId) return byId;
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\b(the|field|place|acres?)\b/g, '').replace(/\s+/g, ' ').trim();
+  const norm = (s: string) => spokenNumbers(s).replace(/[^a-z0-9 ]/g, '').replace(/\b(the|field|place|acres?)\b/g, '').replace(/\b([a-z]{3,})s\b/g, '$1').replace(/\s+/g, ' ').trim();
   const want = norm(spoken);
   if (!want) return farm.fields[0];
   // A name that normalises to nothing (one written in another script, or just "the field") used to match
@@ -592,19 +611,22 @@ export function findField(farm: Farm, spoken: string): Field | null {
   return (
     farm.fields.find((f) => f.name.trim().toLowerCase() === spoken.trim().toLowerCase()) ??
     named.find((f) => norm(f.name) === want) ??
-    named.find((f) => norm(f.name).includes(want) || want.includes(norm(f.name))) ??
+    named.find((f) => within(norm(f.name), want) || within(want, norm(f.name))) ??
     null
   );
 }
 
 /** The machine that was actually named, or null. findEquipment falls back to the first one; this does not. */
 export function equipmentNamed(farm: Farm, spoken: string): Equipment | null {
-  const want = spoken.trim().toLowerCase();
+  // "The Deere" for "John Deere 8R", "planter number two" for "planter 2".
+  const norm = (s: string) => spokenNumbers(s).replace(/[^a-z0-9 ]/g, '').replace(/^(the|my|our|his|her|their) /, '').replace(/\b(number|no)\b/g, '').replace(/\b([a-z]{3,})s\b/g, '$1').replace(/\s+/g, ' ').trim();
+  const want = norm(spoken);
   if (!want) return null;
   return (
     farm.equipment.find((e) => e.id === spoken.trim()) ??
-    farm.equipment.find((e) => e.name.toLowerCase() === want) ??
-    farm.equipment.find((e) => e.name && (e.name.toLowerCase().includes(want) || want.includes(e.name.toLowerCase()))) ??
+    farm.equipment.find((e) => e.name.toLowerCase() === spoken.trim().toLowerCase()) ??
+    farm.equipment.find((e) => norm(e.name) === want) ??
+    farm.equipment.find((e) => norm(e.name) && (within(norm(e.name), want) || within(want, norm(e.name)))) ??
     null
   );
 }

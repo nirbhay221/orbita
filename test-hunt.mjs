@@ -138,5 +138,51 @@ console.log('\nA whole address, as written on an envelope');
   check('a town alone is left alone', s('Fargo, North Dakota').query === 'Fargo, North Dakota' && s('Fargo, North Dakota').postal === null);
 }
 
+console.log('\nField and machine names as speech recognition writes them');
+{
+  const store = await import('./dist/store.js');
+  const farm = { fields: [{ id: 'f2', name: 'Lot 12', lat: 0, lon: 0 }, { id: 'f5', name: 'Lot 1', lat: 0, lon: 0 }, { id: 'f1', name: 'North 40', lat: 0, lon: 0 }, { id: 'f4', name: 'Section 21', lat: 0, lon: 0 }], equipment: [{ id: 'e2', name: 'John Deere 8R', correction: 'rtk' }, { id: 'e1', name: 'planter', correction: 'rtk' }, { id: 'e4', name: 'planter 2', correction: 'sbas' }] };
+  const field = (q) => store.findField(farm, q)?.name ?? null;
+  const machine = (q) => store.equipmentNamed(farm, q)?.name ?? null;
+  check('"north forty" is North 40', field('north forty') === 'North 40', field('north forty'));
+  check('"North40" is North 40', field('North40') === 'North 40', field('North40'));
+  check('"lot twelve" is Lot 12', field('lot twelve') === 'Lot 12', field('lot twelve'));
+  check('"section twenty-one" is Section 21', field('section twenty-one') === 'Section 21', field('section twenty-one'));
+  check('"lot 1" is Lot 1, not Lot 12', field('lot 1') === 'Lot 1', field('lot 1'));
+  check('"the Deere" is the John Deere 8R', machine('the Deere') === 'John Deere 8R', machine('the Deere'));
+  check('"planter number two" is planter 2', machine('planter number two') === 'planter 2', machine('planter number two'));
+  check('"planters" is the planter', machine('planters') === 'planter', machine('planters'));
+  check('a machine never named is not found', machine('tractor') === null, machine('tractor'));
+}
+
+console.log('\nTimes said the way people say them');
+{
+  const { parseWhen } = await import('./dist/history.js');
+  const now = new Date('2026-10-23T02:00:00Z'); // Thursday 22 October 2026, 9 PM in Nebraska
+  const tz = 'America/Chicago';
+  const at = (q, prefer = 'future', country = 'US', zone = tz) => {
+    const d = parseWhen(q, now, { prefer, timeZone: zone, country });
+    return d ? d.toLocaleString('en-US', { timeZone: zone, month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
+  };
+  check('"in two hours"', at('in two hours') === 'Oct 22, 2026, 11:00 PM', at('in two hours'));
+  check('"in half an hour"', at('in half an hour') === 'Oct 22, 2026, 9:30 PM', at('in half an hour'));
+  check('"three hours ago"', at('three hours ago', 'past') === 'Oct 22, 2026, 6:00 PM', at('three hours ago', 'past'));
+  check('"3 o\'clock tomorrow" keeps the hour, in the afternoon', at("3 o'clock tomorrow") === 'Oct 23, 2026, 3:00 PM', at("3 o'clock tomorrow"));
+  check('"half past three tomorrow"', at('half past three tomorrow') === 'Oct 23, 2026, 3:30 PM', at('half past three tomorrow'));
+  check('"quarter to ten tomorrow"', at('quarter to ten tomorrow') === 'Oct 23, 2026, 9:45 AM', at('quarter to ten tomorrow'));
+  check('"yesterday at 3" is the afternoon', at('yesterday at 3', 'past') === 'Oct 21, 2026, 3:00 PM', at('yesterday at 3', 'past'));
+  check('"nine o\'clock tonight" is the evening', at("9 o'clock tonight") === 'Oct 22, 2026, 9:00 PM', at("9 o'clock tonight"));
+  check('"tomorrow at 03:00" is a 24 hour clock', at('tomorrow at 03:00') === 'Oct 23, 2026, 3:00 AM', at('tomorrow at 03:00'));
+  check('"at 3 o\'clock" alone is the next one', at("at 3 o'clock") === 'Oct 23, 2026, 3:00 PM', at("at 3 o'clock"));
+  check('"midnight" is the coming one', at('midnight') === 'Oct 23, 2026, 12:00 AM', at('midnight'));
+  check('"this weekend" is Saturday', /^Oct 24, 2026/.test(at('this weekend') ?? ''), at('this weekend'));
+  check('"10/05/2024" from the United States is 5 October', /^Oct 5, 2024/.test(at('10/05/2024', 'past') ?? ''), at('10/05/2024', 'past'));
+  check('"10/05/2024" from India is 10 May', /^May 10, 2024/.test(at('10/05/2024', 'past', 'IN', 'Asia/Kolkata') ?? ''), at('10/05/2024', 'past', 'IN', 'Asia/Kolkata'));
+  check('"10.05.2024" is 10 May anywhere', /^May 10, 2024/.test(at('10.05.2024', 'past') ?? ''), at('10.05.2024', 'past'));
+  check('"25/12/2025" settles itself', /^Dec 25, 2025/.test(at('25/12/2025', 'past') ?? ''), at('25/12/2025', 'past'));
+  check('what worked before still does: "May 10th 2024 at 7pm"', at('May 10th 2024 at 7pm', 'past') === 'May 10, 2024, 7:00 PM', at('May 10th 2024 at 7pm', 'past'));
+  check('...and "tomorrow morning"', at('tomorrow morning') === 'Oct 23, 2026, 8:00 AM', at('tomorrow morning'));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

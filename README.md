@@ -12,7 +12,7 @@ machine and this job, and tells everyone else a solar storm reaches what to do a
 ![Streamable HTTP](https://img.shields.io/badge/transport-Streamable%20HTTP-1ac3eb)
 ![tools](https://img.shields.io/badge/tools-18-e08f1a)
 ![p95 13 ms](https://img.shields.io/badge/p95-13%20ms-2ea44f)
-![checks](https://img.shields.io/badge/checks-2416%20passing-2ea44f)
+![checks](https://img.shields.io/badge/checks-2443%20passing-2ea44f)
 [![Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-lightgrey)](LICENSE)
 
 **[▶ Try it live](https://ct5ae538t6.execute-api.us-east-1.amazonaws.com/echo.html)** ·
@@ -165,7 +165,7 @@ can too. A source that could not be read is never counted as clear.
 | What operators actually did | May 2024, November 2025 and January 2026: 22 of 22 recorded actions matched | `evals/may2024.mjs`, `evals/storms.mjs` |
 | Tool choice, from spoken sentences | 100 percent of 87 on Opus 5.5, a regression baseline rather than a blind score | `evals/golden.json` |
 | Whole conversations | 36 of 37 turns right, in the patterns real users were recorded in | `evals/conversations-last-run.json` |
-| Automated checks | 2,416 on every push, on Node 20 and 22, plus the stack, DynamoDB Local and the Strands agent | [`.github/workflows/tests.yml`](.github/workflows/tests.yml) |
+| Automated checks | 2,443 on every push, on Node 20 and 22, plus the stack, DynamoDB Local and the Strands agent | [`.github/workflows/tests.yml`](.github/workflows/tests.yml) |
 
 ## For the judges
 
@@ -231,7 +231,7 @@ node skills/orbita-gps-trust/scripts/connect.mjs https://ct5ae538t6.execute-api.
 }
 ```
 
-**Tests.** `npm test` runs 2,416 checks; [Running it](#running-it) lists every suite and what it covers.
+**Tests.** `npm test` runs 2,443 checks; [Running it](#running-it) lists every suite and what it covers.
 
 ## What's here
 
@@ -361,7 +361,7 @@ Nothing here is mocked for the demo. Where something stands in for a thing we co
 
 | Part | Status |
 |---|---|
-| MCP server, 18 tools by default | **Real and deployed** on AWS, behind account linking. 2,416 automated checks, run on every push |
+| MCP server, 18 tools by default | **Real and deployed** on AWS, behind account linking. 2,443 automated checks, run on every push |
 | Agent Skill | **Real**: `skills/orbita-gps-trust`, to the open Agent Skills format, passing the format's own validator. Installable as a folder, and readable from the server as `skill://` resources |
 | Strands agent | **Real**: `strands/agent.mjs`, on AWS's Strands Agents SDK. It reads the skill from the server and follows each next step. The chain, the yes before a write and the step cap are checked with a scripted model at no cost; the path through Claude needs a key and is not in the automated checks |
 | Space weather: Kp forecast and nowcast, solar wind, ionosphere map, aurora oval, alerts | **Real, live feeds** from NOAA SWPC, polled in the background, never inside a turn |
@@ -1305,11 +1305,11 @@ cd infra && npm test        # what the stack promises, with no AWS account
 Moving a running server over is `node scripts/copy-to-table.mjs` once on the host, then the `/orbita/store`
 parameter set to `dynamodb` and a restart. The file is kept, so going back is the parameter and a restart.
 
-`npm test` runs everything, 2,416 checks. It is also what CI runs on every push, on Node 20 and 22,
+`npm test` runs everything, 2,443 checks. It is also what CI runs on every push, on Node 20 and 22,
 with the live suite in its own job so an outage at NOAA is never mistaken for a regression here.
 
 ```bash
-npm run test:unit           # 2,124 checks, no live data
+npm run test:unit           # 2,151 checks, no live data
 npm run test:live           # 292 checks, against a running server and the real feed
 
 node test.mjs               # tolerances, geometry, the moving auroral oval, windows, deadlines

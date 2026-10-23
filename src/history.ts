@@ -160,6 +160,8 @@ const ORDINALS: Record<string, number> = {
   eighteenth: 18, nineteenth: 19, twentieth: 20, thirtieth: 30,
 };
 const DAY_MS = 86_400_000;
+/** Where a numeric date is written month first. Canada writes both; it is read the American way, as before. */
+const MONTH_FIRST = new Set(['US', 'PR', 'GU', 'VI', 'AS', 'MP', 'CA']);
 
 /** Minutes the zone is ahead of UTC at that instant. */
 function offsetMinutes(at: Date, timeZone: string): number {
@@ -188,7 +190,8 @@ function dayNumber(text: string): number | null {
 export function parseWhen(
   spoken: string,
   now = new Date(),
-  opts: { prefer?: 'past' | 'future'; timeZone?: string | null } = {},
+  /** country: the field's, so a numeric date is read the way it is written there. */
+  opts: { prefer?: 'past' | 'future'; timeZone?: string | null; country?: string | null } = {},
 ): Date | null {
   const prefer = opts.prefer ?? 'past';
   let raw = spoken.trim();
@@ -199,8 +202,42 @@ export function parseWhen(
   if (local && Number(local[2]) >= 1 && Number(local[2]) <= 12) {
     raw = `${MONTHS[Number(local[2]) - 1]} ${Number(local[3])} ${local[1]}${local[4] ? ` at ${local[4]}:${local[5]}` : ''}`;
   }
-  const s = raw.toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim();
+  // A date written with dots is day first everywhere it is written that way: "10.05.2024" is 10 May.
+  const dotted = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(raw);
+  if (dotted) raw = `${MONTHS[Number(dotted[2]) - 1] ?? 'x'} ${Number(dotted[1])} ${dotted[3]}`;
+  let s = raw.toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!s) return null;
+
+  /*
+   * Hours said the way people say them. "In two hours" and "three hours ago" were not understood at all, "3 o'clock
+   * tomorrow" and "half past three tomorrow" kept the day and dropped the hour, and "midnight" and "this weekend" came
+   * back as nothing. Found by running everyday phrases through this function, 22 October 2026.
+   */
+  const NUM = (w: string): number | null => (/^\d+$/.test(w) ? Number(w) : UNITS[w] ?? (w === 'half' ? 0.5 : null));
+  const rel = /\b(?:in (?:about |around )?)?(\d+|an?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|couple(?: of)?|half an?) (hours?|minutes?|mins?)(?: (ago|from now))?\b/.exec(s);
+  if (rel && (/\bin\b/.test(s.slice(0, rel.index + 4)) || rel[3])) {
+    const n = /^half/.test(rel[1]) ? 0.5 : NUM(rel[1].replace(/ of$/, '')) ?? null;
+    if (n != null) {
+      const ms = n * (/^h/.test(rel[2]) ? 3_600_000 : 60_000);
+      return new Date(now.getTime() + (rel[3] === 'ago' ? -ms : ms));
+    }
+  }
+  // Words for the hour, and the half and quarter hours, as a clock time.
+  const HOURS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+  const hourOf = (w: string): number | null => (/^\d{1,2}$/.test(w) ? Number(w) : HOURS[w] ?? null);
+  s = s.replace(/\b(half|quarter) (past|to|after) (\d{1,2}|[a-z]+)\b/g, (all, part, dir, w) => {
+    const h = hourOf(w);
+    if (h == null) return all;
+    if (dir === 'to') return `${h === 1 ? 12 : h - 1}:45`;
+    return `${h}:${part === 'half' ? '30' : '15'}`;
+  });
+  s = s.replace(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve) ?o ?'? ?clock\b/g, (all, w) => (hourOf(w) != null ? `${hourOf(w)}:00` : all));
+  s = s.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve) ?(am|pm|a m|p m)\b/g, (_all, w, m) => `${HOURS[w]} ${m}`);
+  // The weekend is its Saturday, or today when it is already the weekend.
+  if (/\bweekend\b/.test(s)) {
+    const dow = new Date(now.getTime() + offsetMinutes(now, opts.timeZone || 'UTC') * 60_000).getUTCDay();
+    s = /\b(last|next)\b/.test(s) || (dow !== 0 && dow !== 6) ? s.replace(/\b(the )?weekend\b/, 'saturday') : s.replace(/\b(this |the )?weekend\b/, 'today');
+  }
 
   // Unmistakably ISO with its zone, and nothing else, goes to the built-in parser.
   if (/^\d{4}-\d{2}-\d{2}([t ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(z|[+-]\d{2}:?\d{2})?)?$/i.test(raw)) {
@@ -216,14 +253,22 @@ export function parseWhen(
 
   // The time of day, if one was said. Otherwise the same clock time as now.
   let hour: number | null = null;
-  const clock = /\b(?:at )?(\d{1,2})(?::(\d{2}))? ?(am|pm|a m|p m)\b/.exec(s) ?? /\b(\d{1,2}):(\d{2})\b/.exec(s);
+  const clock = /\b(?:at )?(\d{1,2})(?::(\d{2}))? ?(am|pm|a m|p m)\b/.exec(s) ?? /\b(\d{1,2}):(\d{2})\b/.exec(s) ??
+    // "Yesterday at 3": an hour after "at", not followed by a unit or a year.
+    /\bat (\d{1,2})()()(?! ?(?:minutes?|hours?|days?|weeks?|\d))\b/.exec(s);
   if (clock) {
     let h = Number(clock[1]);
     const half = (clock[3] ?? '').replace(' ', '');
     if (half === 'pm' && h < 12) h += 12;
     if (half === 'am' && h === 12) h = 0;
+    // "At 3" or "3 o'clock" with no am or pm, about field work, is the afternoon: from 1 to 6 it is pm. Written with a
+    // leading zero, "03:00", it is a 24 hour clock and left alone.
+    if (!half && h >= 1 && h <= 6 && !/^0/.test(clock[1])) h += 12;
+    // "Nine o'clock tonight" is in the evening.
+    else if (!half && h < 12 && /\b(tonight|evening|night)\b/.test(s)) h += 12;
     if (h <= 23) hour = h + Number(clock[2] ?? 0) / 60;
-  } else if (/\bnoon\b|\bmidday\b/.test(s)) hour = 12;
+  } else if (/\bmidnight\b/.test(s)) hour = prefer === 'future' ? 24 : 0;
+  else if (/\bnoon\b|\bmidday\b/.test(s)) hour = 12;
   else if (/\bmorning\b/.test(s)) hour = 8;
   else if (/\bafternoon\b/.test(s)) hour = 14;
   else if (/\bevening\b/.test(s)) hour = 18;
@@ -278,13 +323,24 @@ export function parseWhen(
     return onDay(candidate < startOfLocalDay ? build(thisYear + 1) : candidate);
   }
 
-  // A numeric date the American way round: month, day, year.
+  // A numeric date. Month first in the United States; day first everywhere else Alexa+ is sold (Mexico, Brazil, the UK,
+  // Europe, India, Australia), so "10/05/2024" from a field in Punjab is 10 May and not 5 October. A number above 12
+  // settles it either way.
   const numeric = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(s);
   if (numeric) {
-    const [m, d, y] = [Number(numeric[1]), Number(numeric[2]), Number(numeric[3])];
+    const [a, b2, y] = [Number(numeric[1]), Number(numeric[2]), Number(numeric[3])];
+    const monthFirst = a > 12 ? false : b2 > 12 ? true : !opts.country || MONTH_FIRST.has(opts.country.toUpperCase());
+    const [m, d] = monthFirst ? [a, b2] : [b2, a];
     if (m < 1 || m > 12 || d < 1 || d > 31) return null;
     const built = Date.UTC(y, m - 1, d);
     return new Date(built).getUTCMonth() === m - 1 ? onDay(built) : null;
+  }
+
+  // A time with no day, "at 3 o'clock" or "midnight": the next one coming, or the last one gone.
+  if (hour != null) {
+    const today = daysFromToday(0);
+    if (prefer === 'future') return today.getTime() >= now.getTime() - 15 * 60_000 ? today : daysFromToday(1);
+    return today.getTime() <= now.getTime() ? today : daysFromToday(-1);
   }
 
   return null;

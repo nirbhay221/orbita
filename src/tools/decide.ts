@@ -171,7 +171,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       // new Date(), so "tomorrow morning" became an invalid date, and an invalid date was then answered with
       // the oldest block in NOAA's file: a week-old Kp, stated as the answer for tomorrow.
       const now = new Date();
-      const at = when ? history.parseWhen(when, now, { prefer: 'future', timeZone: f.timeZone }) : now;
+      const at = when ? history.parseWhen(when, now, { prefer: 'future', timeZone: f.timeZone, country: f.countryCode }) : now;
       if (!at) {
         return say(`I could not work out when "${clean(when)}" is. Say a day, like tomorrow or Thursday, or ask about right now.`, { unavailable: true });
       }

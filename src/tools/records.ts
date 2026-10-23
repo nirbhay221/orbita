@@ -123,7 +123,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       // machine it is about, because the customer named neither and the old
       // behaviour was to pick silently.
       const assumed = !field && farm.fields.length > 1 && chosenName === undefined;
-      const at = when ? history.parseWhen(when, new Date(), { prefer: 'past', timeZone: f.timeZone }) : new Date();
+      const at = when ? history.parseWhen(when, new Date(), { prefer: 'past', timeZone: f.timeZone, country: f.countryCode }) : new Date();
       if (!at) return say(`I couldn't work out when "${clean(when)}" was. Try a day name or a date.`, { logged: false });
       // A log is of work that happened. A date ahead of now is a plan, and it would sit in the report as done.
       if (at.getTime() > Date.now() + 5 * 60_000) {

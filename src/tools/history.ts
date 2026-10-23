@@ -84,7 +84,7 @@ export function register(server: McpServer, farmOf: () => string): void {
       const eq = store.findEquipment(farm, equipment);
       if (!eq) return say(NO_EQUIP);
 
-      let at = history.parseWhen(when, new Date(), { prefer: 'past', timeZone: f.timeZone });
+      let at = history.parseWhen(when, new Date(), { prefer: 'past', timeZone: f.timeZone, country: f.countryCode });
       if (!at) {
         // A year alone is a fair question, "what about 1859?", and deserves more than "I could not work out what date".
         const year = /^\s*(\d{4})\s*$/.exec(String(when ?? ''))?.[1];
