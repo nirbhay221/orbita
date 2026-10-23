@@ -170,8 +170,8 @@ can too. A source that could not be read is never counted as clear.
 | Fitted on one year, tested on the next | The one judgement in the model, fitted on 2024 and scored on 2025: held 35 of 43 storm blocks where receivers lost precise positioning | [CALIBRATION.md](CALIBRATION.md) |
 | Three planting seasons replayed | "Not now" in 1 to 5 percent of blocks, on the days that had real storms | [BACKTEST.md](BACKTEST.md) |
 | What operators actually did | May 2024, November 2025 and January 2026: 22 of 22 recorded actions matched | `evals/may2024.mjs`, `evals/storms.mjs` |
-| Tool choice, from spoken sentences | 100 percent of 87 on Opus 5.5, a regression baseline rather than a blind score | `evals/golden.json` |
-| Whole conversations | 36 of 37 turns right, in the patterns real users were recorded in | `evals/conversations-last-run.json` |
+| Tool choice, from spoken sentences | 100 percent of 94 on Opus 5.5, a regression baseline rather than a blind score | `evals/golden.json` |
+| Whole conversations | 35 of 37 turns right, in the patterns real users were recorded in | `evals/conversations-last-run.json` |
 | Automated checks | 2,467 on every push, on Node 20 and 22, plus the stack, DynamoDB Local and the Strands agent | [`.github/workflows/tests.yml`](.github/workflows/tests.yml) |
 | The live demo, while it is judged | Checked twice a day against the deployed server with no model and no cost: fresh NOAA data, the May 2024 replay, a go or a hold, a position check, the demo page | `scripts/live-check.mjs` |
 
@@ -349,7 +349,8 @@ never says trust when a reading could not be had.
 
 **Tested the way people talk.** Sixteen conversations in the patterns real users were recorded in (farmers' own
 words from May 2024, repeats, "never mind", "what about tomorrow though", "why not", corrections), played turn by
-turn against the real tools, got 36 of 37 turns right on Opus on 16 October (`conversations.mjs`,
+turn against the real tools, got 35 of 37 turns right on Opus on 23 October (36 of 37 on 16 October; the two misses were
+a farmer whose tractors had stopped, answered with the operator steps rather than the storm status) (`conversations.mjs`,
 `evals/conversations-last-run.json`). The first run, of fourteen, scored 32 of 33. Its miss was a delivery robot asking "and in ten minutes?", which the model
 rightly said the position check could not answer ahead of time. That was a gap, so the check now takes `inMinutes`
 and judges that time from the forecast, and the same conversation then went 2 for 2
@@ -1877,7 +1878,8 @@ scintillation, spoofing regions and holdover, 1 trial: tool choice 98.8% of 80, 
 a survey rover asking whether to trust its fix, chose the survey job check, and is accepted with the reason written
 in the golden file. On 16 October, with seven more sentences for what was built in October (a fleet, windows ahead,
 a robot's other dependencies, a ship, a cable landing station, satellite imagery, a drone show over Victoria
-Harbour), 1 trial: tool choice and arguments 100% of 87, no sentence that was right before went wrong ($0.60). Read that with care: the first live runs missed several sentences, and the
+Harbour), 1 trial: tool choice and arguments 100% of 87, no sentence that was right before went wrong ($0.60). On 23 October,
+1 trial: 100% of 94, nothing regressed against the baseline ($0.74). Read that with care: the first live runs missed several sentences, and the
 fixes were tool descriptions plus a few golden sentences that were not fair single-turn tests (a required value only
 the customer knows, so asking back is correct), so 100% is a regression baseline and not a blind score. A golden set is also fixed, so it cannot notice a failure it does not contain, and cases should be
 added from real misses.
