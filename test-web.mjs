@@ -218,10 +218,16 @@ console.log('\nThe satellite outage file, from the Coast Guard or its mirror');
 {
   // The Coast Guard refuses automated reads from cloud servers, so the deployed server reads CelesTrak's copy.
   const { mirrorName } = await import('./dist/interference.js');
-  const pointer = await fetch('https://celestrak.org/GPS/sof/current_sof.txt').then((r) => r.text()).catch(() => '');
-  const name = mirrorName(pointer);
-  const xml = name ? await fetch(`https://celestrak.org/GPS/sof/${name}`).then((r) => r.text()).catch(() => '') : '';
-  check('CelesTrak names the newest outage file and serves it as the control segment wrote it', /<GPSISFILE[^>]*FILEID="SOF"/.test(xml), name ?? pointer.slice(0, 60));
+  // CelesTrak not answering at all is its outage, not ours (on 23 October 2026 it refused connections for hours), and
+  // the server already says "could not check" then. Only an answer in the wrong shape is a failure here.
+  const pointer = await fetch('https://celestrak.org/GPS/sof/current_sof.txt', { signal: AbortSignal.timeout(20_000) }).then((r) => r.text()).catch(() => null);
+  if (pointer === null) {
+    console.log('  skip  CelesTrak did not answer, so its outage file could not be checked this run');
+  } else {
+    const name = mirrorName(pointer);
+    const xml = name ? await fetch(`https://celestrak.org/GPS/sof/${name}`).then((r) => r.text()).catch(() => '') : '';
+    check('CelesTrak names the newest outage file and serves it as the control segment wrote it', /<GPSISFILE[^>]*FILEID="SOF"/.test(xml), name ?? pointer.slice(0, 60));
+  }
 }
 
 console.log('\nThe GPS test schedule, from the FAA when the Coast Guard refuses');
