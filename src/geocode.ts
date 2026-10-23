@@ -18,7 +18,10 @@ type Lookup = (query: string) => Promise<Place | null>;
 
 /** "Grand Island, Nebraska" or "Grand Island Nebraska": the town, and whatever narrows it down. */
 export function split(query: string): { town: string; rest: string } {
-  const q = query.trim().replace(/\s+/g, ' ').replace(/^(near|by|outside|around|close to)\s+/i, '');
+  // How people place a field against a town: "near Ames", "just outside Ames", "north of Fargo", "20 miles from Fargo".
+  // A storm does not change over those distances, so the town is the answer. Only "near" and four others were known.
+  const q = query.trim().replace(/\s+/g, ' ')
+    .replace(/^(just |right |a bit |a little )?(near|by|outside( of)?|around|close to|next to|beside|(about |some )?\d+(\.\d+)? ?(miles?|mi|km|kilometres?|kilometers?) (from|outside( of)?|out of|(north|south|east|west|northeast|northwest|southeast|southwest) of)|(north|south|east|west|northeast|northwest|southeast|southwest) of)\s+/i, '');
   const comma = q.indexOf(',');
   if (comma > 0) return { town: q.slice(0, comma).trim(), rest: q.slice(comma + 1).trim() };
   return { town: q, rest: '' };
@@ -129,10 +132,66 @@ const REGION_CENTRES: Record<string, [number, number]> = {
   Ontario: [50.0, -85.3], 'Prince Edward Island': [46.5, -63.4], Quebec: [52.9, -73.5], Saskatchewan: [52.9, -106.5], Yukon: [64.3, -135.0],
 };
 
-/** A query that is only a state or a province, as the middle of it; null for anything else. */
+/*
+ * The same, for the farming regions of the other countries Alexa+ is in. "Bavaria" found a village of that name in
+ * Veneto, Italy, and "Mato Grosso" a town in Paraíba, 2,000 km from the soybean state. Names that are as often a city
+ * ("Victoria") are left out, so they are looked up as places.
+ */
+const ABROAD: Record<string, { name: string; country: string; at: [number, number] }> = Object.fromEntries(([
+  ['New South Wales', 'AU', -32.2, 147.0], ['Queensland', 'AU', -22.6, 144.1], ['South Australia', 'AU', -30.0, 135.8],
+  ['Western Australia', 'AU', -25.3, 122.3], ['Tasmania', 'AU', -42.0, 146.6], ['Northern Territory', 'AU', -19.4, 133.4],
+  ['Bavaria', 'DE', 48.9, 11.4, 'Bayern'], ['Lower Saxony', 'DE', 52.6, 9.8, 'Niedersachsen'], ['Baden-Württemberg', 'DE', 48.5, 9.0, 'Baden-Wurttemberg'],
+  ['Brandenburg', 'DE', 52.4, 13.4], ['Mecklenburg-Vorpommern', 'DE', 53.6, 12.4], ['Saxony', 'DE', 51.0, 13.3, 'Sachsen'],
+  ['Saxony-Anhalt', 'DE', 52.0, 11.7, 'Sachsen-Anhalt'], ['Schleswig-Holstein', 'DE', 54.2, 9.8], ['North Rhine-Westphalia', 'DE', 51.5, 7.6, 'Nordrhein-Westfalen'],
+  ['Hesse', 'DE', 50.6, 9.0, 'Hessen'], ['Thuringia', 'DE', 50.9, 11.0, 'Thüringen'], ['Rhineland-Palatinate', 'DE', 49.9, 7.4, 'Rheinland-Pfalz'],
+  ['Mato Grosso', 'BR', -12.6, -55.4], ['Mato Grosso do Sul', 'BR', -20.5, -54.8], ['Goiás', 'BR', -15.9, -49.6, 'Goias'],
+  ['Paraná', 'BR', -24.6, -51.6, 'Parana'], ['Rio Grande do Sul', 'BR', -29.7, -53.2], ['Minas Gerais', 'BR', -18.5, -44.6],
+  ['Bahia', 'BR', -12.5, -41.7], ['Tocantins', 'BR', -10.2, -48.3], ['Maranhão', 'BR', -5.4, -45.4, 'Maranhao'],
+  ['Piauí', 'BR', -7.7, -42.7, 'Piaui'], ['Santa Catarina', 'BR', -27.2, -50.5], ['São Paulo', 'BR', -22.3, -48.7, 'Sao Paulo'],
+  ['Punjab', 'IN', 30.9, 75.4], ['Haryana', 'IN', 29.1, 76.1], ['Uttar Pradesh', 'IN', 26.8, 80.9], ['Madhya Pradesh', 'IN', 23.5, 78.4],
+  ['Maharashtra', 'IN', 19.4, 75.7], ['Gujarat', 'IN', 22.7, 71.6], ['Rajasthan', 'IN', 26.6, 73.8], ['Karnataka', 'IN', 15.0, 75.7],
+  ['Andhra Pradesh', 'IN', 15.9, 79.7], ['Telangana', 'IN', 17.9, 79.0], ['Tamil Nadu', 'IN', 11.1, 78.4], ['Bihar', 'IN', 25.9, 85.6],
+  ['West Bengal', 'IN', 23.0, 87.9], ['Sinaloa', 'MX', 25.0, -107.5], ['Sonora', 'MX', 29.6, -110.9], ['Jalisco', 'MX', 20.6, -103.6],
+  ['Tamaulipas', 'MX', 24.3, -98.8], ['England', 'GB', 52.6, -1.5], ['Scotland', 'GB', 56.5, -4.2], ['Wales', 'GB', 52.3, -3.8],
+  ['Northern Ireland', 'GB', 54.6, -6.7], ['Lombardy', 'IT', 45.6, 9.8, 'Lombardia'], ['Emilia-Romagna', 'IT', 44.5, 11.0],
+  ['Andalusia', 'ES', 37.5, -4.7, 'Andalucía'], ['Brittany', 'FR', 48.2, -2.9, 'Bretagne'], ['Normandy', 'FR', 49.1, 0.2, 'Normandie'],
+] as [string, string, number, number, string?][]).flatMap(([name, country, lat, lon, alias]) => {
+  const v = { name, country, at: [lat, lon] as [number, number] };
+  return [[name.toLowerCase(), v], ...(alias ? [[alias.toLowerCase(), v]] : [])];
+}));
+
+/** State abbreviations beside the US and Canadian ones: "Wagga Wagga NSW", "Rondonópolis MT". Tried when the first reading finds nothing. */
+const ABROAD_SHORT: Record<string, string> = {
+  NSW: 'New South Wales, Australia', QLD: 'Queensland, Australia', VIC: 'Victoria, Australia', SA: 'South Australia, Australia',
+  WA: 'Western Australia, Australia', TAS: 'Tasmania, Australia', NT: 'Northern Territory, Australia',
+  MT: 'Mato Grosso, Brazil', MS: 'Mato Grosso do Sul, Brazil', GO: 'Goiás, Brazil', PR: 'Paraná, Brazil', RS: 'Rio Grande do Sul, Brazil',
+  MG: 'Minas Gerais, Brazil', BA: 'Bahia, Brazil', TO: 'Tocantins, Brazil', MA: 'Maranhão, Brazil', PI: 'Piauí, Brazil',
+  SC: 'Santa Catarina, Brazil', SP: 'São Paulo, Brazil',
+};
+export function abroadReading(query: string): string | null {
+  const m = /^(.+?)[,\s]+([A-Za-z]{2,3})\.?$/.exec(query.trim());
+  const full = m ? ABROAD_SHORT[m[2].toUpperCase()] : undefined;
+  return m && full ? `${m[1].replace(/,\s*$/, '')}, ${full}` : null;
+}
+
+/** A query that is only a country: too big to judge from its middle, so the customer is asked for a town instead. */
+export function countryOnly(query: string): boolean {
+  const { town, rest } = split(query);
+  if (rest) return false;
+  const n = narrowing(town);
+  return !n.region && !!n.country && !ABROAD[town.trim().toLowerCase()];
+}
+
+/** A query that is only a state, a province or a farming region, as the middle of it; null for anything else. */
 export function regionOnly(query: string, rows: Row[]): Place | null {
   const { town, rest } = split(query);
   if (rest || /^[a-z]{2}\.?$/i.test(town)) return null;
+  const abroad = ABROAD[town.trim().toLowerCase()];
+  if (abroad) {
+    const big = rows.find((r) => r.name.toLowerCase() === abroad.name.toLowerCase() && (r.admin1 ?? '').toLowerCase() === abroad.name.toLowerCase() && (r.population ?? 0) >= 100_000);
+    if (big) return { name: big.name, region: big.admin1 ?? null, country: big.country ?? countryName(big.country_code), countryCode: big.country_code ?? null, lat: big.latitude, lon: big.longitude, timeZone: big.timezone ?? null };
+    return { name: `central ${abroad.name}`, region: null, country: countryName(abroad.country), countryCode: abroad.country, lat: abroad.at[0], lon: abroad.at[1], timeZone: null };
+  }
   const { region, country } = narrowing(town);
   const centre = region ? REGION_CENTRES[region] : undefined;
   if (!region || !centre) return null;
@@ -236,8 +295,26 @@ async function fetchAddress(query: string): Promise<Place | null> {
     const byPostal = await fetchPlace(postal);
     if (byPostal) return byPostal;
   }
+  // "Brazil" or "USA" alone: the middle of a country is not where anybody's field is, and "USA" found Uşak in Turkey.
+  if (!postal && countryOnly(cleaned)) return null;
   const found = cleaned ? await fetchPlace(cleaned) : null;
-  return found ?? (postal ? fetchPlace(postal) : null);
+  if (found) return found;
+  // A state abbreviation abroad, "Rondonópolis MT", which the first reading took for Montana.
+  const abroad = abroadReading(cleaned);
+  if (abroad) {
+    const hit = await fetchPlace(abroad);
+    if (hit) return hit;
+  }
+  // A region said with no comma, "Ludhiana Punjab": the last one or two words as the region.
+  if (!cleaned.includes(',')) {
+    const words = cleaned.split(' ');
+    for (const n of [1, 2]) {
+      if (words.length <= n) continue;
+      const hit = await fetchPlace(`${words.slice(0, -n).join(' ')}, ${words.slice(-n).join(' ')}`);
+      if (hit) return hit;
+    }
+  }
+  return postal ? fetchPlace(postal) : null;
 }
 
 let lookup: Lookup = (query) => fetchAddress(query);

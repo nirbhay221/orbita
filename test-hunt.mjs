@@ -155,6 +155,45 @@ console.log('\nField and machine names as speech recognition writes them');
   check('a machine never named is not found', machine('tractor') === null, machine('tractor'));
 }
 
+console.log('\nPlaces said loosely, and places abroad');
+{
+  check('"north of Fargo" is Fargo', geo.split('north of Fargo').town === 'Fargo');
+  check('"20 miles from Fargo" is Fargo', geo.split('20 miles from Fargo').town === 'Fargo');
+  check('"just outside of Ames" is Ames', geo.split('just outside of Ames').town === 'Ames');
+  check('"Wagga Wagga NSW" is read as New South Wales', geo.abroadReading('Wagga Wagga NSW') === 'Wagga Wagga, New South Wales, Australia');
+  check('"Rondonópolis MT" is read as Mato Grosso when Montana finds nothing', geo.abroadReading('Rondonópolis MT') === 'Rondonópolis, Mato Grosso, Brazil');
+  check('"Bavaria" is the middle of Bavaria, not a village in Italy', geo.regionOnly('Bavaria', [{ name: 'Bavaria', admin1: 'Veneto', country_code: 'IT', latitude: 45.81, longitude: 12.19 }])?.countryCode === 'DE');
+  check('"Bayern" is Bavaria too', geo.regionOnly('Bayern', [])?.name === 'central Bavaria');
+  check('"Mato Grosso" is the soybean state, not the town in Paraíba', geo.regionOnly('Mato Grosso', [{ name: 'Mato Grosso', admin1: 'Paraíba', country_code: 'BR', latitude: -6.5, longitude: -37.7 }])?.lat === -12.6);
+  check('"São Paulo" stays the city', geo.regionOnly('São Paulo', [{ name: 'São Paulo', admin1: 'São Paulo', country_code: 'BR', latitude: -23.55, longitude: -46.64, population: 10_021_295 }])?.lat === -23.55);
+  check('a country alone is too big to judge, so a town is asked for', geo.countryOnly('Brazil') && geo.countryOnly('USA') && geo.countryOnly('India'));
+  check('...but a town is not a country', !geo.countryOnly('Fargo') && !geo.countryOnly('Bavaria'));
+}
+
+console.log('\nThe demo lines with no model behind them (word rules)');
+{
+  const { chooseByWords } = await import('./dist/rules.js');
+  const tools = ['can_i_run', 'storm_status', 'what_happened', 'watch_jobs', 'crew_contact', 'log_job', 'job_report', 'farm_status', 'what_should_i_do', 'what_can_you_do', 'plan_season', 'position_trust', 'schedule_jobs', 'outage_patterns', 'my_farm', 'tell_me_more', 'share_access'].map((name) => ({ name }));
+  const pick = (s, history = []) => chooseByWords(s, tools, history);
+  const sorriso = pick("My field is near Sorriso, Brazil. The planter's on RTK. Can I plant tonight?");
+  check('a first question with its own setup is answered for that town', sorriso.tool === 'can_i_run' && sorriso.args.place === 'Sorriso, Brazil' && sorriso.args.correction === 'rtk' && sorriso.args.when === 'tonight', JSON.stringify(sorriso));
+  const watch = pick('Watch it for me.', [{ role: 'user', text: "My field is near Sorriso, Brazil. The planter's on RTK. Can I plant tonight?" }, { role: 'assistant', text: 'Hold off planting.' }]);
+  check('"watch it for me" takes the town and correction from before', watch.tool === 'watch_jobs' && watch.args.place === 'Sorriso, Brazil' && watch.args.correction === 'rtk', JSON.stringify(watch));
+  const north = pick("The North 40, near Grand Island, Nebraska. The planter's on RTK.");
+  check('"The North 40, near Grand Island" saves a field called North 40', north.tool === 'my_farm' && north.args.fieldName === 'North 40' && north.args.place === 'Grand Island, Nebraska', JSON.stringify(north));
+  const dana = pick('Dana, at dana@example.com.');
+  check('an email address adds that person', dana.tool === 'crew_contact' && dana.args.name === 'Dana' && dana.args.email === 'dana@example.com', JSON.stringify(dana));
+  check('the satellite operator gets their role', pick('I operate satellites in low Earth orbit. Will the next three days throw off our orbit predictions?').args.role === 'satellite_operator');
+  check('a robot fleet asking about its GPS gets the position check, in Fargo', (() => { const r = pick('We run delivery robots in Fargo, North Dakota. Can they trust their GPS right now?'); return r.tool === 'position_trust' && r.args.place === 'Fargo, North Dakota'; })());
+  check('"how many hours did space weather cost me" counts the hours', pick('How many hours did space weather cost me this month?').tool === 'outage_patterns');
+  check('"twelve hours of planting and six of spraying" is a schedule of both', JSON.stringify(pick('I need twelve hours of planting and six of spraying.').args.jobs) === JSON.stringify([{ operation: 'planting', hours: 12 }, { operation: 'spraying', hours: 6 }]));
+  check('the grid room gets its role and its state', (() => { const r = pick('I run a grid control room in Minnesota. Is there anything we should get ready for this week?'); return r.args.role === 'grid_operator' && r.args.place === 'Minnesota'; })());
+  check('"will it hurt my phone" is the household', pick("There's a solar storm on the news. Will it hurt my phone or anything in the house?").args.role === 'household');
+  check('"a drone show in Hong Kong tonight" is Hong Kong, not "Hong Kong tonight"', pick("I'm flying a drone show in Hong Kong tonight. The drones are on RTK. Can it run?").args.place === 'Hong Kong');
+  check('"stop watching" stops', pick('Stop watching.').args.action === 'stop');
+  check('"forget everything" asks to clear everything', pick('Forget everything.').args.removeWhat === 'everything');
+}
+
 console.log('\nTimes said the way people say them');
 {
   const { parseWhen } = await import('./dist/history.js');
