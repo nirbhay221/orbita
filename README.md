@@ -8,6 +8,7 @@
 machine and this job, and tells everyone else a solar storm reaches what to do about it.**
 
 [![tests](https://github.com/nirbhay221/orbita/actions/workflows/tests.yml/badge.svg)](https://github.com/nirbhay221/orbita/actions/workflows/tests.yml)
+[![live demo](https://github.com/nirbhay221/orbita/actions/workflows/live-check.yml/badge.svg)](https://github.com/nirbhay221/orbita/actions/workflows/live-check.yml)
 ![MCP 2025-11-25](https://img.shields.io/badge/MCP-2025--11--25-1ac3eb)
 ![Streamable HTTP](https://img.shields.io/badge/transport-Streamable%20HTTP-1ac3eb)
 ![tools](https://img.shields.io/badge/tools-18-e08f1a)
@@ -172,6 +173,7 @@ can too. A source that could not be read is never counted as clear.
 | Tool choice, from spoken sentences | 100 percent of 87 on Opus 5.5, a regression baseline rather than a blind score | `evals/golden.json` |
 | Whole conversations | 36 of 37 turns right, in the patterns real users were recorded in | `evals/conversations-last-run.json` |
 | Automated checks | 2,467 on every push, on Node 20 and 22, plus the stack, DynamoDB Local and the Strands agent | [`.github/workflows/tests.yml`](.github/workflows/tests.yml) |
+| The live demo, while it is judged | Checked twice a day against the deployed server with no model and no cost: fresh NOAA data, the May 2024 replay, a go or a hold, a position check, the demo page | `scripts/live-check.mjs` |
 
 ## For the judges
 
